@@ -380,6 +380,16 @@ jobs:
           # no compositor, and fails against a launcher that ignores the key.
           bash tests/check-desktop-launch.sh
 
+      - name: The quick controls open on purpose, not when the pointer passes
+        run: |
+          # The right strip opened the volume and brightness panel on plain
+          # hover, for anyone aiming at a scrollbar beside the frame or crossing
+          # to a monitor on the right. It now wants the pointer resting against
+          # the edge, or a click. Pointer events are QtTest's, into the real
+          # strip (windows/Border.qml). Needs a compositor and skips cleanly
+          # without one.
+          ./tests/run-edge-intent-test.sh
+
       - name: A resting pointer does not pick the launcher row Enter opens
         run: |
           # A row took the selection on `entered`, which Qt also sends to rows

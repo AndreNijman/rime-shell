@@ -13,8 +13,10 @@ import "../"
 // QuickControl — volume and brightness, out of the right screen strip
 // (UI/UX roadmap v3 Phase 9b, EDGE_SPILL).
 //
-// It opens on hovering the middle of the right strip and closes a moment after
-// the pointer has left both the strip and the panel. The body is geometry.js
+// It opens when the pointer is put on the middle of the right strip on purpose
+// (resting against the screen's edge, components/EdgeIntent.qml, or a click),
+// not when it passes, and closes a moment after the pointer has left both the
+// strip and the panel. The body is geometry.js
 // edgeSpillRight: extruded out of the strip on standardDecel, its top settling
 // early and its bottom late — it arrives from the edge and drips down, which
 // is what keeps it from being LEFT_SPILL mirrored.

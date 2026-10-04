@@ -74,6 +74,10 @@ QtObject {
                                     || dashboardOpen || wallpaperOpen || quickOpen
                                     || clipboardOpen || contextMenuOpen || overviewOpen
 
+    // Every surface was told to close. Edge triggers listen, so a pointer left
+    // resting on one does not open again what was just closed (EdgeIntent).
+    signal allClosed()
+
     function closeAll() {
         audioOpen         = false
         networkOpen       = false
@@ -85,5 +89,6 @@ QtObject {
         clipboardOpen     = false
         contextMenuOpen   = false
         overviewOpen      = false
+        allClosed()
     }
 }

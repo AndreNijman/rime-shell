@@ -2,6 +2,7 @@ import Quickshell
 import QtQuick
 import "../"
 import "../services/"
+import "../components"
 
 PanelWindow {
     id: root
@@ -176,8 +177,13 @@ PanelWindow {
             }
         }
 
-        // ── Right border — hover opens the quick controls (QuickControl) ──────
+        // ── Right border — the quick controls (QuickControl) ──────────────────
+        // Opened on purpose, not by passing: the pointer resting against the
+        // screen's edge (EdgeIntent), or a click on the strip. Plain hover over
+        // this zone opened it for anyone aiming at a scrollbar beside the frame
+        // or crossing to a monitor on the right.
         Item {
+            id: quickZone
             visible: root.edge === "right"
             anchors{
                 verticalCenter: parent.verticalCenter
@@ -186,8 +192,36 @@ PanelWindow {
             }
             height: 300
             HoverHandler {
+                id: quickHover
                 enabled: root.edge === "right"
-                onHoveredChanged: Popups.quickTriggerHovered = hovered
+            }
+            // The surface sits flush with the screen's right edge, so the
+            // pointer's distance from that edge is the zone's width less x.
+            EdgeIntent {
+                id: quickIntent
+                hovered: quickHover.hovered
+                edgeDistance: quickZone.width - quickHover.point.position.x
+                along: quickHover.point.position.y
+                band: root.thickness
+                tolerance: root.theme.px(12)
+                linger: Popups.hoverCloseDelay
+                onActiveChanged: if (root.edge === "right") Popups.quickTriggerHovered = active
+            }
+            TapHandler {
+                enabled: root.edge === "right"
+                onTapped: {
+                    var next = !Popups.quickOpen
+                    Popups.closeAll()
+                    Popups.quickOpen = next
+                }
+            }
+            // Closed some other way with the pointer still here: stay quiet
+            // until it leaves, or a pointer parked at the edge reopens it.
+            Connections {
+                target: Popups
+                enabled: root.edge === "right"
+                function onAllClosed() { quickIntent.spend() }
+                function onQuickOpenChanged() { if (!Popups.quickOpen) quickIntent.spend() }
             }
         }
 
