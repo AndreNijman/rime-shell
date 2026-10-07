@@ -56,9 +56,9 @@ Column {
             icon:    "󰊴",
             danger:  false,
             confirm: true,
-            title:   "Enter Gaming Mode?",
-            message: "You will be logged out and returned to the login screen with Gaming Mode selected. Steam Big Picture then runs inside gamescope, with no desktop compositing over the game. Save your work before continuing.",
-            label2:  "Enter Gaming Mode",
+            title:   "Switch to Gaming Mode?",
+            message: "Your desktop closes and Steam Big Picture opens full screen, with nothing composited over the game and the machine at full power. Quitting Steam brings you straight back to the desktop. Save your work before continuing.",
+            label2:  "Switch to Gaming Mode",
             action:  "gamingmode"
         },
         {

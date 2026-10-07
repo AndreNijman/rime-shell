@@ -101,7 +101,14 @@ case "$1" in
             echo "gaming mode: no session helper at $helper" >&2; exit 1
         fi
         rime_remember_desktop_session
-        rime_run sudo -n "$helper" rime-gaming --switch ;;
+        # --from tells the OS helper which desktop to come back to when Gaming
+        # Mode ends: Gaming Mode has no shell to remember it. An older helper
+        # ignores the extra words.
+        if from="$(rime_session_for_current_compositor)"; then
+            rime_run sudo -n "$helper" rime-gaming --switch --from "$from"
+        else
+            rime_run sudo -n "$helper" rime-gaming --switch
+        fi ;;
     # Leave Gaming Mode: same mechanism, pointed back at the desktop session.
     #
     # This used to pass a literal `hyprland`, so a labwc or niri user who entered

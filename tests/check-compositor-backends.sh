@@ -334,9 +334,8 @@ tools_of() {
 #     dependent.
 #   PowerControl.sh shutdown/reboot/suspend/lock/windows — systemctl, sudo and
 #     the shell's own IPC. Same command on every compositor by design.
-#   PowerControl.sh gamingmode — covered below in IDENTICAL instead. It is
-#     compositor-independent BY DESIGN (there is one gaming session), so
-#     `covers` would reject it for being right; see that block.
+#   PowerControl.sh gamingmode — pinned exactly per compositor in
+#     GAMINGMODE_EXPECT below; see that block.
 DISPATCH=(
     "src/scripts/DpmsControl.sh	off"
     "src/scripts/DpmsControl.sh	on"
@@ -361,8 +360,18 @@ DISPATCH=(
 # being required to exist.
 #
 # %HELPER% is substituted with the fixture's stub helper path.
-IDENTICAL=(
-    "src/scripts/PowerControl.sh	gamingmode	sudo -n %HELPER% rime-gaming --switch"
+IDENTICAL=()
+
+# gamingmode moved out of IDENTICAL when Gaming Mode became a toggle: it now
+# tells the OS helper which desktop session it is leaving (`--from`), so the
+# trip back lands there with no shell around to remember it. That makes the
+# argv differ per compositor by exactly one word — the session id this image
+# installs for it — and it is pinned exactly, per compositor.
+#   compositor<TAB>expected-argv
+GAMINGMODE_EXPECT=(
+    "hyprland	sudo -n %HELPER% rime-gaming --switch --from hyprland"
+    "niri	sudo -n %HELPER% rime-gaming --switch --from niri"
+    "labwc	sudo -n %HELPER% rime-gaming --switch --from rime-labwc"
 )
 
 # ── The fixture ──────────────────────────────────────────────────────────────
@@ -440,6 +449,19 @@ for d in "${DISPATCH[@]}"; do
         for c in "${COMPOSITORS[@]}"; do
             echo "          $c -> $(resolve "$root" "$script" "$verb" "$c")"
         done
+    fi
+done
+
+for d in "${GAMINGMODE_EXPECT[@]}"; do
+    c="$(printf '%s' "$d" | cut -f1)"
+    expect="$(printf '%s' "$d" | cut -f2)"
+    expect="${expect//%HELPER%/$fix/rime-session-select}"
+    out="$(resolve "$root" src/scripts/PowerControl.sh gamingmode "$c")"
+    if [ "$out" = "$expect" ]; then
+        ok "PowerControl.sh gamingmode on $c runs exactly: $expect"
+    else
+        bad "PowerControl.sh gamingmode on $c runs exactly: $expect"
+        echo "          got: $out"
     fi
 done
 
