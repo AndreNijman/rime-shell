@@ -236,12 +236,14 @@ else
         "WAYLAND_DISPLAY no longer names the socket headless_start brought up"
 fi
 
-case "$ATSPI_STATUS" in
-    *"'ScreenReaderEnabled': <true>"*)
-        ok "org.a11y.Status.ScreenReaderEnabled is true, as a screen reader sets it" ;;
-    *)  bad "org.a11y.Status.ScreenReaderEnabled is true, as a screen reader sets it" \
-            "got ${ATSPI_STATUS:-<no answer>}; Qt's bridge publishes nothing with this false" ;;
-esac
+# (at-spi2-core 2.62 has no ScreenReaderEnabled; atspi_status_on then reads
+# IsEnabled. The label stays: mutate-lockscreen-atspi.sh matches on it.)
+if atspi_status_on; then
+    ok "org.a11y.Status.ScreenReaderEnabled is true, as a screen reader sets it"
+else
+    bad "org.a11y.Status.ScreenReaderEnabled is true, as a screen reader sets it" \
+        "got ${ATSPI_STATUS:-<no answer>}; Qt's bridge publishes nothing with this false"
+fi
 echo "  note: host $HEADLESS_COMP on $WAYLAND_DISPLAY at $HEADLESS_MODE"
 
 # ─────────────────────────────────────────────────────────────────────────────
