@@ -75,16 +75,16 @@ case "$1" in
         rime_run "${RIME_CMD[@]}" ;;                        # quit compositor → back to greeter
     suspend)  power suspend ;;
     # ── Enter Gaming Mode ────────────────────────────────────────────────────
-    # Record the session the greeter should preselect, then end this session so
-    # the greeter comes back with "Rime Gaming Mode" already chosen. One password
-    # entry and gamescope + Steam Big Picture takes the display, with no desktop
-    # compositor in the path.
+    # Switch straight to Rime Gaming Mode: with --switch the OS helper ends this
+    # session and starts Gaming Mode for the same account, with no login screen
+    # in between, and gamescope + Steam Big Picture takes the display with no
+    # desktop compositor in the path. Leaving Gaming Mode (Steam's Switch to
+    # Desktop, or quitting Steam) comes back to the desktop named by --from.
     #
-    # The write has to be privileged: the greeter's memory lives in
-    # /var/lib/rime-greet, which is owned by the `greetd` user. The helper is
-    # reached through a dedicated NOPASSWD sudoers rule and validates the session
-    # id against the .desktop files actually installed, so nothing here hands it
-    # a path. RIME_SESSION_HELPER is the override for packagers.
+    # The switch has to be privileged: it rewrites greetd's start-up and
+    # restarts it as root. The helper is reached through a dedicated NOPASSWD
+    # sudoers rule and validates the session id against the .desktop files
+    # actually installed, so nothing here hands it a path. RIME_SESSION_HELPER is the override for packagers.
     #
     # Fails LOUDLY rather than logging you out into nothing: if the helper is
     # missing or refuses, the session is left exactly as it was. The shell only
