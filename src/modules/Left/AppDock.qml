@@ -150,9 +150,7 @@ Row {
                     width: 16
                     height: 16
                     anchors.centerIn: parent
-                    source: appButton.modelData.entry && appButton.modelData.entry.icon
-                        ? "image://icon/" + appButton.modelData.entry.icon
-                        : ""
+                    source: IconService.forEntry(appButton.modelData.entry)
                     sourceSize.width: 16
                     sourceSize.height: 16
                     fillMode: Image.PreserveAspectFit

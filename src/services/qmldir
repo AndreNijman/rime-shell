@@ -31,6 +31,10 @@ singleton LauncherState 1.0 LauncherState.qml
 # honour Terminal= — so nvim, and every other terminal application, could be
 # clicked and did nothing.
 singleton DesktopExec 1.0 DesktopExec.qml
+# How an icon name becomes an image, for every surface. Quickshell draws a
+# placeholder (and reports Ready) for a name the theme lacks, so each caller's
+# own fallback only shows if it asks here first. See the file's header.
+singleton IconService 1.0 IconService.qml
 # The launcher-provider extension point's host (roadmap §16). Declared here for
 # the same reason the Agent Center's parts below are: AppLauncher is loaded
 # THROUGH this qmldir, so this directory is not on the import path and relying

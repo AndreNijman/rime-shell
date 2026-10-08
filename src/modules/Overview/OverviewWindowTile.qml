@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Wayland
 import "../../"
+import "../../services"
 
 // ─── OverviewWindowTile ─────────────────────────────────────────────────────
 // One window in the workspace overview: its live picture where it sits on its
@@ -83,7 +84,7 @@ Item {
             anchors.centerIn: parent
             width: root._icon; height: width
             sourceSize.width: width * 2; sourceSize.height: height * 2
-            source: root.iconName !== "" ? "image://icon/" + root.iconName : ""
+            source: IconService.source(root.iconName)
             asynchronous: true
             smooth: true
         }

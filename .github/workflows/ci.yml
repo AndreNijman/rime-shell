@@ -1771,6 +1771,15 @@ jobs:
           ./tests/check-release-service.sh
           ./tests/run-release-service-test.sh
 
+      # Every app icon the Shell draws goes through IconService: a name nobody
+      # has is "" (Quickshell's placeholder for it reports Ready, so no
+      # fallback ever showed), an icon in an unlisted size directory or in
+      # pixmaps/ is found by file, and a notification with no app_icon gets
+      # its app's icon from the desktop-entry hint or its app name. SKIPS
+      # without quickshell.
+      - name: Installed apps never show a broken icon
+        run: ./tests/run-app-icons-test.sh
+
       # The surface and text roles (src/theme/roles.js) against every palette
       # the shell ships — six wallpapers, both matugen schemes — with the
       # fallback rule applied and the fallbacks that fire pinned.
