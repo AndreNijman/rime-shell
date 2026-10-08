@@ -78,8 +78,9 @@ CfgScroll {
 
         CfgRow {
             label: GamingService.readiness
-            description: "Gaming Mode logs you out and back in with just the " +
-                         "game on screen, driven by a controller. Your games " +
+            description: "Gaming Mode switches the screen to just your games, " +
+                         "driven by a controller, without the login screen; " +
+                         "quitting Steam brings the desktop back. Your games " +
                          "still run on the normal desktop either way — this is " +
                          "about the separate, controller-first way in."
             hoverable: false

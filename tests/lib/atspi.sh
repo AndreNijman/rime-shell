@@ -176,6 +176,21 @@ atspi_require() {
     return 0
 }
 
+# True when the a11y bus says a screen reader is on. at-spi2-core 2.61 reworked
+# org.a11y.Status: 2.62 publishes IsEnabled only, and ScreenReaderEnabled is
+# gone (measured: Arch's 2.62.0.1 and Fedora 45's both answer GetAll with
+# {'IsEnabled': <true>} alone). A bus that still has the property must have it
+# true; a bus without it must have IsEnabled true, which is then the only flag
+# Qt's bridge can read.
+atspi_status_on() {
+    case "${ATSPI_STATUS:-}" in
+        *"'ScreenReaderEnabled': <true>"*) return 0 ;;
+        *"'ScreenReaderEnabled'"*) return 1 ;;
+        *"'IsEnabled': <true>"*) return 0 ;;
+    esac
+    return 1
+}
+
 atspi_start() {
     ATSPI_W="$(mktemp -d "${TMPDIR:-/tmp}/rime-atspi.XXXXXX")" || return 1
     chmod 700 "$ATSPI_W"
@@ -402,14 +417,12 @@ EOF
     ATSPI_STATUS="$(gdbus call --session -d org.a11y.Bus -o /org/a11y/bus \
         -m org.freedesktop.DBus.Properties.GetAll org.a11y.Status 2>/dev/null)"
     export ATSPI_STATUS
-    case "$ATSPI_STATUS" in
-        *"'ScreenReaderEnabled': <true>"*) : ;;
-        *)  # Not fatal here -- the suite that cares asserts it and says so --
-            # but it must never be silent, because the consequence is an empty
-            # tree that reads exactly like a greeter with no markup.
-            printf 'NOTE: org.a11y.Status.ScreenReaderEnabled did not read back true: %s\n' \
-                   "${ATSPI_STATUS:-<no answer>}" ;;
-    esac
+    # Not fatal here -- the suite that cares asserts it and says so -- but it
+    # must never be silent, because the consequence is an empty tree that
+    # reads exactly like a greeter with no markup.
+    atspi_status_on \
+        || printf 'NOTE: org.a11y.Status.ScreenReaderEnabled did not read back true: %s\n' \
+                  "${ATSPI_STATUS:-<no answer>}"
 
     export AT_SPI_BUS_ADDRESS="$ATSPI_BUS"
 
