@@ -409,6 +409,7 @@ Item {
         readonly property string tSummary: card.live ? (card.notification.summary ?? "") : card.sSummary
         readonly property string tBody:    card.live ? (card.notification.body ?? "")    : card.sBody
         readonly property string tIcon:    card.live ? (card.notification.appIcon ?? "") : card.sIcon
+        readonly property string tEntry:   card.live ? (card.notification.desktopEntry ?? "") : card.sEntry
         readonly property var    tActions: card.live ? (card.notification.actions ?? []) : card.sActions
         readonly property int    tUrgency: card.live ? (card.notification.urgency ?? NotificationUrgency.Normal) : card.sUrgency
         readonly property real   tTime:    card.sTime   // fixed at arrival; the snapshot is the only copy
@@ -417,6 +418,7 @@ Item {
         property string sSummary: ""
         property string sBody:    ""
         property string sIcon:    ""
+        property string sEntry:   ""
         property var    sActions: []
         property int    sUrgency: NotificationUrgency.Normal
         property real   sTime:    0
@@ -427,6 +429,7 @@ Item {
             card.sSummary = n.summary ?? ""
             card.sBody    = n.body ?? ""
             card.sIcon    = n.appIcon ?? ""
+            card.sEntry   = n.desktopEntry ?? ""
             card.sActions = n.actions ?? []
             card.sUrgency = n.urgency ?? NotificationUrgency.Normal
             card.sTime    = NotificationService.arrivedAt(n) || card.sTime
@@ -563,12 +566,7 @@ Item {
                 Image {
                     id:        iconImg
                     anchors.fill: parent
-                    source: {
-                        var ic = card.tIcon
-                        if (ic === "") return ""
-                        if (ic.startsWith("/")) return "file://" + ic
-                        return "image://icon/" + ic
-                    }
+                    source: IconService.forNotification(card.tIcon, card.tEntry, card.tApp)
                     fillMode:          Image.PreserveAspectFit
                     smooth:            true
                     visible:           status === Image.Ready

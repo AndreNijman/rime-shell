@@ -143,8 +143,7 @@ PanelWindow {
                                 sourceSize.height: root.theme.px(40)
                                 fillMode: Image.PreserveAspectFit
                                 smooth: true
-                                source: (tile.entry && tile.entry.icon)
-                                    ? "image://icon/" + tile.entry.icon : ""
+                                source: IconService.forEntry(tile.entry)
                             }
 
                             // Same fallback glyph the dock uses, so a window

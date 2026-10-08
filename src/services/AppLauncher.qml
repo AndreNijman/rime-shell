@@ -664,12 +664,7 @@ Item {
                                     Image {
                                         id: ico
                                         anchors.fill: parent
-                                        source: {
-                                            var s = rowItem.modelData ? (rowItem.modelData.icon ?? "") : ""
-                                            if (!s || s === "")    return ""
-                                            if (s.startsWith("/")) return "file://" + s
-                                            return "image://icon/" + s
-                                        }
+                                        source: IconService.source(rowItem.modelData ? rowItem.modelData.icon : "")
                                         fillMode:          Image.PreserveAspectFit
                                         smooth:            true
                                         sourceSize.width:  28

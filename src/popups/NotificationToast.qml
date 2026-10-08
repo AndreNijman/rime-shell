@@ -234,12 +234,9 @@ Item {
 						Image {
 							id:           toastIcon
 							anchors.fill: parent
-							source: {
-								var ic = root.current?.appIcon ?? ""
-								if (ic === "") return ""
-								if (ic.startsWith("/")) return "file://" + ic
-								return "image://icon/" + ic
-							}
+							source: root.current
+								? IconService.forNotification(root.current.appIcon, root.current.desktopEntry, root.current.appName)
+								: ""
 							fillMode:          Image.PreserveAspectFit
 							smooth:            true
 							visible:           status === Image.Ready
