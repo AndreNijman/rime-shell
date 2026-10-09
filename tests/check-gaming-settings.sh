@@ -175,6 +175,30 @@ want "the explanation is the page's first section when the CLI is missing" \
 want "the CLI path is overridable for local testing" \
     grep -q "RIME_GAMING_CLI" "$csvc"
 
+# ── DISCORD ACTIVITY: ONE MORE WRITE, HELD TO THE SAME RULES ────────────────
+# rime-gaming-discord `set on|off` writes the setting Gaming Mode reads. It is
+# entered from one function, re-read after, and never from load.
+want "the service reads rime-gaming-discord status --json" \
+    grep -q '"status", "--json"' "$csvc"
+want "the discord write is entered from exactly one place" \
+    test "$(grep -c '_discordSetProc.running = true' "$csvc")" -eq 1
+want "and that place is setDiscordPresence()" \
+    bash -c 'sed -n "/function setDiscordPresence/,/^    }$/p" "$1" | grep -q "_discordSetProc.running = true"' _ "$csvc"
+want "turning it on is refused when the helper says it would not work" \
+    bash -c 'sed -n "/function setDiscordPresence/,/^    }$/p" "$1" | grep -q "if (on && !root.discordCanEnable) return"' _ "$csvc"
+want "the discord write re-reads its status, even on failure" \
+    bash -c 'sed -n "/_discordSetProc: Process/,/^    }$/p" "$1" | sed -n "/onExited/,\$p" | grep -q "_discordProc.running = true"' _ "$csvc"
+want "the page changes it only from the switch's onToggled" \
+    bash -c 'test "$(grep -c "GamingService.setDiscordPresence(" "$1")" -eq 1 && grep -q "onToggled: function(v) { GamingService.setDiscordPresence(v) }" "$1"' _ "$cpage"
+want "the page does not change it on load" \
+    bash -c '! grep -qE "Component.onCompleted.*setDiscordPresence" "$1"' _ "$cpage"
+want "refresh() re-reads it too" \
+    bash -c 'sed -n "/function refresh/,/^    }$/p" "$1" | grep -q "_discordProc.running = true"' _ "$csvc"
+want "a helper that cannot run is reported, not 'Reading…' for ever" \
+    bash -c 'sed -n "/_discordProc: Process/,/^    }$/p" "$1" | grep -q "root.discord = GM.readDiscord(\"\")"' _ "$csvc"
+want "the helper path is overridable for local testing" \
+    grep -q "RIME_GAMING_DISCORD" "$csvc"
+
 # ── THE NODE SUITE CANNOT SKIP ──────────────────────────────────────────────
 # Against the comment-stripped copy: the suite's own header explains at length
 # why it cannot skip, and a grep that read that as a skip would fail on a file

@@ -246,6 +246,51 @@ function policyLine(s) {
     return bits.join("   ·   ")
 }
 
+// ── Discord activity in Gaming Mode ─────────────────────────────────────────
+// `rime-gaming-discord status --json`: the setting, and whether Equibop would
+// actually be started (installed, its Rich Presence on, opened once). The
+// reason is the helper's own sentence, shown as it is.
+function readDiscord(raw) {
+    var out = { ok: false, enabled: false, installed: false, richPresence: false,
+                ready: false, running: false, reason: "", error: "" }
+    var v
+    try {
+        v = JSON.parse(_str(raw))
+    } catch (e) {
+        out.error = "rime-gaming-discord printed no report"
+        return out
+    }
+    if (!_isObject(v)) {
+        out.error = "rime-gaming-discord printed no report"
+        return out
+    }
+    out.ok           = true
+    out.enabled      = v.enabled === true
+    out.installed    = v.installed === true
+    out.richPresence = v.rich_presence === true
+    out.ready        = v.ready === true
+    out.running      = v.running === true
+    out.reason       = _str(v.reason)
+    return out
+}
+
+// Turning it ON is offered only when it would work; turning it off always is.
+function discordCanEnable(d) {
+    return !!(d && d.ok && d.ready)
+}
+
+// The sentence under the switch.
+function discordLine(d) {
+    if (!d) return "Reading…"
+    if (!d.ok) return d.error
+    if (!d.ready) return d.reason
+    return "Equibop starts with Steam, hidden and muted, only for its Rich " +
+           "Presence: games show on your Discord profile, and nothing of " +
+           "Discord appears on screen or makes a sound. It stops when you " +
+           "leave Gaming Mode. It uses about as much memory as Equibop does " +
+           "on the desktop."
+}
+
 if (typeof module !== "undefined" && module.exports)
     module.exports = {
         TOOLS: TOOLS, SETUP: SETUP,
@@ -254,5 +299,7 @@ if (typeof module !== "undefined" && module.exports)
         otherChecks: otherChecks,
         installLine: installLine, readiness: readiness,
         readModeStatus: readModeStatus, inGamingMode: inGamingMode,
-        policyLine: policyLine
+        policyLine: policyLine,
+        readDiscord: readDiscord, discordCanEnable: discordCanEnable,
+        discordLine: discordLine
     }

@@ -196,6 +196,40 @@ check("column widths do not matter",
 check("and neither does trailing space",
       G.readModeStatus("mode          : gaming   ").mode, "gaming");
 
+// ── Discord activity in Gaming Mode ─────────────────────────────────────────
+// Fixtures are real `rime-gaming-discord status --json` output (rime-os
+// files/system/libexec/rime-gaming-discord): a machine without Equibop, and
+// katana's Equibop with arRPC on.
+const D_NONE = '{"enabled": false, "installed": false, "kind": "", "source": "", ' +
+    '"rich_presence": false, "set_up": false, "running": false, "ready": false, ' +
+    '"reason": "Equibop is not installed."}';
+const D_READY = '{"enabled": true, "installed": true, "kind": "native", ' +
+    '"source": "/home/a/.local/share/applications/equibop.desktop", ' +
+    '"rich_presence": true, "set_up": true, "running": false, "ready": true, "reason": ""}';
+const D_ARRPC_OFF = '{"enabled": true, "installed": true, "kind": "native", "source": "x", ' +
+    '"rich_presence": false, "set_up": true, "running": false, "ready": false, ' +
+    '"reason": "Rich Presence is off in Equibop. Turn on arRPC in Equibop\'s settings first."}';
+
+check("no Equibop: read, off, cannot be turned on",
+      [G.readDiscord(D_NONE).ok, G.readDiscord(D_NONE).enabled, G.discordCanEnable(G.readDiscord(D_NONE))],
+      [true, false, false]);
+check("no Equibop: the helper's own reason is the line",
+      G.discordLine(G.readDiscord(D_NONE)), "Equibop is not installed.");
+check("ready: can be turned on, and says it is hidden and muted",
+      [G.discordCanEnable(G.readDiscord(D_READY)), /hidden and muted/.test(G.discordLine(G.readDiscord(D_READY)))],
+      [true, true]);
+check("on but arRPC off in Equibop: still reads as on (so it can be turned off)",
+      G.readDiscord(D_ARRPC_OFF).enabled, true);
+check("…cannot be (re)enabled, and says why",
+      [G.discordCanEnable(G.readDiscord(D_ARRPC_OFF)), G.discordLine(G.readDiscord(D_ARRPC_OFF))],
+      [false, "Rich Presence is off in Equibop. Turn on arRPC in Equibop's settings first."]);
+check("no helper output is a failed read, not 'not installed'",
+      [G.readDiscord("").ok, G.discordLine(G.readDiscord(""))],
+      [false, "rime-gaming-discord printed no report"]);
+check("a JSON array is not a report", G.readDiscord("[]").ok, false);
+check("only a literal true enables", G.readDiscord('{"enabled": "yes", "ready": 1}').enabled, false);
+check("nothing read yet", G.discordLine(null), "Reading…");
+
 if (failed > 0) {
     console.error(`\n${failed} assertion(s) failed`);
     process.exit(1);

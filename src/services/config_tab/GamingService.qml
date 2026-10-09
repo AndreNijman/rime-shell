@@ -21,9 +21,13 @@ import "gaming.js" as GM
 //                        game mode. Criterion 6. Text, because there is no
 //                        --json on that subcommand yet.
 //
-//   rime mode set <m>    the one thing here that changes anything, behind a
+//   rime mode set <m>    the one thing here that changes the machine, behind a
 //                        button, and followed by re-reading `mode status`
 //                        rather than assuming it worked. Criterion 7.
+//
+//   rime-gaming-discord  status --json / set on|off: whether Gaming Mode
+//                        starts Equibop hidden for its Rich Presence. A
+//                        setting in ~/.config/rime, re-read after every write.
 //
 // ── NO TIMER ─────────────────────────────────────────────────────────────────
 //
@@ -97,6 +101,7 @@ QtObject {
     function refresh() {
         root._gamingProc.running = true
         root._statusProc.running = true
+        root._discordProc.running = true
     }
 
     // Criterion 7: change the policy, then MEASURE it. Never assume the exit
@@ -111,6 +116,64 @@ QtObject {
     }
 
     property var _setCommand: []
+
+    // ── Discord activity in Gaming Mode ───────────────────────────────────────
+    // `rime-gaming-discord status --json` reads; `set on|off` is its only
+    // write, entered from setDiscordPresence() alone and followed by a re-read,
+    // like setMode(). It writes a file in ~/.config/rime and starts nothing:
+    // Gaming Mode's Steam wrapper reads the setting when it starts.
+    readonly property string discordCli: {
+        const override = Quickshell.env("RIME_GAMING_DISCORD") || ""
+        return override !== "" ? override : "/usr/libexec/rime-gaming-discord"
+    }
+    property var discord: null         // readDiscord()'d, or null
+    property bool discordBusy: false
+    property string discordError: ""
+    readonly property bool discordOn:      root.discord ? root.discord.enabled : false
+    readonly property bool discordCanEnable: GM.discordCanEnable(root.discord)
+    readonly property string discordLine:  GM.discordLine(root.discord)
+
+    function setDiscordPresence(on) {
+        if (root.discordBusy) return
+        if (on && !root.discordCanEnable) return
+        root.discordError = ""
+        root.discordBusy = true
+        root._discordSetCommand = [root.discordCli, "set", on ? "on" : "off"]
+        root._discordSetProc.running = true
+    }
+
+    property var _discordSetCommand: []
+
+    property var _discordProc: Process {
+        command: [root.discordCli, "status", "--json"]
+        running: true
+        stdout: StdioCollector {
+            onStreamFinished: { root.discord = GM.readDiscord(text) }
+        }
+        // An image without the helper prints nothing: say that, rather than
+        // "Reading…" for ever under a switch that cannot work. Not onExited:
+        // a program that cannot be started never exits (measured).
+        onRunningChanged: {
+            if (!running && root.discord === null)
+                Qt.callLater(function() {
+                    if (root.discord === null) root.discord = GM.readDiscord("")
+                })
+        }
+    }
+
+    property var _discordSetProc: Process {
+        command: root._discordSetCommand
+        running: false
+        stderr: StdioCollector {
+            onStreamFinished: { root.discordError = text.trim() }
+        }
+        onExited: function(code, status) {
+            root.discordBusy = false
+            if (code !== 0 && root.discordError === "")
+                root.discordError = "rime-gaming-discord exited " + code
+            root._discordProc.running = true
+        }
+    }
 
     // ── rime gaming --json ────────────────────────────────────────────────────
     property var _gamingProc: Process {
