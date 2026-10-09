@@ -194,6 +194,8 @@ want "the page does not change it on load" \
     bash -c '! grep -qE "Component.onCompleted.*setDiscordPresence" "$1"' _ "$cpage"
 want "refresh() re-reads it too" \
     bash -c 'sed -n "/function refresh/,/^    }$/p" "$1" | grep -q "_discordProc.running = true"' _ "$csvc"
+want "a helper that cannot run is reported, not 'Reading…' for ever" \
+    bash -c 'sed -n "/_discordProc: Process/,/^    }$/p" "$1" | grep -q "root.discord = GM.readDiscord(\"\")"' _ "$csvc"
 want "the helper path is overridable for local testing" \
     grep -q "RIME_GAMING_DISCORD" "$csvc"
 

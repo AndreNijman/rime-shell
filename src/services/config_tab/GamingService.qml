@@ -150,6 +150,15 @@ QtObject {
         stdout: StdioCollector {
             onStreamFinished: { root.discord = GM.readDiscord(text) }
         }
+        // An image without the helper prints nothing: say that, rather than
+        // "Reading…" for ever under a switch that cannot work. Not onExited:
+        // a program that cannot be started never exits (measured).
+        onRunningChanged: {
+            if (!running && root.discord === null)
+                Qt.callLater(function() {
+                    if (root.discord === null) root.discord = GM.readDiscord("")
+                })
+        }
     }
 
     property var _discordSetProc: Process {
