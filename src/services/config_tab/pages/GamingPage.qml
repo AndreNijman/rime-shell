@@ -213,6 +213,35 @@ CfgScroll {
         }
     }
 
+    // ── Discord activity ──────────────────────────────────────────────────────
+    // Equibop's Rich Presence in Gaming Mode. The switch turns on only when the
+    // helper says it would work; the sentence under it is the helper's reason
+    // when it would not. Off is always allowed.
+    CfgSection {
+        title: "Discord"
+        visible: root.usable
+
+        CfgRow {
+            label: "Show what you play in Gaming Mode"
+            description: GamingService.discordLine
+
+            CfgSwitch {
+                checked: GamingService.discordOn
+                opacity: (GamingService.discordBusy
+                          || (!GamingService.discordOn && !GamingService.discordCanEnable))
+                         ? 0.4 : 1
+                Behavior on opacity { MotionFade {} }
+                onToggled: function(v) { GamingService.setDiscordPresence(v) }
+            }
+        }
+        CfgRow {
+            label: "That did not work"
+            description: GamingService.discordError
+            hoverable: false
+            visible: GamingService.discordError !== ""
+        }
+    }
+
     // ── Advanced ──────────────────────────────────────────────────────────────
     // Criterion 4. The setup checks are here rather than above because none of
     // them is fixed by installing a package: they are files an image ships, so a
