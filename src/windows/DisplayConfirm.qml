@@ -33,7 +33,7 @@ import "../components/controls"
 //   checked against a headless wlroots session, not assumed.
 //
 // So: a layer-shell overlay of its own, built for EVERY output the same way
-// ConfirmDialog and UpdatePopup are, driven by a singleton's countdown. One
+// ConfirmDialog is, driven by a singleton's countdown. One
 // instance dying with its output leaves the others up, which is what
 // "reachable after the layout changed" has to mean.
 //

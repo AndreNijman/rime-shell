@@ -697,7 +697,9 @@ win_mirrored="$(grep -rlE '^\s*PanelWindow\b|^\s*FloatingWindow\b' "$root/src" 2
 # in it has a reading direction). 19 since 2026-09-29: popups/Overview.qml, the
 # workspace overview (SUPER+Tab). Its caption and the workspace order DO have a
 # reading direction, and like every other root here it does not mirror yet.
-WIN_TOTAL_EXPECT=19
+# 18 again since 2026-10-10: the update popup window left with the shell's own
+# git updater (updates are `sudo rime update`; Settings → Updates shows them).
+WIN_TOTAL_EXPECT=18
 WIN_MIRRORED_EXPECT=0
 [ "$win_total" -eq "$WIN_TOTAL_EXPECT" ] \
     && ok "the shell paints from $WIN_TOTAL_EXPECT window roots — counted $win_total" \

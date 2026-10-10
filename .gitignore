@@ -2,9 +2,6 @@
 # current machine's absolute wallpaper path, so it must not be committed.
 /src/config/colors.conf
 
-# Runtime UI preferences written by the shell
-/src/user_data/update_prefs.json
-
 .claude/
 
 # Staged by the test harnesses (Quickshell requires the entry point to sit
@@ -14,3 +11,7 @@
 /.compositor-facade-test.qml
 /.plugin-host-test.qml
 /.agent-settings-legacy-test.qml
+/.updates-page-test.qml
+# Written by the image build beside the installed shell; staged by
+# tests/run-updates-page-test.sh for the length of its run.
+/.rime-shell-commit

@@ -54,6 +54,7 @@ GamingPage ./config_tab/pages/GamingPage.qml
 # ServiceRef refcounts it, and two instances would each hold their own count.
 singleton RecoveryService 1.0 RecoveryService.qml
 RecoveryPage ./config_tab/pages/RecoveryPage.qml
+UpdatesPage ./config_tab/pages/UpdatesPage.qml
 
 # P1-061's privacy surface. Same shape as the row above: the service is polled
 # only while the page is on screen, and the page is reached through this qmldir

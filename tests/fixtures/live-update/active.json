@@ -1,0 +1,21 @@
+{
+  "schema": 1,
+  "updated": 1760083200,
+  "txn": "20261010T031500Z-1a2b",
+  "state": "active",
+  "booted": {"digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111", "release": "2026.10.10"},
+  "target": {"digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222", "release": "2026.10.11"},
+  "staged_for_boot": true,
+  "components": [
+    {"component": "shell", "label": "Rime Shell", "state": "active", "requirement": "live-reload",
+     "detail": "Activated live; the running shell is revision 3dd0eb6b.",
+     "versions": ["quickshell 0.3.1-1 → 0.3.2-1"]},
+    {"component": "rimed", "label": "Rime daemon", "state": "active", "requirement": "service-restart",
+     "detail": "Restarted.", "versions": []},
+    {"component": "firefox", "label": "Firefox", "state": "active-at-next-use", "requirement": "next-use",
+     "detail": "The new version starts next time you open it.", "versions": ["firefox 143.0-1 → 143.0.1-1"]}
+  ],
+  "remaining": "nothing",
+  "recommendation": "",
+  "summary": "3 components active live; nothing else is needed."
+}

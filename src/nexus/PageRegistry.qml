@@ -15,7 +15,7 @@ import "../services/config_tab/pages"
 //
 // `group` is the navigation's section (UI/UX Phase 19b): the pages are listed
 // in group order, and NavPane draws a section label above the first page of
-// each group. Sixteen pages in one flat column read as a pile; five groups — what
+// each group. Seventeen pages in one flat column read as a pile; five groups — what
 // it looks like, how you drive it, who may reach what, the devices paired to it,
 // and the machine itself — read as a map.
 //
@@ -169,6 +169,18 @@ QtObject {
             "component": gamingComp
         },
         {
+            "id": "updates",
+            "group": "System",
+            "title": "Updates",
+            "subtitle": "Whether a newer Rime is out, and what the last update changed live",
+            "icon": "󰚰",
+            // Re-reads /run/rime-live/status.json and /run/rime-update/state on
+            // a slow timer while the page is looked at, and nothing at all when
+            // it is not.
+            "needsScreen": true,
+            "component": updatesComp
+        },
+        {
             "id": "recovery",
             "group": "System",
             "title": "Recovery",
@@ -194,7 +206,7 @@ QtObject {
             "id": "misc",
             "group": "System",
             "title": "Misc",
-            "subtitle": "Compositor, updates, about",
+            "subtitle": "Compositor, release notes, about",
             "icon": "󰒓",
             // SystemStats lives in the About area and shells out to collect
             // distro/kernel/uptime/packages, so this page has to be told
@@ -239,6 +251,9 @@ QtObject {
     }
     readonly property Component gamingComp: Component {
         GamingPage {}
+    }
+    readonly property Component updatesComp: Component {
+        UpdatesPage {}
     }
     readonly property Component recoveryComp: Component {
         RecoveryPage {}
