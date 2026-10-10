@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "updated": 1760083300,
+  "txn": "20261010T031600Z-3c4d",
+  "state": "deferred",
+  "booted": {"digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111", "release": "2026.10.10"},
+  "target": {"digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222", "release": "2026.10.11"},
+  "staged_for_boot": true,
+  "components": [
+    {"component": "shell", "label": "Rime Shell", "state": "deferred", "requirement": "live-reload",
+     "detail": "A session is locked; the shell is replaced once every session is unlocked.", "versions": []},
+    {"component": "rimed", "label": "Rime daemon", "state": "active", "requirement": "service-restart",
+     "detail": "Restarted.", "versions": []}
+  ],
+  "remaining": "live-reload",
+  "recommendation": "unlock to finish",
+  "summary": "1 component active live; Rime Shell waits for the screen to be unlocked."
+}

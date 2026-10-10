@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "state": "active",
+  "unknown_field": {"run": "rm -rf /"},
+  "booted": {"digest": "sha256:1", "release": "<b>2026.10.10</b>"},
+  "target": "not an object",
+  "components": [
+    {"component": "shell", "label": "<b>bold</b><a href=\"https://example.invalid\">link</a>", "state": "exploded",
+     "requirement": "teleport", "detail": "line one\nline two\u0007", "versions": "not a list"},
+    42,
+    null
+  ],
+  "remaining": "nothing",
+  "summary": "<img src=x onerror=alert(1)>"
+}

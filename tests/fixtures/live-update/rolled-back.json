@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "updated": 1760083500,
+  "txn": "20261010T031800Z-7a8b",
+  "state": "rolled-back",
+  "booted": {"digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111", "release": "2026.10.10"},
+  "target": null,
+  "staged_for_boot": false,
+  "components": [
+    {"component": "shell", "label": "Rime Shell", "state": "failed-rolled-back", "requirement": "live-reload",
+     "detail": "The new shell did not answer its health check; the previous one was restored.", "versions": []}
+  ],
+  "remaining": "nothing",
+  "recommendation": "",
+  "summary": "The live activation was rolled back; the running system is as it was."
+}

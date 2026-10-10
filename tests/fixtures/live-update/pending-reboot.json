@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "updated": 1760083400,
+  "txn": "20261010T031700Z-5e6f",
+  "state": "active",
+  "booted": {"digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111", "release": "2026.10.10"},
+  "target": {"digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222", "release": "2026.10.11"},
+  "staged_for_boot": true,
+  "components": [
+    {"component": "shell", "label": "Rime Shell", "state": "active", "requirement": "live-reload",
+     "detail": "Activated live.", "versions": []},
+    {"component": "kernel", "label": "Kernel", "state": "pending", "requirement": "kernel-transition",
+     "detail": "Runs after a restart.", "versions": ["kernel 7.2.9 → 7.2.10"]},
+    {"component": "nvidia", "label": "NVIDIA driver", "state": "pending", "requirement": "reboot",
+     "detail": "Loaded after a restart.", "versions": []}
+  ],
+  "remaining": "reboot",
+  "recommendation": "restart when convenient",
+  "summary": "1 component active live; kernel and NVIDIA driver need a restart."
+}

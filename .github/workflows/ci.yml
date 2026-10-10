@@ -1771,6 +1771,21 @@ jobs:
           ./tests/check-release-service.sh
           ./tests/run-release-service-test.sh
 
+      # Settings → Updates and the `shell` IPC target the OS's live update
+      # engine calls before and after it replaces the running shell. The node
+      # suite drives every state the page tells apart (and a hostile status
+      # file); the static suite proves the page runs nothing but three
+      # constant argv, the shell target has no unlock and reports a lock being
+      # taken or released as locked, and the old git updater stays gone (with
+      # mutants); the runner draws the page from fixtures, presses its buttons
+      # against a recording terminal stub and calls the IPC from outside while
+      # the real lock is held. The last SKIPS without labwc and quickshell.
+      - name: Updates page and the shell's live-update IPC
+        run: |
+          node tests/liveupdate-test.js
+          ./tests/check-updates-page.sh --self-test
+          ./tests/run-updates-page-test.sh
+
       # Every app icon the Shell draws goes through IconService: a name nobody
       # has is "" (Quickshell's placeholder for it reports Ready, so no
       # fallback ever showed), an icon in an unlisted size directory or in

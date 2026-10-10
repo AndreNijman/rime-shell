@@ -11,3 +11,7 @@
 /.compositor-facade-test.qml
 /.plugin-host-test.qml
 /.agent-settings-legacy-test.qml
+/.updates-page-test.qml
+# Written by the image build beside the installed shell; staged by
+# tests/run-updates-page-test.sh for the length of its run.
+/.rime-shell-commit
