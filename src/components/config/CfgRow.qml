@@ -60,6 +60,11 @@ Item {
     // worded, because the row already has a label and a description and a third
     // sentence would bury it.
     property bool   statusWarns: false
+    // The label, description and readout come from outside the shell (a file
+    // root wrote, a daemon's answer) and must be drawn as the characters they
+    // are. Off by default: Text's AutoText reads `<b>` as markup, which some
+    // callers' own strings rely on.
+    property bool   plainText:   false
 
     // When this particular control reaches the machine, if it is not now. One
     // of settings-semantics.js's EFFECTS: "relogin", "reboot", "apply",
@@ -197,6 +202,7 @@ Item {
         Text {
             width:          parent.width
             text:           root.label
+            textFormat:     root.plainText ? Text.PlainText : Text.AutoText
             font.pixelSize: theme.typeBody
             color:          root.unavailable ? Theme.textSecondary : Theme.textPrimary
             elide:          Text.ElideRight
@@ -205,6 +211,7 @@ Item {
             width:          parent.width
             visible:        text !== ""
             text:           root.unavailable ? root.disabledReason : root.description
+            textFormat:     root.plainText ? Text.PlainText : Text.AutoText
             font.pixelSize: theme.typeCaption
             color:          Theme.textSecondary
             wrapMode:       Text.WordWrap
@@ -246,6 +253,7 @@ Item {
         id: readout
         visible:                root.status !== "" && !root.unavailable
         text:                   root.status
+        textFormat:             root.plainText ? Text.PlainText : Text.AutoText
         anchors.right:          slot.children.length > 0 ? slot.left : parent.right
         anchors.rightMargin:    slot.children.length > 0 ? 10 : 0
         anchors.verticalCenter: parent.verticalCenter

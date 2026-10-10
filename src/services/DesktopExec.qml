@@ -120,4 +120,18 @@ Singleton {
         Quickshell.execDetached(ctx)
         return true
     }
+
+    // Run a fixed argv in the user's terminal, through the same helper a
+    // Terminal=true entry uses. For commands a page shows the user rather than
+    // runs itself (Settings → Updates: `sudo rime update` asks for the password
+    // in that terminal, never in the shell). Callers pass constants.
+    function runInTerminal(argv) {
+        if (!argv || argv.length === 0)
+            return false
+        const cmd = [root.terminalHelper]
+        for (const a of argv)
+            cmd.push(String(a))
+        Quickshell.execDetached({ "command": cmd })
+        return true
+    }
 }

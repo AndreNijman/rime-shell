@@ -282,7 +282,7 @@ keys_seq() {
 nexus_pages() {
     local p
     for p in appearance layout data input display blueprint gaming recovery privacy \
-             agents lid firewall remote-pair remote-devices keybinds misc; do
+             agents lid firewall remote-pair remote-devices keybinds updates misc; do
         ipc nexus open "$p"; sleep 1.2
         grab "nexus-page-$p"
     done
