@@ -141,7 +141,7 @@ eq("a label-less component is named by its id", L.parseStatus(JSON.stringify({ s
 console.log("── the only commands ──");
 const HOLD = "\"$@\"; printf '\\nPress Enter to close this window. '; read -r _";
 eq("Update now", L.UPDATE_ARGV, ["sh", "-c", HOLD, "sh", "sudo", "rime", "update"]);
-eq("Show plan", L.PLAN_ARGV, ["sh", "-c", HOLD, "sh", "rime", "update", "--plan"]);
+eq("Show plan", L.PLAN_ARGV, ["sh", "-c", HOLD, "sh", "sudo", "rime", "update", "--plan"]);
 eq("Explain", L.EXPLAIN_ARGV, ["sh", "-c", HOLD, "sh", "rime", "live", "explain"]);
 const src = fs.readFileSync(path.join(__dirname, "..", "src", "services", "liveupdate.js"), "utf8");
 check("nothing in the module evaluates text", !/\beval\s*\(|new\s+Function\b|Qt\.include/.test(src));

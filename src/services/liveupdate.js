@@ -241,11 +241,13 @@ function componentLine(c) {
 // Constants, never assembled from the files above. Each runs in the user's
 // terminal through DesktopExec.runInTerminal, wrapped so the window stays open
 // until Enter: the plan and the explanation are output to READ, and a terminal
-// that closes the instant the command exits shows neither. `sudo` asks for the
-// password in that terminal; the shell holds no privilege and asks for none.
+// that closes the instant the command exits shows neither. The plan needs root:
+// it downloads the release (staged download-only, never queued for boot) to
+// measure it. `sudo` asks for the password in that terminal; the shell holds
+// no privilege and asks for none.
 var HOLD = "\"$@\"; printf '\\nPress Enter to close this window. '; read -r _"
 var UPDATE_ARGV  = ["sh", "-c", HOLD, "sh", "sudo", "rime", "update"]
-var PLAN_ARGV    = ["sh", "-c", HOLD, "sh", "rime", "update", "--plan"]
+var PLAN_ARGV    = ["sh", "-c", HOLD, "sh", "sudo", "rime", "update", "--plan"]
 var EXPLAIN_ARGV = ["sh", "-c", HOLD, "sh", "rime", "live", "explain"]
 
 if (typeof module !== "undefined" && module.exports)

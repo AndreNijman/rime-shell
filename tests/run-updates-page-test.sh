@@ -197,9 +197,9 @@ fi
 tails="$(awk '/^---$/ { if (n) print s; s = ""; n = 1; i = 0; next }
               { i++; if (i > 4) s = s (s == "" ? "" : " ") $0 }
               END { if (n) print s }' "$TERMLOG")"
-want_tails=$'sudo rime update\nrime update --plan\nrime live explain'
-[ "$tails" = "$want_tails" ] && ok "the three commands are sudo rime update, rime update --plan, rime live explain" \
-    || bad "the three commands are sudo rime update, rime update --plan, rime live explain (got: ${tails//$'\n'/ | })"
+want_tails=$'sudo rime update\nsudo rime update --plan\nrime live explain'
+[ "$tails" = "$want_tails" ] && ok "the three commands are sudo rime update, sudo rime update --plan, rime live explain" \
+    || bad "the three commands are sudo rime update, sudo rime update --plan, rime live explain (got: ${tails//$'\n'/ | })"
 [ ! -s "$W/sudo-calls.log" ] && ok "nothing ran sudo" || bad "nothing ran sudo ($(cat "$W/sudo-calls.log"))"
 
 png="$W/updates-page.png"

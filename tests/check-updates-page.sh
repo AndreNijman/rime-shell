@@ -87,8 +87,8 @@ check_tree() {
     want "and there are exactly three" test "$(count "$page" 'DesktopExec\.runInTerminal\(')" = 3
     want "Update now opens sudo rime update" \
         has "$js" '^var UPDATE_ARGV  = \["sh", "-c", HOLD, "sh", "sudo", "rime", "update"\]$'
-    want "Show plan opens rime update --plan" \
-        has "$js" '^var PLAN_ARGV    = \["sh", "-c", HOLD, "sh", "rime", "update", "--plan"\]$'
+    want "Show plan opens sudo rime update --plan" \
+        has "$js" '^var PLAN_ARGV    = \["sh", "-c", HOLD, "sh", "sudo", "rime", "update", "--plan"\]$'
     want "Explain opens rime live explain" \
         has "$js" '^var EXPLAIN_ARGV = \["sh", "-c", HOLD, "sh", "rime", "live", "explain"\]$'
     want "the hold wrapper only runs its arguments" \
@@ -155,7 +155,7 @@ if [ "${1:-}" = "--self-test" ]; then
       "page|s/DesktopExec\.runInTerminal(L\.PLAN_ARGV)/DesktopExec.runInTerminal([\"sh\", \"-c\", root.status.summary])/|a button runs text from the status file"
       "page|s/onClicked: DesktopExec\.runInTerminal(L\.EXPLAIN_ARGV)/onClicked: Quickshell.execDetached([\"rime\", \"live\", \"explain\"])/|the page spawns on its own"
       "js|s/\"sh\", \"sudo\", \"rime\", \"update\"\]/\"sh\", \"sudo\", \"rime\", \"update\", \"--yes\"]/|Update now passes another argument"
-      "js|s/\"rime\", \"update\", \"--plan\"\]/\"sudo\", \"rime\", \"update\", \"--plan\"]/|Show plan asks for root"
+      "js|s/\"sudo\", \"rime\", \"update\", \"--plan\"\]/\"rime\", \"update\", \"--plan\"]/|Show plan runs without root and cannot download the release"
       "page|0,/plainText:        true/s//plainText:        false/|a row draws the file as markup"
       "page|s/titleItem\.textFormat:  Text\.PlainText/titleItem.textFormat:  Text.AutoText/|the hero draws the summary as markup"
       "page|s/onLoadFailed: root\._statusText = \"\"/onLoadFailed: {}/|a deleted status keeps being shown"
