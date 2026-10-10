@@ -641,6 +641,63 @@ QtObject {
 
     signal focusToggleRequested()
 
+    // ── The shell itself, for the OS's live update engine ────
+    // `sudo rime update` can replace the running Rime Shell. Before it does,
+    // it asks `qs -p /usr/share/rime-shell ipc call shell state` whether every
+    // session is unlocked (a replacement under the lock screen would drop the
+    // lock); after starting the new shell it asks `... shell revision` as its
+    // health check. Both are reads. There is deliberately no lock, no unlock
+    // and nothing else here: the engine decides, this only answers.
+    property var shellInfo: IpcHandler {
+        target: "shell"
+
+        function revision(): string {
+            return root.shellRevision
+        }
+
+        function state(): string {
+            const lock = root.shellLockState()
+            const pid = Number(Quickshell.processId)
+            return JSON.stringify({
+                "revision":   root.shellRevision,
+                "locked":     lock.locked,
+                "lockSecure": lock.lockSecure,
+                "pid":        Number.isInteger(pid) && pid > 0 ? pid : null
+            })
+        }
+    }
+
+    // The revision THIS process loaded, read once at startup and never again.
+    // The engine replaces the shell's directory before it starts the new
+    // shell, so a read at call time would have the old shell report the new
+    // revision and the health check would prove nothing.
+    property string shellRevision: ""
+    property FileView _commitFile: FileView {
+        path: Quickshell.shellDir + "/.rime-shell-commit"
+        blockLoading: true
+        printErrors: false
+    }
+    Component.onCompleted: {
+        const t = String(root._commitFile.text() || "").trim()
+        root.shellRevision = /^[0-9A-Za-z._-]{1,64}$/.test(t) ? t : ""
+    }
+
+    // Locked unless every flag says otherwise. `capturing` is a lock asked for
+    // and not yet engaged (LockState waits up to 120 ms for its picture), and
+    // `unlocking` is a correct password whose release has not landed: both are
+    // still locked as far as replacing the shell is concerned. Anything that
+    // cannot be read counts as locked.
+    function shellLockState() {
+        try {
+            const secure = LockState.lockSecure === true
+            const locked = LockState.locked !== false || LockState.unlocking !== false
+                           || LockState.capturing !== false || secure
+            return { "locked": locked, "lockSecure": secure }
+        } catch (e) {
+            return { "locked": true, "lockSecure": false }
+        }
+    }
+
     // ── Session Lock ─────────────────────────────────────────
     // External entry point for the native lock screen (windows/Lockscreen.qml).
     // Invoked by scripts/PowerControl.sh, hypridle's lock_cmd, and
