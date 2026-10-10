@@ -9,11 +9,12 @@ import "../../../components/config"
 // that directory holds pragma-Singleton services too, and the qmldir entry
 // exists precisely to hand this type out.
 import "../../"
+import "../../../nexus"
 
 // Config → Misc
 //   • About — name, version, repo, config provider
 //   • System — distro, kernel, WM, uptime, packages, hostname (SystemStats)
-//   • Updates — auto-update toggle, status, check / apply
+//   • Updates — release notes after an update; the rest is Config → Updates
 //   • Shell — reload the Quickshell config
 //   • Keybinds — reset every shortcut to default (two-click confirm)
 //   • Reset — restore all appearance/layout settings (two-click confirm)
@@ -298,42 +299,15 @@ CfgScroll {
             }
         }
 
+        // Rime has one updater, `sudo rime update`, and the shell is part of
+        // the image it updates. Its own git updater lived here and is gone.
         CfgRow {
-            label:       "Automatic updates"
-            description: "Check origin/main on startup"
-            CfgSwitch {
-                checked: UpdateService.autoUpdate
-                onToggled: function(v) { UpdateService.setAutoUpdate(v) }
-            }
-        }
-
-        CfgRow {
-            label:       "Status"
-            description: UpdateService.checking
-                ? "Checking…"
-                : (UpdateService.commitsBehind > 0
-                    ? (UpdateService.commitsBehind + " update(s) available")
-                    : "Up to date")
+            label:       "System updates"
+            description: "Whether a newer Rime is out, and what the last update changed"
             CfgButton {
-                label: "Check now"
-                icon:  "󰑐"
-                onClicked: UpdateService.check()
-            }
-        }
-
-        Item {
-            width:   parent.width
-            height:  UpdateService.updateAvailable ? 38 : 0
-            clip:    true
-            visible: UpdateService.updateAvailable
-            // Anchored, not `x: 10` — same reason as the About row above.
-            CfgButton {
-                anchors.left:           parent.left
-                anchors.verticalCenter: parent.verticalCenter
-                variant: "accent"
-                label:   "Update now"
-                icon:    "󰚰"
-                onClicked: UpdateService.stashAndUpdate()
+                label: "Open Updates"
+                icon:  "󰚰"
+                onClicked: NexusState.page = "updates"
             }
         }
     }

@@ -352,7 +352,7 @@ keys_on_visible = re.search(r'keyboardFocus:\s*root\.visible', s)
 sys.exit(0 if (mapped and lifecycle and not keys_on_visible) else 1)
 PY2
 }
-for f in src/windows/ConfirmDialog.qml src/windows/DisplayConfirm.qml src/windows/UpdatePopup.qml \
+for f in src/windows/ConfirmDialog.qml src/windows/DisplayConfirm.qml \
          src/popups/WindowSwitcher.qml src/popups/ScreenRecOptionsPopup.qml; do
     dialog_on_lifecycle "$f" && ok "$(basename "$f" .qml) maps from its lifecycle and holds the keys only while open" \
         || bad "$(basename "$f" .qml) is off the lifecycle, or holds the keyboard on visible"

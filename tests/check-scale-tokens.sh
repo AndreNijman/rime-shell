@@ -264,7 +264,7 @@ fi
 # closure rule below, which needs no list at all.
 PER_OUTPUT="src/windows/DisplayConfirm.qml src/windows/ConfirmDialog.qml \
             src/windows/TopBar.qml src/windows/Border.qml \
-            src/windows/PopupDismiss.qml src/windows/UpdatePopup.qml \
+            src/windows/PopupDismiss.qml \
             src/popups/Osd.qml src/popups/Dashboard.qml \
             src/nexus/Nexus.qml src/windows/Lockscreen.qml \
             src/services/agents/SessionRow.qml \
