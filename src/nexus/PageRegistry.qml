@@ -15,7 +15,7 @@ import "../services/config_tab/pages"
 //
 // `group` is the navigation's section (UI/UX Phase 19b): the pages are listed
 // in group order, and NavPane draws a section label above the first page of
-// each group. Sixteen pages in one flat column read as a pile; five groups — what
+// each group. Seventeen pages in one flat column read as a pile; five groups — what
 // it looks like, how you drive it, who may reach what, the devices paired to it,
 // and the machine itself — read as a map.
 //

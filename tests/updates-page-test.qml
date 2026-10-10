@@ -109,7 +109,7 @@ ShellRoot {
     }
     function run(argv, then) { root._afterSh = then; sh.command = argv; sh.running = true }
     function place(fixture, dest, then) {
-        root.run(["sh", "-c", "cp \"$1\" \"$2.tmp\" && mv -f \"$2.tmp\" \"$2\"", "sh",
+        root.run(["sh", "-c", "mkdir -p \"${2%/*}\" && cp \"$1\" \"$2.tmp\" && mv -f \"$2.tmp\" \"$2\"", "sh",
                   root.fixtures + "/" + fixture, dest], then)
     }
     function remove(dest, then) { root.run(["rm", "-f", dest], then) }
@@ -213,6 +213,9 @@ ShellRoot {
                          root.eq("no files: no component rows", root.compRows().length, 0)
                          root.check("no files: no 'What changed' heading over nothing",
                                     root.showing("What changed") === null)
+                         // No status, but the image says what it is.
+                         root.check("no status: the running release comes from release.json",
+                                    root.showing("Rime 2026.10.09") !== null)
                          root.next()
                      })
     }
@@ -233,15 +236,34 @@ ShellRoot {
                          })
         })
     }
+    // One press at a time, each waited for in the stub's record: the terminal
+    // is started detached, so three presses in a row would race to the log.
+    readonly property string termLog: Quickshell.env("RIME_UP_TERMLOG") || ""
+    function waitForCalls(n, then, tries) {
+        root.run(["sh", "-c", "[ \"$(grep -c '^---$' \"$1\" 2>/dev/null)\" -ge \"$2\" ]", "sh",
+                  root.termLog, String(n)],
+                 function (code) {
+                     if (code === 0) { then(true); return }
+                     if ((tries || 0) >= 50) { then(false); return }
+                     pressPause.then = function () { root.waitForCalls(n, then, (tries || 0) + 1) }
+                     pressPause.restart()
+                 })
+    }
+    Timer { id: pressPause; interval: 100; property var then: null; onTriggered: then() }
     function presses() {
-        const u = root.button("Update now"), p = root.button("Show plan"), e = root.button("Explain")
-        root.check("an Update now button", u !== null)
-        root.check("a Show plan button", p !== null)
-        root.check("an Explain button", e !== null)
-        if (u) u.press()
-        if (p) p.press()
-        if (e) e.press()
-        root.next()
+        const order = ["Update now", "Show plan", "Explain"]
+        const step = function (i) {
+            if (i >= order.length) { root.next(); return }
+            const b = root.button(order[i])
+            root.check("a " + order[i] + " button", b !== null)
+            if (!b) { step(i + 1); return }
+            b.press()
+            root.waitForCalls(i + 1, function (seen) {
+                root.check(order[i] + " reached the terminal helper", seen)
+                step(i + 1)
+            })
+        }
+        step(0)
     }
     function grab() {
         if (root.grabPath === "") { root.next(); return }

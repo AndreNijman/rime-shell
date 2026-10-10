@@ -55,7 +55,9 @@ TERMLOG="$W/terminal-calls.log"
 cat > "$W/bin/xdg-terminal-exec" <<'STUB'
 #!/usr/bin/env bash
 # Records the argv it was handed and runs none of it.
-{ printf '%s\n' "---"; printf '%s\n' "$@"; } >> "$RIME_UP_TERMLOG"
+# One write per call, so two calls can never interleave their lines.
+rec="$(printf '%s\n' "---" "$@")"
+printf '%s\n' "$rec" >> "$RIME_UP_TERMLOG"
 exit 0
 STUB
 chmod +x "$W/bin/xdg-terminal-exec"
@@ -63,7 +65,9 @@ chmod +x "$W/bin/xdg-terminal-exec"
 printf '#!/bin/sh\necho "sudo was run: $*" >> "%s"\nexit 1\n' "$W/sudo-calls.log" > "$W/bin/sudo"
 chmod +x "$W/bin/sudo"
 
-mkdir -p "$W/run-live" "$W/run-update"
+# The status directory does NOT exist at the start, as /run/rime-live does not
+# on most machines: the page must cope, quietly, until the engine creates it.
+mkdir -p "$W/run-update"
 STATUS="$W/run-live/status.json"
 CHECKER="$W/run-update/state"
 READY="$W/ipc-ready"
@@ -88,7 +92,7 @@ log="$W/page.log"
     RIME_UP_REVISION="$REVISION" \
     RIME_UP_TERMLOG="$TERMLOG" \
     RIME_UP_GRAB="$W/updates-page.png" \
-    RIME_RELEASE_JSON="$here/fixtures/live-update/no-such-release.json" \
+    RIME_RELEASE_JSON="$here/fixtures/live-update/release.json" \
     QT_LOGGING_RULES="qml=true" \
     timeout 240 quickshell -p "$staged" ) > "$log" 2>&1 &
 qs_pid=$!
@@ -157,6 +161,13 @@ if grep -qE "TypeError|ReferenceError" "$log"; then
     bad "no binding threw"; grep -E "TypeError|ReferenceError" "$log" | sort -u | head -5 | sed 's/^/          /'
 else
     ok "no binding threw"
+fi
+# Absent files are the normal case: a warning per poll would fill the journal.
+if grep -E "WARN|ERROR" "$log" | grep -qE "run-live|run-update|status\.json"; then
+    bad "an absent or missing-directory status file logs nothing"
+    grep -E "WARN|ERROR" "$log" | grep -E "run-live|run-update|status\.json" | sort -u | head -5 | sed 's/^/          /'
+else
+    ok "an absent or missing-directory status file logs nothing"
 fi
 summary="$(grep -o 'passed=[0-9]* failed=[0-9]*' "$log" | tail -1)"
 if [ -z "$summary" ]; then
