@@ -377,6 +377,7 @@ PanelWindow {
                             AppLauncher {
                                 anchors.fill: parent
                                 onScreen: root.pageLive && root.page === "launcher"
+                                summoned: root.open && root.page === "launcher"
                             }
                         }
                     }
