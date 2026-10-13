@@ -55,8 +55,9 @@ RowLayout {
                 implicitWidth: toggle.implicitHeight
                 implicitHeight: toggle.implicitHeight
 
-                OpenPill { shown: toggle.open }
+                OpenPill { shown: toggle.open; glyph: trayGlyph }
                 Text {
+                    id: trayGlyph
                     anchors.centerIn: parent
                     text: "\u{f10ac}"
                     font.family: Theme.fontIcon

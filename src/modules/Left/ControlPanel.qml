@@ -98,7 +98,7 @@ IconBtn {
 
     // The open state of the control that opened the power menu (brief §D.5:
     // the same rule on the left notch as on the right).
-    OpenPill { shown: Popups.archMenuOpen }
+    OpenPill { shown: Popups.archMenuOpen; glyph: logo }
 
     onClicked: {
         var next = !Popups.archMenuOpen
