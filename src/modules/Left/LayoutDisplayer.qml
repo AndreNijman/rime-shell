@@ -89,11 +89,13 @@ Item {
         }
         OpenPill {
             shown: button.open
+            glyph: layoutGlyph
             size: button.height
             width: button.width
         }
 
         LayoutGlyph {
+            id: layoutGlyph
             anchors.centerIn: parent
             width:  root.theme.px(18)
             height: root.theme.px(13)

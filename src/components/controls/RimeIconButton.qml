@@ -25,6 +25,8 @@ RimePressable {
     property color  glyphColor: root.selected || (root.bar && root.pressed) ? Theme.accentText
                               : root.hovered ? Theme.textPrimary : Theme.iconDefault
     property int    glyphSize: theme.typeIcon
+    // The drawn glyph, for an OpenPill inside this button to centre on.
+    readonly property Item glyphItem: glyphText
 
     implicitWidth: root.size
     implicitHeight: root.size
@@ -41,6 +43,7 @@ RimePressable {
         Behavior on color { MotionColor { role: "hover" } }
     }
     Text {
+        id: glyphText
         anchors.centerIn: parent
         text: root.glyph
         font.family: Theme.fontIcon

@@ -1743,6 +1743,12 @@ jobs:
       - name: The launcher takes the keys on every open (Reduce Motion)
         run: REDUCE_MOTION=true ./tests/run-launcher-focus-test.sh
 
+      # Every bar control's open pill sits on its glyph's drawn ink, at every
+      # scale factor, measured from the pixels. Needs labwc and PIL; skips
+      # cleanly without quickshell.
+      - name: Bar open pills are centred on their glyphs
+        run: ./tests/run-open-pill-centre-test.sh
+
       # The Agents and Config tabs on the keyboard: the agents guide opens on
       # its section list, keeps Tab inside it, closes on Escape alone and hands
       # the keys back; a wallpaper applied from the Appearance strip, read off
