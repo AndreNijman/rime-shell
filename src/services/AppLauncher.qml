@@ -352,10 +352,15 @@ Item {
 
     function _arrive() {
         askDebounce.stop()
+        // Leaving (a close, another page): nothing may take the keys back, and
+        // the preview and answer stay on screen while the surface animates
+        // away; the next arrival clears them.
+        if (!root.summoned) {
+            focusTimer.stop()
+            return
+        }
         _forgetAnswer()
         root.closePreview()
-        if (!root.summoned)
-            return
         root.query     = ""
         root.selIndex  = 0
         root._forgetPointer()
