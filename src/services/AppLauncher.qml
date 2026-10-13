@@ -13,8 +13,8 @@ import "search.js" as Search
 // package search (roadmap §15).
 //
 // Lives inside Dashboard.qml on the "launcher" page. Dashboard is a PanelWindow
-// with WlrKeyboardFocus.Exclusive, so TextInput receives keys without extra
-// wiring.
+// with WlrKeyboardFocus.Exclusive, so the window gets the keys; which item in
+// it gets them is `summoned`'s job (below).
 //
 // This file is the SURFACE. It ranks nothing, decides nothing about what may
 // run, and builds no command line. Every one of those lives in
@@ -75,6 +75,15 @@ Item {
     // is how the stats page once kept six pollers running after the dashboard
     // was closed.
     property bool onScreen: false
+
+    // "The user just asked for the launcher": the Dashboard is open on this
+    // page. Every open, and every switch to this page, starts here with an
+    // empty field that has the keys. Item `visible` cannot say it: a close
+    // hides the window, not the page, so a reopen of the same page changes
+    // nothing visible, and the page is created already visible on its first
+    // open. Both used to leave the keys with the item the Dashboard's close
+    // focuses, until a few closes and opens happened to flip the page.
+    property bool summoned: false
 
     property int  selIndex: -1
     property string query: ""
@@ -335,19 +344,30 @@ Item {
         }
     }
 
-    onVisibleChanged: {
+    // A page created already summoned can see both: the binding's first value
+    // may signal a change, and onCompleted is the guarantee. _arrive() twice is
+    // the same empty, focused field.
+    onSummonedChanged: root._arrive()
+    Component.onCompleted: if (root.summoned) root._arrive()
+
+    function _arrive() {
         askDebounce.stop()
+        // Leaving (a close, another page): nothing may take the keys back, and
+        // the preview and answer stay on screen while the surface animates
+        // away; the next arrival clears them.
+        if (!root.summoned) {
+            focusTimer.stop()
+            return
+        }
         _forgetAnswer()
         root.closePreview()
-        if (!visible)
-            return
         root.query     = ""
         root.selIndex  = 0
         root._forgetPointer()
         searchInput.text = ""
         // Focus now, so the first key typed is not lost; the timer is the
         // fallback for the open, when the window's own keyboard grab lands
-        // a few milliseconds after the page is shown.
+        // a few milliseconds after the Dashboard opens.
         searchInput.forceActiveFocus()
         focusTimer.restart()
         root._reveal()

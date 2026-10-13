@@ -1732,6 +1732,17 @@ jobs:
       - name: The Dashboard's Home and Tasks tabs answer the keyboard (Reduce Motion)
         run: REDUCE_MOTION=true ./tests/run-dashboard-keys-test.sh
 
+      # Alt+Space's launcher takes the keys on every open: the first of the
+      # session, reopens 50-300 ms after a close (before it has finished, so
+      # the page never changed), after Escape, and from another page. Each
+      # round types an app's name and Return; the app's own log is the proof.
+      # Needs labwc and wtype; skips cleanly without them.
+      - name: The launcher takes the keys on every open
+        run: ./tests/run-launcher-focus-test.sh
+
+      - name: The launcher takes the keys on every open (Reduce Motion)
+        run: REDUCE_MOTION=true ./tests/run-launcher-focus-test.sh
+
       # The Agents and Config tabs on the keyboard: the agents guide opens on
       # its section list, keeps Tab inside it, closes on Escape alone and hands
       # the keys back; a wallpaper applied from the Appearance strip, read off
