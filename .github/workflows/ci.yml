@@ -1627,6 +1627,10 @@ jobs:
       - name: Every button is big enough to hit
         run: ./tests/check-hit-targets.sh
 
+      # The Dashboard calendar's "today" follows the wall clock across suspend.
+      - name: Calendar today follows the clock
+        run: ./tests/check-calendar-today.sh
+
       # The motion table and its policy, in node: exits shorter than entrances,
       # no curve overshoots, spatial tokens are 0 under Reduce Motion while
       # effects survive capped, the legacy animDuration migrates by its ratio
