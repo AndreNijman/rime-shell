@@ -14,6 +14,8 @@ StatCard {
     property int    _year:  0
     property int    _month: 0
     property int    _today: 0
+    property int    _todayMonth: 0
+    property int    _todayYear:  0
     property var    _days:  []
     property string _label: ""
 
@@ -24,12 +26,28 @@ StatCard {
     readonly property var _dowNames: ["Su","Mo","Tu","We","Th","Fr","Sa"]
 
     Component.onCompleted: {
-        var now   = new Date()
-        _year     = now.getFullYear()
-        _month    = now.getMonth()
-        _today    = now.getDate()
+        _syncToday(true)
+    }
+
+    // Re-read the wall clock. Called from a repeating timer and whenever the
+    // card is shown, so a suspend (monotonic timers stop) or a clock change
+    // can never leave "today" at the date the session started. Navigation is
+    // only reset to the current month when the day actually changes.
+    function _syncToday(force) {
+        var now = new Date()
+        var d = now.getDate(), m = now.getMonth(), y = now.getFullYear()
+        if (!force && d === _today && m === _todayMonth && y === _todayYear)
+            return
+        _today = d; _todayMonth = m; _todayYear = y
+        _year = y; _month = m
         _rebuild()
     }
+
+    // On screen = this item and its window are both visible. A hidden page
+    // (LazyPage) or a closed dashboard stops the timer and re-reads the date
+    // the moment it is shown again.
+    readonly property bool _live: visible && window !== null && window.visible
+    on_LiveChanged: if (_live) _syncToday(false)
 
     function _rebuild() {
         _label = _monthNames[_month].substring(0,3).toUpperCase() + "  " + _year
@@ -56,24 +74,12 @@ StatCard {
         _rebuild()
     }
 
-	Timer {
-		running: true
-		Component.onCompleted: {
-			var now = new Date()
-			var tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
-			interval = tomorrow - now // Set interval to exact time until midnight
-		}
-		onTriggered: {
-			var now = new Date()
-			root._year  = now.getFullYear()
-			root._month = now.getMonth()
-			root._today = now.getDate()
-			root._rebuild()
-
-			interval = 86400000 // Reset to 24 hours for the next day
-			restart()
-		}
-	}
+    Timer {
+        interval: 30000
+        running: root._live
+        repeat: true
+        onTriggered: root._syncToday(false)
+    }
 
     // ── UI ────────────────────────────────────────────────────────────────────
     Item {
@@ -157,8 +163,8 @@ StatCard {
 
                     readonly property bool isToday:
                         modelData.cur && modelData.n === root._today &&
-                        root._month === new Date().getMonth() &&
-                        root._year  === new Date().getFullYear()
+                        root._month === root._todayMonth &&
+                        root._year  === root._todayYear
 
                     Rectangle {
                         anchors.centerIn: parent
