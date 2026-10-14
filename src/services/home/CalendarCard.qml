@@ -42,7 +42,12 @@ StatCard {
         _year = y; _month = m
         _rebuild()
     }
-    onVisibleChanged: if (visible) _syncToday(false)
+
+    // On screen = this item and its window are both visible. A hidden page
+    // (LazyPage) or a closed dashboard stops the timer and re-reads the date
+    // the moment it is shown again.
+    readonly property bool _live: visible && window !== null && window.visible
+    on_LiveChanged: if (_live) _syncToday(false)
 
     function _rebuild() {
         _label = _monthNames[_month].substring(0,3).toUpperCase() + "  " + _year
@@ -71,7 +76,7 @@ StatCard {
 
     Timer {
         interval: 30000
-        running: true
+        running: root._live
         repeat: true
         onTriggered: root._syncToday(false)
     }
