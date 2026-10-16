@@ -684,6 +684,8 @@ jobs:
           # The static half runs here; the behavioural half needs a compositor
           # and skips, which is why the name checking is not left to it.
           ./tests/run-niri-keybinds-test.sh
+          # The window switcher's generated binds; skips without a compositor.
+          ./tests/run-switcher-keybinds-test.sh
 
       - name: Compositor facade behavioural test
         run: |
