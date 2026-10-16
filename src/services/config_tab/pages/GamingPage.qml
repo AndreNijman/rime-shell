@@ -242,6 +242,27 @@ CfgScroll {
         }
     }
 
+    // ── Alt+Tab ───────────────────────────────────────────────────────────────
+    // Off by default. Not gated on `usable`: it is a shell setting, it works
+    // on a machine that cannot boot into Gaming Mode, and Steam is still
+    // installable from the desktop.
+    CfgSection {
+        title: "Alt+Tab"
+
+        CfgRow {
+            label: "Hide games from Alt+Tab"
+            description: "Steam, the games it starts and Sober are left out of " +
+                         "Alt+Tab, so it cycles through everything else and " +
+                         "never switches to a game. Opening them any other " +
+                         "way still works."
+
+            CfgSwitch {
+                checked: GamingService.hideFromSwitcher
+                onToggled: function(v) { GamingService.setHideFromSwitcher(v) }
+            }
+        }
+    }
+
     // ── Advanced ──────────────────────────────────────────────────────────────
     // Criterion 4. The setup checks are here rather than above because none of
     // them is fixed by installing a package: they are files an image ships, so a

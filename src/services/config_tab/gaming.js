@@ -291,6 +291,33 @@ function discordLine(d) {
            "on the desktop."
 }
 
+// ── Hiding games from the ALT+Tab switcher ──────────────────────────────────
+// `hide_games_from_switcher` in ~/.config/rime/gaming.json. Only a literal
+// true turns it on, the same rule rime-gaming-discord applies to its own key.
+//
+// Which windows: Steam itself (its client and web helper), every Steam game
+// (Steam gives native and Proton games alike an app id of `steam_app_<N>`)
+// and Sober, Roblox's Linux runtime (Flatpak id org.vinegarhq.Sober). One
+// list, here, because the switcher and the test both read it.
+var SWITCHER_HIDDEN_APP_IDS = [
+    /^steam$/, /^steamwebhelper$/, /^steam_app_\d+$/, /^steam_proton$/,
+    /^org\.vinegarhq\.sober$/, /^sober$/
+]
+
+function isHiddenFromSwitcher(appId) {
+    var id = _str(appId).trim().toLowerCase()
+    if (id === "") return false
+    for (var i = 0; i < SWITCHER_HIDDEN_APP_IDS.length; i++)
+        if (SWITCHER_HIDDEN_APP_IDS[i].test(id)) return true
+    return false
+}
+
+function readHideFromSwitcher(raw) {
+    var v
+    try { v = JSON.parse(_str(raw)) } catch (e) { return false }
+    return _isObject(v) && v.hide_games_from_switcher === true
+}
+
 if (typeof module !== "undefined" && module.exports)
     module.exports = {
         TOOLS: TOOLS, SETUP: SETUP,
@@ -301,5 +328,7 @@ if (typeof module !== "undefined" && module.exports)
         readModeStatus: readModeStatus, inGamingMode: inGamingMode,
         policyLine: policyLine,
         readDiscord: readDiscord, discordCanEnable: discordCanEnable,
-        discordLine: discordLine
+        discordLine: discordLine,
+        isHiddenFromSwitcher: isHiddenFromSwitcher,
+        readHideFromSwitcher: readHideFromSwitcher
     }

@@ -230,6 +230,22 @@ check("a JSON array is not a report", G.readDiscord("[]").ok, false);
 check("only a literal true enables", G.readDiscord('{"enabled": "yes", "ready": 1}').enabled, false);
 check("nothing read yet", G.discordLine(null), "Reading…");
 
+// ── Hiding games from the ALT+Tab switcher ──────────────────────────────────
+check("Steam, its games and Sober are hidden",
+      ["steam", "Steam", "steamwebhelper", "steam_app_1091500", "steam_app_0",
+       "org.vinegarhq.Sober", "sober"].map(G.isHiddenFromSwitcher),
+      [true, true, true, true, true, true, true]);
+check("everything else is not",
+      ["firefox", "org.mozilla.firefox", "steam_app_", "steamer", "mysteam", "", null, undefined]
+          .map(G.isHiddenFromSwitcher),
+      [false, false, false, false, false, false, false, false]);
+check("only a literal true hides games",
+      [G.readHideFromSwitcher('{"hide_games_from_switcher": true}'),
+       G.readHideFromSwitcher('{"hide_games_from_switcher": "yes"}'),
+       G.readHideFromSwitcher('{"discord_presence": true}'),
+       G.readHideFromSwitcher("not json"), G.readHideFromSwitcher("[]"), G.readHideFromSwitcher("")],
+      [true, false, false, false, false, false]);
+
 if (failed > 0) {
     console.error(`\n${failed} assertion(s) failed`);
     process.exit(1);
