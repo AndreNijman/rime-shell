@@ -218,7 +218,7 @@ QtObject {
 
     function stage(action, mods, key) {
         if (!root._defaults[action]) return
-        if (root._defaults[action].type === "switcher") {
+        if (root._defaults[action].type === "switcher" && String(key || "") !== "") {
             var why = root._switcherProblem(mods, key)
             if (why !== "") { root.lastError = why; return }
             root.lastError = ""
@@ -745,6 +745,9 @@ QtObject {
 
     function _switcherProblem(mods, key) {
         if (String(key || "").trim() === "") return "The window switcher needs a key."
+        var kl = String(key).trim().toLowerCase()
+        if (kl === "escape" || kl === "return")
+            return "Escape and Return cancel and commit the switcher, so they cannot be its key."
         if (root._switcherModifier(mods) === "")
             return "The window switcher needs exactly one of Alt, Super or Ctrl held "
                  + "(no Shift, no other modifier): letting go of it is what switches."
@@ -960,8 +963,23 @@ QtObject {
                         sb = root._switcherBinds(root._defaults[e.k].mods, root._defaults[e.k].key)
                     }
                     lines.push("local switcher = \"/usr/libexec/rime-switcher\"")
+                    // Cancel, commit and the reverse chord are conveniences on
+                    // top of next and the release. One another action already
+                    // owns (SUPER+Escape is the power menu) is left to that
+                    // action: Hyprland would fire both.
+                    var taken = {}
+                    for (var ti = 0; ti < data.order.length; ti++)
+                        for (var tj = 0; tj < data.groups[data.order[ti]].length; tj++) {
+                            var te = data.groups[data.order[ti]][tj]
+                            if (te.k !== e.k) taken[root._combo(te.mods, te.key)] = true
+                        }
                     for (var bi = 0; bi < sb.length; bi++) {
                         var b = sb[bi]
+                        if (bi > 0 && !b.release && taken[root._combo(b.mods, b.key)]) {
+                            lines.push("-- " + b.verb + " on " + b.mods + " + " + b.key
+                                       + " is another action's; not bound here")
+                            continue
+                        }
                         lines.push("claim(" + root._luaStr(b.mods) + ", " + root._luaStr(b.key) + ")")
                         lines.push("hl.bind(" + root._luaStr(b.mods + " + " + b.key)
                                    + ", hl.dsp.exec_cmd(switcher .. \" " + b.verb + "\"), "
@@ -1149,7 +1167,7 @@ QtObject {
                 // launch is a spawn, which niri does natively; the guard was
                 // catching far more than it meant to.
                 // The switcher is Hyprland's: niri keeps its own recent-windows
-                // switcher, written after this block from the same combo.
+                // switcher, written after this block at its own fixed combo.
                 if (e.type === "switcher") continue
 
                 if (e.type === "exec") {
@@ -1215,15 +1233,10 @@ QtObject {
         lines.push("// src/services/WindowSwitcherService.qml for why this session keeps it.")
         lines.push("recent-windows {")
         lines.push("    binds {")
-        // The combo the user chose for the switcher, when it is a valid one.
-        var swc = root.keybinds["window-switcher"] || root._defaults["window-switcher"]
-        if (root._switcherBinds(swc.mods, swc.key).length === 0) swc = root._defaults["window-switcher"]
-        // niri spells keys "Tab", the model "TAB".
-        var swKey  = swc.key.length > 1 ? swc.key.charAt(0).toUpperCase() + swc.key.slice(1).toLowerCase() : swc.key
-        var swNext = _modsToKdl(swc.mods).concat([swKey]).join("+")
-        var swPrev = _modsToKdl(swc.mods).concat(["Shift", swKey]).join("+")
-        lines.push("        " + swNext + " { next-window; }")
-        lines.push("        " + swPrev + " { previous-window; }")
+        // Pinned at Alt+Tab on purpose: niri's switcher is niri's, so the
+        // Window Switcher row in Settings moves Hyprland's and leaves this.
+        lines.push("        Alt+Tab       { next-window; }")
+        lines.push("        Alt+Shift+Tab { previous-window; }")
         lines.push("    }")
         lines.push("}")
         return lines.join("\n")

@@ -41,6 +41,15 @@ ShellRoot {
         }
     }
 
+    // every `hl.bind("<combo>"` combo in a generated file, as a sorted list
+    function combos(lua, needle) {
+        return lua.split("\n").filter(function (l) { return l.indexOf("hl.bind(") === 0 && l.indexOf(needle) >= 0 })
+            .map(function (l) { return l.slice(9, l.indexOf('"', 9)) }).sort()
+    }
+    function claims(lua) {
+        return lua.split("\n").filter(function (l) { return l.indexOf("claim(") === 0 })
+            .map(function (l) { return l.slice(6, -1).replace(/"/g, "").replace(", ", "|") })
+    }
     function rebound(mods, key) {
         const copy = Object.assign({}, KeybindService.keybinds)
         copy["window-switcher"] = Object.assign({}, copy["window-switcher"], { mods: mods, key: key })
@@ -52,10 +61,9 @@ ShellRoot {
         const def = KeybindService._genLua()
         check("the default is ALT+TAB next", def.indexOf('hl.bind("ALT + TAB", hl.dsp.exec_cmd(switcher .. " next")') >= 0)
         check("and the reverse is ALT+SHIFT+TAB", def.indexOf('hl.bind("ALT + SHIFT + TAB", hl.dsp.exec_cmd(switcher .. " prev")') >= 0)
-        check("both Alt releases commit, with and without SHIFT",
-              root.count(def, "release = true") === 4
-              && def.indexOf('hl.bind("ALT + Alt_R"') >= 0
-              && def.indexOf('hl.bind("ALT + SHIFT + Alt_L"') >= 0)
+        check("exactly the four Alt releases commit: both hands, with and without SHIFT",
+              JSON.stringify(root.combos(def, "release = true"))
+              === JSON.stringify(["ALT + Alt_L", "ALT + Alt_R", "ALT + SHIFT + Alt_L", "ALT + SHIFT + Alt_R"]))
         check("the release binds do not consume the key",
               def.split("\n").filter(function (l) { return l.indexOf("release = true") >= 0 })
                  .every(function (l) { return l.indexOf("non_consuming = true") >= 0 }))
@@ -67,13 +75,19 @@ ShellRoot {
 
         const sup = rebound("SUPER", "GRAVE")
         check("rebound: the new combo is next", sup.indexOf('hl.bind("SUPER + GRAVE", hl.dsp.exec_cmd(switcher .. " next")') >= 0)
-        check("rebound: letting go of SUPER commits, both hands",
-              sup.indexOf('hl.bind("SUPER + Super_L"') >= 0 && sup.indexOf('hl.bind("SUPER + SHIFT + Super_R"') >= 0)
+        check("rebound: exactly the four Super releases commit",
+              JSON.stringify(root.combos(sup, "release = true"))
+              === JSON.stringify(["SUPER + SHIFT + Super_L", "SUPER + SHIFT + Super_R", "SUPER + Super_L", "SUPER + Super_R"]))
         check("rebound: nothing of the switcher is left on Alt",
-              sup.split("\n").filter(function (l) { return l.indexOf("hl.bind(") === 0 && /Alt_[LR]|"ALT \+ TAB"/.test(l) }).length === 0)
-        check("rebound: every OS Alt bind is switched off",
-              sup.indexOf('claim("ALT", "TAB")') >= 0 && sup.indexOf('claim("ALT", "Alt_R")') >= 0
-              && sup.indexOf('claim("ALT + SHIFT", "TAB")') >= 0)
+              sup.split("\n").filter(function (l) { return l.indexOf("hl.bind(") === 0 && /"ALT( \+ SHIFT)? \+ (TAB|Escape|Return)"|Alt_[LR]/.test(l) }).length === 0)
+        const cl = root.claims(sup)
+        check("rebound: every one of the OS's Alt switcher binds is switched off",
+              ["ALT|TAB", "ALT + SHIFT|TAB", "ALT|Escape", "ALT|Return", "ALT|Alt_L", "ALT|Alt_R",
+               "ALT + SHIFT|Alt_L", "ALT + SHIFT|Alt_R"].every(function (c) { return cl.indexOf(c) >= 0 }))
+
+        check("rebound to SUPER: Escape, owned by the power menu, is not also the cancel bind",
+              sup.indexOf('hl.bind("SUPER + Escape", hl.dsp.exec_cmd(switcher') < 0
+              && sup.indexOf("is another action's; not bound here") >= 0)
 
         const ctrl = rebound("CTRL", "TAB")
         check("rebound to CTRL: releases are on Control", ctrl.indexOf('hl.bind("CTRL + Control_L"') >= 0)
@@ -91,7 +105,14 @@ ShellRoot {
         check("staging an invalid combo is refused", KeybindService.staged["window-switcher"] === undefined
               && KeybindService.lastError !== "")
         KeybindService.stage("window-switcher", "SUPER", "TAB")
-        check("staging a valid one is kept", KeybindService.staged["window-switcher"] !== undefined)
+        check("staging a valid one is kept, exactly",
+              JSON.stringify(KeybindService.staged["window-switcher"]) === JSON.stringify({ mods: "SUPER", key: "TAB" }))
+        KeybindService.unstage("window-switcher")
+        KeybindService.stage("window-switcher", "", "")
+        check("clearing the switcher can be staged",
+              JSON.stringify(KeybindService.staged["window-switcher"]) === JSON.stringify({ mods: "", key: "" }))
+        check("Escape and Return cannot be the key",
+              KeybindService._switcherProblem("ALT", "Escape") !== "" && KeybindService._switcherProblem("SUPER", "RETURN") !== "")
         KeybindService.unstage("window-switcher")
 
         const owned = KeybindService._ownedCombos({})
@@ -108,12 +129,12 @@ ShellRoot {
 
         const kdl = (function () {
             const c = Object.assign({}, KeybindService.keybinds)
-            c["window-switcher"] = Object.assign({}, c["window-switcher"], { mods: "SUPER", key: "TAB" })
+            c["window-switcher"] = Object.assign({}, c["window-switcher"], { mods: "SUPER", key: "GRAVE" })
             KeybindService.keybinds = c
             return KeybindService._genKdl()
         })()
-        check("niri: recent-windows follows the combo", kdl.indexOf("Mod+Tab { next-window; }") >= 0
-              && kdl.indexOf("Mod+Shift+Tab { previous-window; }") >= 0)
+        check("niri keeps its own switcher at Alt+Tab whatever Hyprland's is bound to",
+              kdl.indexOf("Alt+Tab       { next-window; }") >= 0 && kdl.indexOf("GRAVE") < 0)
         check("niri: the switcher is not also a shell IPC toggle", kdl.indexOf('"window-switcher" "toggle"') < 0)
 
         console.log("passed=" + root.passed + " failed=" + root.failed)

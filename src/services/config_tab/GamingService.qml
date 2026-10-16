@@ -129,6 +129,7 @@ QtObject {
     property bool hideFromSwitcher: false
 
     function setHideFromSwitcher(on) {
+        root._hideWas = root.hideFromSwitcher
         root.hideFromSwitcher = on === true   // immediate; the read-back confirms
         root._hideSetProc.command = ["python3", "-I", "-c",
             "import json,os,sys\n" +
@@ -147,7 +148,14 @@ QtObject {
         root._hideSetProc.running = true
     }
 
-    property var _hideSetProc: Process { command: []; running: false }
+    property bool _hideWas: false
+    // A write that failed leaves the file as it was, so the switch goes back to
+    // what is actually saved rather than showing a setting that is not.
+    property var _hideSetProc: Process {
+        command: []
+        running: false
+        onExited: function(code) { if (code !== 0) root.hideFromSwitcher = root._hideWas }
+    }
 
     property var _hideFile: FileView {
         path: root._gamingJson

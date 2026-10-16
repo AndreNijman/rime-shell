@@ -212,8 +212,9 @@ Singleton {
             root.entries = list
             // The first entry is the window you are looking at, unless that is
             // one the setting hides: then it is not in the list, and the first
-            // step has to land on entry 0 (forward) or the last (back).
-            root.index = hidden ? -1 : 0
+            // step has to land on entry 0 (forward) or the last (back), which
+            // is what starting one before the first, or on it, gives.
+            root.index = hidden ? (delta > 0 ? -1 : 0) : 0
             root.open = true
             root._writeFlag(true)
         }
