@@ -117,6 +117,54 @@ QtObject {
 
     property var _setCommand: []
 
+    // ── Hiding games from ALT+Tab ─────────────────────────────────────────────
+    // One key in ~/.config/rime/gaming.json, the file rime-gaming-discord keeps
+    // its own key in. The shell is the only reader (WindowSwitcherService) and
+    // the only writer, so there is no helper: python3 rewrites the file with
+    // every other key left alone, and the FileView reads the result back.
+    readonly property string _gamingJson:
+        ((Quickshell.env("XDG_CONFIG_HOME") || "") !== ""
+            ? Quickshell.env("XDG_CONFIG_HOME")
+            : Quickshell.env("HOME") + "/.config") + "/rime/gaming.json"
+    property bool hideFromSwitcher: false
+
+    function setHideFromSwitcher(on) {
+        root._hideWas = root.hideFromSwitcher
+        root.hideFromSwitcher = on === true   // immediate; the read-back confirms
+        root._hideSetProc.command = ["python3", "-I", "-c",
+            "import json,os,sys\n" +
+            "p=sys.argv[1]\n" +
+            "try:\n" +
+            "    d=json.load(open(p))\n" +
+            "    d=d if isinstance(d,dict) else {}\n" +
+            "except (OSError,ValueError):\n" +
+            "    d={}\n" +
+            "d['hide_games_from_switcher']=sys.argv[2]=='on'\n" +
+            "os.makedirs(os.path.dirname(p),exist_ok=True)\n" +
+            "open(p+'.tmp','w').write(json.dumps(d,indent=2)+'\\n')\n" +
+            "os.replace(p+'.tmp',p)\n",
+            root._gamingJson, on === true ? "on" : "off"]
+        root._hideSetProc.running = false
+        root._hideSetProc.running = true
+    }
+
+    property bool _hideWas: false
+    // A write that failed leaves the file as it was, so the switch goes back to
+    // what is actually saved rather than showing a setting that is not.
+    property var _hideSetProc: Process {
+        command: []
+        running: false
+        onExited: function(code) { if (code !== 0) root.hideFromSwitcher = root._hideWas }
+    }
+
+    property var _hideFile: FileView {
+        path: root._gamingJson
+        watchChanges: true
+        onFileChanged: reload()
+        onLoaded: root.hideFromSwitcher = GM.readHideFromSwitcher(text())
+        onLoadFailed: root.hideFromSwitcher = false
+    }
+
     // ── Discord activity in Gaming Mode ───────────────────────────────────────
     // `rime-gaming-discord status --json` reads; `set on|off` is its only
     // write, entered from setDiscordPresence() alone and followed by a re-read,

@@ -170,6 +170,12 @@ QtObject {
         // is `qs -p <shell> ipc call overview-toggle toggle` on Hyprland and niri
         // (where the handler asks niri for its own overview).
         "overview-toggle":    { mods: "SUPER",         key: "TAB",    label: "Workspace Overview",   group: "Workspaces" },
+        // The window switcher. `type: "switcher"` is not one bind but the set
+        // _switcherBinds() derives from this combo: next, previous, cancel,
+        // commit, and the RELEASE of the held modifier, which is what commits.
+        // The release follows the modifier, which is why the model could not
+        // offer this before.
+        "window-switcher":    { mods: "ALT",           key: "TAB",    label: "Window Switcher",      group: "Window Management", type: "switcher" },
     })
 
     property var keybinds: ({})
@@ -212,6 +218,11 @@ QtObject {
 
     function stage(action, mods, key) {
         if (!root._defaults[action]) return
+        if (root._defaults[action].type === "switcher" && String(key || "") !== "") {
+            var why = root._switcherProblem(mods, key)
+            if (why !== "") { root.lastError = why; return }
+            root.lastError = ""
+        }
         var copy = Object.assign({}, root.staged)
         copy[action] = { mods: mods, key: key }
         root.staged = copy
@@ -286,6 +297,17 @@ QtObject {
             if (b && b.key) owned[_modsToMask(b.mods) + "+" + b.key.toLowerCase()] = true
             var p = ov[ks[i]]
             if (p && p.key) owned[_modsToMask(p.mods) + "+" + p.key.toLowerCase()] = true
+            // The switcher is a set of binds (cancel, commit, the releases),
+            // and hyprctl reports every one of them back.
+            if (root._defaults[ks[i]] && root._defaults[ks[i]].type === "switcher") {
+                var cands = [b, p, root._defaults[ks[i]]]
+                for (var ci = 0; ci < cands.length; ci++) {
+                    if (!cands[ci] || !cands[ci].key) continue
+                    var sbs = root._switcherBinds(cands[ci].mods, cands[ci].key)
+                    for (var si = 0; si < sbs.length; si++)
+                        owned[_modsToMask(sbs[si].mods) + "+" + sbs[si].key.toLowerCase()] = true
+                }
+            }
         }
         return owned
     }
@@ -518,6 +540,12 @@ QtObject {
         for (var i = 0; i < ks.length; i++) {
             var old = copy[ks[i]]
             if (!old) continue   // unknown action: nothing to merge into
+            // An empty key is an unbind. Anything else for the switcher must be
+            // a combo it can release on, whoever staged it.
+            if (old.type === "switcher" && (pending[ks[i]].key || "") !== "") {
+                var why = root._switcherProblem(pending[ks[i]].mods, pending[ks[i]].key)
+                if (why !== "") { root.lastError = why; return }
+            }
             copy[ks[i]] = Object.assign({}, old, {
                 mods: (pending[ks[i]].mods || "").toUpperCase().trim(),
                 key:  (pending[ks[i]].key  || "").toUpperCase().trim()
@@ -692,6 +720,67 @@ QtObject {
         l: "left", r: "right", u: "up", d: "down"
     })
 
+    // ── The window switcher's binds ───────────────────────────────────────────
+    //
+    // hold the modifier, tap the key, let go of the modifier. The release is
+    // what commits, so it has to follow whichever modifier the user picked:
+    // one release bind per keysym of that modifier (both hands), each with and
+    // without SHIFT, because after the reverse chord the fingers rarely leave
+    // both modifiers at the same instant. See rime-os rime/keybindings.lua for
+    // why each flag is what it is.
+    readonly property var _switcherHeld: ({
+        ALT:   ["Alt_L", "Alt_R"],
+        SUPER: ["Super_L", "Super_R"],
+        CTRL:  ["Control_L", "Control_R"]
+    })
+
+    // Exactly one of ALT, SUPER or CTRL, no SHIFT (SHIFT is the reverse
+    // direction), and a key. Anything else has no release to commit on, or two.
+    function _switcherModifier(mods) {
+        var parts = String(mods || "").toUpperCase().split("+")
+            .map(function (p) { return p.trim() }).filter(function (p) { return p !== "" })
+        if (parts.length !== 1) return ""
+        return root._switcherHeld[parts[0]] ? parts[0] : ""
+    }
+
+    function _switcherProblem(mods, key) {
+        if (String(key || "").trim() === "") return "The window switcher needs a key."
+        var kl = String(key).trim().toLowerCase()
+        if (kl === "escape" || kl === "return")
+            return "Escape and Return cancel and commit the switcher, so they cannot be its key."
+        if (root._switcherModifier(mods) === "")
+            return "The window switcher needs exactly one of Alt, Super or Ctrl held "
+                 + "(no Shift, no other modifier): letting go of it is what switches."
+        return ""
+    }
+
+    // Every bind the switcher is, as {mods, key, verb, release}. Empty when the
+    // combo is not a valid switcher (the caller falls back to the default).
+    function _switcherBinds(mods, key) {
+        var m = root._switcherModifier(mods)
+        if (m === "" || String(key || "").trim() === "") return []
+        var out = [
+            { mods: m,            key: key,      verb: "next",   desc: "Window switcher" },
+            { mods: m + " + SHIFT", key: key,    verb: "prev",   desc: "Window switcher (reverse)" },
+            { mods: m,            key: "Escape", verb: "cancel", desc: "Cancel the window switcher", soft: true },
+            { mods: m,            key: "Return", verb: "commit", desc: "Commit the window switcher", soft: true }
+        ]
+        var held = root._switcherHeld[m]
+        for (var i = 0; i < held.length; i++) {
+            out.push({ mods: m,             key: held[i], verb: "commit", release: true,
+                       desc: "Commit the window switcher" })
+            out.push({ mods: m + " + SHIFT", key: held[i], verb: "commit", release: true,
+                       desc: "Commit the window switcher" })
+        }
+        return out
+    }
+
+    function _switcherOpts(b) {
+        var o = b.release ? "release = true, non_consuming = true, transparent = true, "
+              : b.soft    ? "non_consuming = true, transparent = true, " : ""
+        return "{ " + o + "description = " + root._luaStr(b.desc) + " }"
+    }
+
     function _luaStr(s) {
         return '"' + String(s).replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"'
     }
@@ -837,6 +926,17 @@ QtObject {
             const curMods = cur ? (cur.mods || "") : ""
             const curKey  = cur ? (cur.key  || "") : ""
             if (curMods === (def.mods || "") && curKey === def.key) continue
+            if (def.type === "switcher") {
+                // The OS binds the whole set, not one combo. Every bind of the
+                // default is switched off, then the current combo (if any) is
+                // bound below under its own modifier.
+                const dsb = root._switcherBinds(def.mods, def.key)
+                lines.push("-- " + dk + " has moved off its default combo")
+                for (let si = 0; si < dsb.length; si++)
+                    lines.push("claim(" + root._luaStr(dsb[si].mods) + ", "
+                               + root._luaStr(dsb[si].key) + ")")
+                continue
+            }
             const tag = (def.mods || "") + "|" + def.key
             if (released[tag]) continue
             released[tag] = true
@@ -855,6 +955,38 @@ QtObject {
                 var combo = e.mods ? e.mods + " + " + e.key : e.key
 
                 var expression
+                if (e.type === "switcher") {
+                    var sb = root._switcherBinds(e.mods, e.key)
+                    if (sb.length === 0) {
+                        lines.push("-- " + e.k + ": " + root._switcherProblem(e.mods, e.key)
+                                   + " Falling back to the default.")
+                        sb = root._switcherBinds(root._defaults[e.k].mods, root._defaults[e.k].key)
+                    }
+                    lines.push("local switcher = \"/usr/libexec/rime-switcher\"")
+                    // Cancel, commit and the reverse chord are conveniences on
+                    // top of next and the release. One another action already
+                    // owns (SUPER+Escape is the power menu) is left to that
+                    // action: Hyprland would fire both.
+                    var taken = {}
+                    for (var ti = 0; ti < data.order.length; ti++)
+                        for (var tj = 0; tj < data.groups[data.order[ti]].length; tj++) {
+                            var te = data.groups[data.order[ti]][tj]
+                            if (te.k !== e.k) taken[root._combo(te.mods, te.key)] = true
+                        }
+                    for (var bi = 0; bi < sb.length; bi++) {
+                        var b = sb[bi]
+                        if (bi > 0 && !b.release && taken[root._combo(b.mods, b.key)]) {
+                            lines.push("-- " + b.verb + " on " + b.mods + " + " + b.key
+                                       + " is another action's; not bound here")
+                            continue
+                        }
+                        lines.push("claim(" + root._luaStr(b.mods) + ", " + root._luaStr(b.key) + ")")
+                        lines.push("hl.bind(" + root._luaStr(b.mods + " + " + b.key)
+                                   + ", hl.dsp.exec_cmd(switcher .. \" " + b.verb + "\"), "
+                                   + root._switcherOpts(b) + ")")
+                    }
+                    continue
+                }
                 if (e.type === "dispatch") {
                     expression = root._luaDispatch(e)
                     if (expression === "") {
@@ -1034,6 +1166,10 @@ QtObject {
                 // worked and the applications simply were not bound. An app
                 // launch is a spawn, which niri does natively; the guard was
                 // catching far more than it meant to.
+                // The switcher is Hyprland's: niri keeps its own recent-windows
+                // switcher, written after this block at its own fixed combo.
+                if (e.type === "switcher") continue
+
                 if (e.type === "exec") {
                     var argv = root._niriArgv(e.command)
                     if (!argv) { lines.push("    // " + e.k + ": command does not resolve on niri"); continue }
@@ -1097,6 +1233,8 @@ QtObject {
         lines.push("// src/services/WindowSwitcherService.qml for why this session keeps it.")
         lines.push("recent-windows {")
         lines.push("    binds {")
+        // Pinned at Alt+Tab on purpose: niri's switcher is niri's, so the
+        // Window Switcher row in Settings moves Hyprland's and leaves this.
         lines.push("        Alt+Tab       { next-window; }")
         lines.push("        Alt+Shift+Tab { previous-window; }")
         lines.push("    }")

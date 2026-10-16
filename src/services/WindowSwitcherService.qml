@@ -5,6 +5,7 @@ import Quickshell.Io
 import Quickshell.Wayland
 import "../"
 import "../components"
+import "config_tab/gaming.js" as GM
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  WindowSwitcherService — the ALT+Tab switcher's state.
@@ -160,8 +161,15 @@ Singleton {
             if (seen.indexOf(t) !== -1) continue
             seen.push(t); out.push(t)
         }
-        return out
+        if (!root.hideGames) return out
+        return out.filter(function (t) { return !GM.isHiddenFromSwitcher(t.appId) })
     }
+
+    /// Gaming settings → "Hide games from Alt+Tab". Steam, its games and Sober
+    /// are left out of the list when this is on, so the switcher cycles
+    /// through everything else and never activates them. Never activating
+    /// them is also what keeps the workspace they sit on from sliding past.
+    readonly property bool hideGames: GamingService.hideFromSwitcher
 
     // ── Labels ───────────────────────────────────────────────────────────────
 
@@ -198,9 +206,15 @@ Singleton {
             // One window, or none, is not a switch. Silently doing nothing is
             // right: the alternative is a switcher showing a single tile that
             // the user then has to dismiss.
-            if (list.length < 2) return
+            const here = ToplevelManager.activeToplevel
+            const hidden = root.hideGames && here && GM.isHiddenFromSwitcher(here.appId)
+            if (list.length < (hidden ? 1 : 2)) return
             root.entries = list
-            root.index = 0
+            // The first entry is the window you are looking at, unless that is
+            // one the setting hides: then it is not in the list, and the first
+            // step has to land on entry 0 (forward) or the last (back), which
+            // is what starting one before the first, or on it, gives.
+            root.index = hidden ? (delta > 0 ? -1 : 0) : 0
             root.open = true
             root._writeFlag(true)
         }
