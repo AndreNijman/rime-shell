@@ -1,8 +1,40 @@
-# Rime Shell theme — matugen-generated. bg/fg/cursor + NEUTRALS only; the warm
-# accent palette (1-6, 9-14) is set statically in ~/.config/ghostty/config.
+# Rime's Ghostty theme, rendered by Rime Shell (matugen) from your wallpaper.
+# Everything else is the look Rime's terminal had in Alacritty. Your own settings
+# go in ~/.config/ghostty/config.ghostty, which wins over every line here.
+# rime-static-begin
+font-family = monospace
+font-size = 11.25
+# Measured with DejaVu Sans Mono at 15 px (NixOS's monospace; nix/tests/terminal-look.nix): Ghostty's cells were 17 px
+# tall, Alacritty's 18, and the block cursor fills the cell there. Re-measure if the monospace default changes.
+adjust-cell-height = 1
+adjust-cursor-height = 1
+window-padding-x = 0
+window-padding-y = 0
+window-padding-balance = false
+cursor-style = block
+cursor-style-blink = false
+shell-integration-features = no-cursor
+scrollback-limit-lines = 10000
+bell-features = no-title
+cursor-color = cell-foreground
+cursor-text = cell-background
+selection-foreground = cell-background
+selection-background = cell-foreground
+palette = 1=#ac4242
+palette = 2=#90a959
+palette = 3=#f4bf75
+palette = 4=#6a9fb5
+palette = 5=#aa759f
+palette = 6=#75b5aa
+palette = 9=#c55555
+palette = 10=#aac474
+palette = 11=#feca88
+palette = 12=#82b8c8
+palette = 13=#c28cb8
+palette = 14=#93d3c3
+# rime-static-end
 background = {{colors.surface.default.hex}}
 foreground = {{colors.on_surface.default.hex}}
-cursor-color = {{colors.primary.default.hex}}
 palette = 0=#{{colors.surface_container_lowest.default.hex_stripped}}
 palette = 7=#{{colors.on_surface_variant.default.hex_stripped}}
 palette = 8=#{{colors.outline.default.hex_stripped}}
