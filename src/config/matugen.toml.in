@@ -35,10 +35,13 @@ output_path = '@HOME@/.config/hypr/rime-shell-colors.conf'
 input_path = '@SRCDIR@/src/config/colors.conf.template'
 output_path = '@HOME@/.config/hypr/rime-shell-hyprlock-colors.conf'
 
-# -- Optional terminal palette -> ~/.config/ghostty/rime-shell-colors ---------
+# -- Terminal theme -> ~/.config/ghostty/themes/rime-os -----------------------
+# Ghostty is Rime's terminal; every user's config.ghostty says `theme = rime-os`
+# (rime-os's rime-terminal-migrate writes it, and seeds a fallback copy of this
+# theme marked "# rime-os fallback" until the first render replaces it).
 [templates.ghostty]
 input_path = '@SRCDIR@/src/config/ghostty-colors.template'
-output_path = '@HOME@/.config/ghostty/rime-shell-colors'
+output_path = '@HOME@/.config/ghostty/themes/rime-os'
 
 # -- Terminal greeting accent -> ~/.cache/rime-shell/accent-ansi --------------
 # The fastfetch greeting (/usr/share/rime/shell/greeting.sh) reads this file and

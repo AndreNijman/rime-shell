@@ -182,7 +182,7 @@ Item {
     Process {
         id: nmtuiProc
         command: ["bash", "-c",
-            "for t in \"$TERMINAL\" xdg-terminal-exec alacritty kitty ghostty foot wezterm " +
+            "for t in \"$TERMINAL\" xdg-terminal-exec ghostty alacritty kitty foot wezterm " +
             "gnome-terminal konsole xfce4-terminal xterm; do " +
             "  [ -n \"$t\" ] || continue; " +
             "  command -v \"$t\" >/dev/null 2>&1 || continue; " +

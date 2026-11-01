@@ -95,7 +95,7 @@ valid_dest() {
 open_terminal() {
     local script="$1"
     local entry name flag
-    for entry in "${TERMINAL:-}:-e" alacritty:-e ghostty:-e foot:-e kitty:-e \
+    for entry in "${TERMINAL:-}:-e" ghostty:-e alacritty:-e foot:-e kitty:-e \
                  wezterm:start xterm:-e; do
         name="${entry%%:*}"
         flag="${entry##*:}"

@@ -289,6 +289,15 @@ jobs:
           # must each fail a case.
           ./tests/check-shell-migrate.sh
 
+      - name: Ghostty's Rime theme is rendered where Ghostty reads it
+        run: |
+          # Ghostty is Rime's terminal on NixOS and every user's config.ghostty
+          # says `theme = rime-os`. The matugen template renders that theme to
+          # ~/.config/ghostty/themes/rime-os, keeps Alacritty's stock look in its
+          # static block, and rethemeIfStale() renders over rime-os's seeded
+          # fallback. Five mutants must each fail a rule.
+          ./tests/check-ghostty-theme.sh
+
       - name: Firewall surface logic
         run: |
           # P1-044. Drives src/services/firewall.js — the file the shell loads

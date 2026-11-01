@@ -238,7 +238,7 @@ PanelWindow {
     function run(action) {
         root.close()
         switch (action) {
-        case "terminal":  proc.exec(["sh", "-c", "${TERMINAL:-alacritty}"]); break
+        case "terminal":  proc.exec(["sh", "-c", "${TERMINAL:-ghostty}"]); break
         case "launcher":  proc.exec(["rime", "shell", "launcher"]); break
         case "wallpaper": proc.exec(["rime", "shell", "wallpaper"]); break
         case "settings":  proc.exec(["rime", "shell", "settings"]); break

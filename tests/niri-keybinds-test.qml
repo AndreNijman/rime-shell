@@ -87,7 +87,7 @@ ShellRoot {
         check("the browser bind is emitted",
               root.kdl.indexOf("rime-open-browser") >= 0)
         check("the terminal bind is emitted",
-              root.kdl.indexOf('spawn "alacritty"') >= 0)
+              root.kdl.indexOf('spawn "ghostty"') >= 0)
         check("the file manager bind is emitted",
               root.kdl.indexOf('spawn "thunar"') >= 0)
 

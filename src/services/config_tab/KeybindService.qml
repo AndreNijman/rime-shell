@@ -818,7 +818,7 @@ QtObject {
     // default browser and every other session honoured it.
     function _luaCommand(command) {
         return String(command)
-            .replace("$terminal",    "alacritty")
+            .replace("$terminal",    "ghostty")
             .replace("$browser",     "/usr/libexec/rime-open-browser")
             .replace("$fileManager", "thunar")
             .replace("$qsIpc",       "qs -p " + root._shellDir + " ipc call")
@@ -1096,7 +1096,7 @@ QtObject {
     // Hyprland config variables, resolved. niri spawns WITHOUT a shell, so an
     // unresolved `$browser` would be passed to execvp as a literal filename.
     readonly property var _niriApps: ({
-        "$terminal":    "alacritty",
+        "$terminal":    "ghostty",
         // Not a browser name: opens whichever browser the user has set as
         // default, the same reason hyprland.conf and labwc's rc.xml stopped
         // naming one.

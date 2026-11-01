@@ -237,7 +237,11 @@ QtObject {
             "mkdir -p \"$(dirname \"$CFG\")\" && " +
             "sed -e \"s|@SRCDIR@|$2|g\" -e \"s|@HOME@|$HOME|g\" \"$TMPL\" > \"$CFG\" || exit 1; " +
             "missing=0; while IFS= read -r out; do " +
-            "[ -e \"$out\" ] || { missing=1; echo \"missing: $out\"; }; " +
+            // A seeded fallback (rime-os's rime-terminal-migrate writes Ghostty's
+            // theme before the first render) counts as missing: render over it.
+            "first=; [ -e \"$out\" ] && IFS= read -r first < \"$out\"; " +
+            "case \"$first\" in '# rime-os fallback'*) first=fallback ;; esac; " +
+            "{ [ -e \"$out\" ] && [ \"$first\" != fallback ]; } || { missing=1; echo \"missing: $out\"; }; " +
             "done < <(sed -n \"s/^output_path *= *'\\(.*\\)'.*/\\1/p\" \"$CFG\"); " +
             "[ \"$missing\" = 1 ] || exit 0; " +
             "STATIC=\"$(readlink -f ~/.curr_wall_static.jpg 2>/dev/null)\"; " +
