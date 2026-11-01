@@ -79,6 +79,17 @@ Singleton {
     }
     readonly property string listPath: root._configHome + "/xdg-terminals.list"
 
+    // xdg-terminal-exec's own cache. It is keyed on `ls -l` of the list files
+    // (size and mtime to the MINUTE), and choosing a terminal only reorders
+    // the same two lines, so the list keeps its size. Measured (0.14.3 and
+    // nixpkgs 0.14.4): Alacritty chosen, a terminal opened (the cache saved),
+    // Ghostty chosen within the minute: every launch, and --print-id, still
+    // gave Alacritty. So a write drops the cache; the next launch rebuilds it.
+    readonly property string cachePath: {
+        const x = Quickshell.env("XDG_CACHE_HOME") || ""
+        return (x !== "" ? x : (Quickshell.env("HOME") + "/.cache")) + "/xdg-terminal-exec"
+    }
+
     function refresh() {
         root._probe.running = false
         root._probe.running = true
@@ -109,13 +120,20 @@ Singleton {
         onSaved: {
             if (!root._writePending) return
             root._writePending = false
-            root.refresh()
+            // Drop the stale cache, then read back (see cachePath).
+            root._dropCache.running = true
         }
         onSaveFailed: function(err) {
             root._writePending = false
             root.busy = false
             root.error = "Could not write " + root.listPath + " (" + err + ")."
         }
+    }
+
+    property Process _dropCache: Process {
+        command: ["rm", "-f", "--", root.cachePath]
+        running: false
+        onExited: root.refresh()
     }
 
     property Process _probe: Process {

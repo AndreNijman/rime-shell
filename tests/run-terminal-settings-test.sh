@@ -15,9 +15,15 @@
 #      per terminal (no growth);
 #    - a running Ghostty's Wayland app id finds its desktop entry;
 #    - with a desktop-specific list in the way, the page SAYS the choice is
-#      shadowed instead of showing a choice that does nothing.
-#  Then the read-back after a write is taken out of the staged tree, and the
-#  run must FAIL.
+#      shadowed instead of showing a choice that does nothing;
+#    - xdg-terminal-exec's cache is dropped with every choice. Its key is
+#      `ls -l` of the lists (size, mtime to the minute) and a choice only
+#      reorders two lines, so a cache saved by a launch survives a choice
+#      made within the minute and the old terminal keeps opening. The cache
+#      is ON here, as on a real machine; the runner seeds one and it must be
+#      gone afterwards.
+#  Then the read-back after a write, and separately the cache drop, are taken
+#  out of the staged tree, and each run must FAIL.
 #
 #  Needs xdg-terminal-exec (the system's, or XTE=/path); SKIPs without it.
 # ─────────────────────────────────────────────────────────────────────────────
@@ -51,7 +57,8 @@ printf '[Desktop Entry]\nType=Application\nName=Ghostty\nTryExec=ghostty\nExec=g
 printf '[Desktop Entry]\nType=Application\nName=Alacritty\nTryExec=alacritty\nExec=alacritty\nCategories=System;TerminalEmulator;\nStartupWMClass=Alacritty\n' \
     > "$HOME/.local/share/applications/Alacritty.desktop"
 printf 'com.mitchellh.ghostty.desktop\n' > "$etc/xdg-terminals.list"
-export XDG_DATA_DIRS="$share" XDG_CONFIG_DIRS="$etc" XDG_CURRENT_DESKTOP=Hyprland XTE_CACHE_ENABLED=0
+export XDG_DATA_DIRS="$share" XDG_CONFIG_DIRS="$etc" XDG_CURRENT_DESKTOP=Hyprland
+cache="$XDG_CACHE_HOME/xdg-terminal-exec"
 
 tree="$HEADLESS_W/tree"
 mkdir -p "$tree"
@@ -64,6 +71,8 @@ list="$HOME/.config/xdg-terminals.list"
 run() {
     local log="$HEADLESS_W/log-$1"
     rm -f "$list" "$HOME/.config/hyprland-xdg-terminals.list"
+    # A cache a launch left behind (any content: the tool only reads it).
+    mkdir -p "$XDG_CACHE_HOME"; printf 'seeded by the test\n' > "$cache"
     if [[ "$2" = shadow ]]; then
         printf 'Alacritty.desktop\n' > "$HOME/.config/hyprland-xdg-terminals.list"
     fi
@@ -73,7 +82,14 @@ run() {
     if compgen -G "$HEADLESS_W/launched-*" >/dev/null; then
         echo "  FAIL a terminal was LAUNCHED by the settings page ($1)"; return 1
     fi
-    sed -n 's/.*TERM \({.*}\)$/\1/p' "$log" | python3 -I "$here/lib/terminal-settings-check.py" "$2" "$list"
+    local verdict=0
+    sed -n 's/.*TERM \({.*}\)$/\1/p' "$log" | python3 -I "$here/lib/terminal-settings-check.py" "$2" "$list" || verdict=1
+    if [[ -e "$cache" ]]; then
+        echo "  FAIL xdg-terminal-exec's cache survived the choice: the old terminal can keep opening ($1)"; verdict=1
+    else
+        echo "  ok   xdg-terminal-exec's cache is dropped with the choice ($1)"
+    fi
+    return "$verdict"
 }
 
 rc=0
@@ -83,18 +99,31 @@ echo "── a desktop-specific list naming Alacritty in the way ──"
 run shadow shadow || rc=1
 [[ $rc -eq 0 ]] || { echo "RESULT: the Default terminal setting does not do what it shows"; exit 1; }
 
-# ── Can it fail? No read-back after the write. ──────────────────────────────
-python3 -I - "$tree/src/services/TerminalService.qml" <<'PY' || { echo "RESULT: the self-test mutation did not apply"; exit 1; }
+# ── Can it fail? ────────────────────────────────────────────────────────────
+svc="$tree/src/services/TerminalService.qml"
+cp "$svc" "$HEADLESS_W/TerminalService.qml.orig"
+# mutate <new> — replace the cache drop (which leads to the read-back) in the staged copy.
+mutate() {
+    cp "$HEADLESS_W/TerminalService.qml.orig" "$svc"
+    python3 -I - "$svc" "$1" <<'PY' || { echo "RESULT: the self-test mutation did not apply"; exit 1; }
 import sys
-p = sys.argv[1]
+p, new = sys.argv[1:3]
 s = open(p, encoding="utf-8").read()
-old = "root._writePending = false\n            root.refresh()"
-if old not in s: sys.exit(3)
-open(p, "w", encoding="utf-8").write(s.replace(old, "root._writePending = false\n            root.busy = false", 1))
+old = "root._dropCache.running = true"
+if s.count(old) != 1: sys.exit(3)
+open(p, "w", encoding="utf-8").write(s.replace(old, new, 1))
 PY
+}
+mutate "root.busy = false"
 if run noreadback normal >/dev/null; then
     echo "  FAIL self-test: a page that never reads back SURVIVED"
     exit 1
 fi
 echo "  ok   self-test: a page that never reads back is caught"
+mutate "root.refresh()"
+if run keepcache normal >/dev/null; then
+    echo "  FAIL self-test: a choice that leaves xdg-terminal-exec's cache SURVIVED"
+    exit 1
+fi
+echo "  ok   self-test: a choice that leaves xdg-terminal-exec's cache is caught"
 echo "RESULT: Settings → Default terminal writes the user's list and shows what xdg-terminal-exec then resolves"
