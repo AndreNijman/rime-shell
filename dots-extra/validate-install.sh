@@ -205,7 +205,7 @@ else
     echo ""
     echo "To fix:"
     echo "  • Arch:  Re-run install-arch.sh or install missing packages with pacman/yay"
-    echo "  • NixOS: Re-run install-nix.sh or add packages to your flake.nix"
+    echo "  • NixOS: use the rime-shell package from the rime-os flake"
     echo ""
     exit 1
 fi

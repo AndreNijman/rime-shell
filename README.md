@@ -350,8 +350,8 @@ Known Issues
 - **Tray icon themes:** Applications that advertise a private `IconThemePath`
   may show a fallback glyph instead of their real icon.
 
-> [!WARNING]
-> **NixOS & Flakes Support:** The NixOS installation pipeline and Flake implementation are experimental and may be broken. On NixOS, configure the shell by hand for now.
+> [!NOTE]
+> **NixOS:** this repository no longer carries a flake. Rime OS builds the shell for NixOS from its own flake (`nix/pkgs/rime-shell.nix` in rime-os), which takes this repository as a plain source input. `install.sh` does not run on NixOS.
 
 ---
 

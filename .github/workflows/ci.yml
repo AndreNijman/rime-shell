@@ -2788,6 +2788,12 @@ jobs:
   nix-validate:
     name: NixOS — Flake & Package Check
     runs-on: ubuntu-latest
+    # The shell has no flake of its own: rime-os's flake builds it (nix/pkgs/rime-shell.nix), with this checkout
+    # standing in for its rime-shell input. That build runs the package's install check: the Rime.I18n plugin
+    # loads in the package's Qt and every catalogue installs, and the tree carries no Fedora path left unrewritten.
+    env:
+      # TODO(handover): point at rime-os main once the NixOS port lands there.
+      RIME_OS_FLAKE: github:AndreNijman/rime-os/feat/nixos
 
     steps:
       - name: Checkout
@@ -2796,57 +2802,24 @@ jobs:
       - name: Install Nix
         uses: cachix/install-nix-action@v27
         with:
-          nix_path: nixpkgs=channel:nixos-unstable
           extra_nix_config: |
             experimental-features = nix-command flakes
-            accept-flake-config = true
 
-      - name: Validate flake.nix syntax
+      - name: Build rime-shell through rime-os's flake
         run: |
-          # Check file exists and is valid UTF-8 text
-          cat flake.nix > /dev/null
-          # Use nix-instantiate for pure syntax check (no network, no path access)
-          nix-instantiate --parse flake.nix > /dev/null
-          echo "✓ flake.nix syntax OK"
+          nix build "$RIME_OS_FLAKE#rime-shell" \
+            --override-input rime-shell "path:$GITHUB_WORKSPACE" \
+            -L --print-out-paths
 
-      - name: Validate flake.lock structure
+      - name: Check the built tree
         run: |
-          python3 -c "
-          import json, sys
-          with open('flake.lock') as f:
-              lock = json.load(f)
-          assert lock.get('version') == 7, 'Expected lock version 7'
-          nodes = lock.get('nodes', {})
-          print(f'Lock version: {lock[\"version\"]}')
-          print(f'Nodes: {list(nodes.keys())}')
-          for name, node in nodes.items():
-              if 'locked' in node:
-                  rev = node['locked'].get('rev', 'N/A')[:10]
-                  print(f'  ✓ {name}: {rev}')
-          "
-
-      - name: Validate flake.nix declares required outputs
-        run: |
-          python3 -c "
-          with open('flake.nix') as f:
-              content = f.read()
-          checks = {
-            'packages':     'packages' in content,
-            'devShells':    'devShells' in content,
-            'nixosModules': 'nixosModules' in content,
-            'description':  'description' in content,
-            'rime-shell':  'rime-shell' in content,
-          }
-          failed = []
-          for key, ok in checks.items():
-              if ok:
-                  print(f'  ✓ {key} declared')
-              else:
-                  print(f'  ✗ {key} MISSING')
-                  failed.append(key)
-          if failed:
-              raise SystemExit(f'Missing from flake.nix: {failed}')
-          "
+          out=$(readlink -f result)
+          test -f "$out/share/rime-shell/shell.qml"
+          test -x "$out/bin/rime-shell"
+          test -f "$out/lib/qt-6/qml/Rime/I18n/qmldir"
+          grep -Ex ' *lock_cmd = qs -c /run/current-system/sw/share/rime-shell ipc call lockscreen lock' \
+            "$out/share/rime-shell/src/config/hypridle.conf"
+          echo "rime-shell built: $out"
 
   # ─────────────────────────────────────────────
   #  Structure Sanity Check (both runners agree)
@@ -2863,8 +2836,6 @@ jobs:
         run: |
           REQUIRED=(
             "shell.qml"
-            "flake.nix"
-            "flake.lock"
             "install.sh"
             "dots-extra/install-arch.sh"
             "dots-extra/validate-install.sh"

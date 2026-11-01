@@ -64,9 +64,9 @@ if [[ -f /etc/os-release ]]; then
             ;;
         nixos)
             echo ""
-            log_error "NixOS is not currently supported by this installer."
-            log_info "The NixOS pipeline and Nix flake are known to be broken (see README)."
-            log_info "Manual configuration is required on NixOS for now."
+            log_error "This installer does not support NixOS."
+            log_info "Rime OS packages the shell for NixOS itself: the rime-shell package and"
+            log_info "its NixOS module live in the rime-os flake (nix/pkgs/rime-shell.nix, nix/modules/desktop.nix)."
             exit 1
             ;;
         *)
