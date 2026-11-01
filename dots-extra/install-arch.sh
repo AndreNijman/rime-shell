@@ -366,7 +366,7 @@ _append_conf() {
 
 # Rime Shell Autostarts
 exec-once = awww-daemon
-exec-once = hypridle -c $HOME/.local/src/rime-shell/src/config/hypridle.conf
+exec-once = hypridle -c $HOME/.config/hypr/hypridle.conf
 exec-once = quickshell -c $HOME/.local/src/rime-shell/.
 exec-once = systemctl --user start hyprpolkitagent
 exec-once = wl-paste --type text --watch cliphist store
@@ -380,7 +380,7 @@ _append_lua() {
 -- Rime Shell Autostarts
 hl.on("hyprland.start", function()
     hl.exec_cmd("awww-daemon")
-    hl.exec_cmd("hypridle -c " .. os.getenv("HOME") .. "/.local/src/rime-shell/src/config/hypridle.conf")
+    hl.exec_cmd("hypridle -c " .. os.getenv("HOME") .. "/.config/hypr/hypridle.conf")
     hl.exec_cmd("quickshell -c " .. os.getenv("HOME") .. "/.local/src/rime-shell")
     hl.exec_cmd("systemctl --user start hyprpolkitagent")
     hl.exec_cmd("wl-paste --type text --watch cliphist store")
@@ -435,11 +435,17 @@ mkdir -p "$USER_DATA" \
          "$HOME/.config/hypr/shaders" \
          "$HOME/.config/matugen/templates"
 
-# Copy hypridle config; -n = do not overwrite if already customised
-if cp -n "$REPO_DIR/src/config/hypridle.conf" "$HOME/.config/hypr/" 2>/dev/null; then
-    log_ok "hypridle.conf → $HOME/.config/hypr/"
-else
+# Render the hypridle config; never overwrite one that already exists (it may be
+# customised). The shipped file names the shell by its Rime OS path,
+# /usr/share/rime-shell, which this checkout is not at: lock_cmd must name the
+# exact path quickshell is started with, or locking on idle reaches no shell.
+if [[ -e "$HOME/.config/hypr/hypridle.conf" ]]; then
     log_info "hypridle.conf already exists — not overwritten"
+elif sed "s|/usr/share/rime-shell|$REPO_DIR|g" "$REPO_DIR/src/config/hypridle.conf" \
+        > "$HOME/.config/hypr/hypridle.conf"; then
+    log_ok "hypridle.conf → $HOME/.config/hypr/ (shell path: $REPO_DIR)"
+else
+    log_warn "could not write $HOME/.config/hypr/hypridle.conf"
 fi
 
 # Merge rather than truncate: config_Provider.json also carries the "compositor"

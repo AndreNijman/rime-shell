@@ -31,11 +31,15 @@ CfgScroll {
     // PageRegistry marks this page needsScreen: true so both hosts bind it.
     property bool onScreen: false
 
-    // ── Live version (git describe) ───────────────────────────────────────────
+    // ── Live version (git describe, else the packaged commit) ─────────────────
+    // An installed shell has no .git (Rime OS vendors the tree without it), so
+    // `git describe` prints nothing there. The packager writes the commit it
+    // built from to <shellDir>/.rime-shell-commit; show its first 12 characters.
     property string version: "…"
 
     property var _verProc: Process {
-        command: ["bash", "-c", "git -C \"$1\" describe --tags --always 2>/dev/null",
+        command: ["bash", "-c",
+                  "git -C \"$1\" describe --tags --always 2>/dev/null || cut -c1-12 \"$1/.rime-shell-commit\" 2>/dev/null",
                   "--", Quickshell.shellDir]
         running: false
         stdout: SplitParser {
