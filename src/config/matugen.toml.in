@@ -5,7 +5,7 @@
 # `~` or environment variables in template input_path/output_path, so every
 # path below must be ABSOLUTE. The two placeholders are substituted into a real
 # config at ~/.config/rime-shell/matugen.toml:
-#   @SRCDIR@ -> the Rime Shell source directory (e.g. ~/.local/src/rime-shell)
+#   @SRCDIR@ -> the Rime Shell directory (/usr/share/rime-shell on Rime OS)
 #   @HOME@   -> your home directory
 # The substitution is done by install.sh at install time and by
 # WallpaperService.qml at runtime (both use the live $HOME / shell dir), which
@@ -26,12 +26,14 @@ output_path = '@HOME@/.cache/rime-shell/colors.json'
 input_path = '@SRCDIR@/src/config/colors.conf.template'
 output_path = '@HOME@/.config/hypr/rime-shell-colors.conf'
 
-# -- hyprlock colours -> source-tree colors.conf ------------------------------
-# hyprlock.conf sources exactly <srcdir>/src/config/colors.conf,
-# so render the same template there too to keep the lock screen theme in sync.
+# -- hyprlock colours -> ~/.config/hypr/rime-shell-hyprlock-colors.conf -------
+# hyprlock.conf sources exactly this file, so the lock screen follows the same
+# palette. It used to be written back into the shell's own tree
+# (<srcdir>/src/config/colors.conf), which is read-only wherever the shell is
+# installed as part of the OS. No output of this file may point at @SRCDIR@.
 [templates.hyprlock_colors]
 input_path = '@SRCDIR@/src/config/colors.conf.template'
-output_path = '@SRCDIR@/src/config/colors.conf'
+output_path = '@HOME@/.config/hypr/rime-shell-hyprlock-colors.conf'
 
 # -- Optional terminal palette -> ~/.config/ghostty/rime-shell-colors ---------
 [templates.ghostty]
