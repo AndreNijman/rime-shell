@@ -815,10 +815,12 @@ QtObject {
     // set as default, which is the whole reason nothing in Rime hardcodes one.
     // This generator used to substitute `firefox` here while the niri and conf
     // paths used the helper, so a Hyprland user's SUPER+W ignored their own
-    // default browser and every other session honoured it.
+    // default browser and every other session honoured it. `$terminal` is the
+    // same idea for terminals: xdg-terminal-exec opens the user's default
+    // (Settings → Misc → Default terminal), never a named emulator.
     function _luaCommand(command) {
         return String(command)
-            .replace("$terminal",    "alacritty")
+            .replace("$terminal",    "xdg-terminal-exec")
             .replace("$browser",     "/usr/libexec/rime-open-browser")
             .replace("$fileManager", "thunar")
             .replace("$qsIpc",       "qs -p " + root._shellDir + " ipc call")
@@ -1096,7 +1098,9 @@ QtObject {
     // Hyprland config variables, resolved. niri spawns WITHOUT a shell, so an
     // unresolved `$browser` would be passed to execvp as a literal filename.
     readonly property var _niriApps: ({
-        "$terminal":    "alacritty",
+        // Not a terminal name either: the user's default terminal, which
+        // Settings → Misc → Default terminal writes (xdg-terminals.list).
+        "$terminal":    "xdg-terminal-exec",
         // Not a browser name: opens whichever browser the user has set as
         // default, the same reason hyprland.conf and labwc's rc.xml stopped
         // naming one.

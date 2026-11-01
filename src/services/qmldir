@@ -31,6 +31,9 @@ singleton LauncherState 1.0 LauncherState.qml
 # honour Terminal= — so nvim, and every other terminal application, could be
 # clicked and did nothing.
 singleton DesktopExec 1.0 DesktopExec.qml
+# The user's default terminal: read back from xdg-terminal-exec, written to
+# ~/.config/xdg-terminals.list (Settings → Misc → Default terminal).
+singleton TerminalService 1.0 TerminalService.qml
 # How an icon name becomes an image, for every surface. Quickshell draws a
 # placeholder (and reports Ready) for a name the theme lacks, so each caller's
 # own fallback only shows if it asks here first. See the file's header.

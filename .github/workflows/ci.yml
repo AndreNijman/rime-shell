@@ -169,6 +169,23 @@ jobs:
           # can skip.
           node tests/search-test.js
 
+      # The two terminals Rime offers (Ghostty, the default, and Alacritty):
+      # their measured desktop ids and Wayland app ids, Ghostty's launch with
+      # single-instance off, and the writer behind Settings → Default terminal
+      # (keeps the user's own lines, idempotent). No process, nothing to skip.
+      - name: Terminal identities and the Default terminal writer
+        run: node tests/terminals-test.js
+
+      # Every terminal the shell opens follows the user's default: no launch
+      # site names an emulator, rime-terminal.sh is run against stub terminals
+      # (xdg-terminal-exec first, $TERMINAL only without it, Ghostty with
+      # --gtk-single-instance=false, 127 with nothing), and the REAL
+      # xdg-terminal-exec resolves what the Settings writer wrote. Six mutants.
+      - name: Every terminal the shell opens follows the default terminal
+        run: |
+          pacman -S --needed --noconfirm xdg-terminal-exec || echo "xdg-terminal-exec unavailable: its checks will SKIP"
+          ./tests/check-terminal-default.sh
+
       - name: Test blueprint editor logic
         run: |
           # §10's editor keeps every decision it makes in a plain module —
@@ -288,6 +305,15 @@ jobs:
           # instead of rename, no symlink, move over an existing directory, …)
           # must each fail a case.
           ./tests/check-shell-migrate.sh
+
+      - name: Ghostty's Rime theme is rendered where Ghostty reads it
+        run: |
+          # Ghostty is Rime's terminal on NixOS and every user's config.ghostty
+          # says `theme = rime-os`. The matugen template renders that theme to
+          # ~/.config/ghostty/themes/rime-os, keeps Alacritty's stock look in its
+          # static block, and rethemeIfStale() renders over rime-os's seeded
+          # fallback. Five mutants must each fail a rule.
+          ./tests/check-ghostty-theme.sh
 
       - name: Firewall surface logic
         run: |
@@ -1754,6 +1780,22 @@ jobs:
       # cleanly without quickshell.
       - name: Bar open pills are centred on their glyphs
         run: ./tests/run-open-pill-centre-test.sh
+
+      # The Rime layered ridge as drawn: the brand masters' geometry, plane 3
+      # in the accent (Rime Blue when the palette's accent would vanish into
+      # the ink), at 16-240 px on light and dark, redrawn when the accent
+      # moves; the bar's and About's marks bound to Theme. Three mutants.
+      # Needs labwc and PIL; skips cleanly without quickshell.
+      - name: The Rime mark is drawn as the brand says
+        run: ./tests/run-rime-mark-test.sh
+
+      # Settings → Default terminal end to end, with the real
+      # xdg-terminal-exec: the page's choice is written and read back, and a
+      # desktop-specific list that outranks it is reported, not hidden.
+      - name: Settings → Default terminal does what it shows
+        run: |
+          pacman -S --needed --noconfirm xdg-terminal-exec || echo "xdg-terminal-exec unavailable: the suite will SKIP"
+          ./tests/run-terminal-settings-test.sh
 
       # The Agents and Config tabs on the keyboard: the agents guide opens on
       # its section list, keeps Tab inside it, closes on Escape alone and hands

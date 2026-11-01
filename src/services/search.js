@@ -379,6 +379,7 @@ var SETTINGS = [
     { page: "display",    name: "Monitor arrangement",  keywords: "monitor arrangement position layout second screen" },
     { page: "blueprint",  name: "Blueprint",            keywords: "blueprint declarative apply diff machine" },
     { page: "keybinds",   name: "Keybinds",             keywords: "keybind shortcut hotkey binding keyboard" },
+    { page: "misc",       name: "Default terminal",     keywords: "terminal ghostty alacritty default emulator console" },
     { page: "misc",       name: "Compositor",           keywords: "compositor hyprland niri labwc session" },
     { page: "misc",       name: "Updates",              keywords: "update upgrade version changelog" },
     { page: "misc",       name: "About this machine",   keywords: "about system info kernel distro uptime" }

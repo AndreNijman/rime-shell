@@ -13,6 +13,7 @@ import "../../../nexus"
 
 // Config → Misc
 //   • About — name, version, repo, config provider
+//   • Default terminal — Ghostty or Alacritty (TerminalService, xdg-terminals.list)
 //   • System — distro, kernel, WM, uptime, packages, hostname (SystemStats)
 //   • Updates — release notes after an update; the rest is Config → Updates
 //   • Shell — reload the Quickshell config
@@ -92,10 +93,14 @@ CfgScroll {
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 12
 
-                Text {
-                    text:           "󰧑"
-                    font.pixelSize: theme.fs(30)
-                    color:          Theme.active
+                // The Rime layered ridge: plane 3 in the live accent, the rest
+                // in the page's ink (src/components/RimeMark.qml).
+                RimeMark {
+                    objectName: "aboutRimeMark"
+                    width:      theme.px(44)
+                    height:     Math.round(width * 175 / 240)
+                    accent:     Theme.active
+                    foreground: Theme.text
                     anchors.verticalCenter: parent.verticalCenter
                 }
                 Column {
@@ -138,6 +143,57 @@ CfgScroll {
                 font.pixelSize: theme.typeMono
                 color:       Theme.textSecondary
             }
+        }
+    }
+
+    // ── Default terminal ──────────────────────────────────────────────────────
+    // Which terminal opens for SUPER+T, the right-click menu, a terminal app in
+    // the launcher, and every search verb that needs one. Written to the
+    // user's ~/.config/xdg-terminals.list, which xdg-terminal-exec reads before
+    // the OS's list; the readout is what xdg-terminal-exec resolves afterwards
+    // (TerminalService.qml), not what was asked for.
+    CfgSection {
+        title: "Default terminal"
+
+        CfgRow {
+            id: termRow
+            label:       "Terminal"
+            description: "Opens for the Terminal shortcut, the desktop menu, terminal apps "
+                       + "and commands the shell runs for you. Your Ghostty or Alacritty "
+                       + "settings stay where they are."
+            plainText:   true
+            // Quiet while what resolves is what is selected; otherwise it names
+            // what actually opens (the read-back), and the warning below says why.
+            status:      TerminalService.busy ? ""
+                       : TerminalService.resolvedId === "" ? "none resolved"
+                       : TerminalService.current === termSeg.value ? ""
+                       : TerminalService.resolvedId
+            statusWarns: TerminalService.shadowed !== "" || TerminalService.error !== ""
+
+            CfgSegmented {
+                id: termSeg
+                objectName: "terminalChoice"
+                options: TerminalService.options.map(function (t) {
+                    return TerminalService.installed(t.key)
+                        ? { "value": t.key, "label": t.name }
+                        : { "value": t.key, "label": t.name, "dimmed": true,
+                            "hint": t.name + " is not installed" }
+                })
+                value:   TerminalService.requested !== "" ? TerminalService.requested
+                                                          : TerminalService.current
+                enabled: !TerminalService.busy
+                onSelected: function (v) { TerminalService.setDefault(v) }
+            }
+        }
+
+        Text {
+            visible:  text !== ""
+            width:    parent.width
+            wrapMode: Text.WordWrap
+            textFormat: Text.PlainText
+            text:     TerminalService.error !== "" ? TerminalService.error : TerminalService.shadowed
+            color:    Theme.warning
+            font.pixelSize: theme.typeCaption
         }
     }
 

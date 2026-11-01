@@ -35,10 +35,13 @@ output_path = '@HOME@/.config/hypr/rime-shell-colors.conf'
 input_path = '@SRCDIR@/src/config/colors.conf.template'
 output_path = '@HOME@/.config/hypr/rime-shell-hyprlock-colors.conf'
 
-# -- Optional terminal palette -> ~/.config/ghostty/rime-shell-colors ---------
+# -- Terminal theme -> ~/.config/ghostty/themes/rime-os -----------------------
+# Ghostty is Rime's terminal; every user's config.ghostty says `theme = rime-os`
+# (rime-os's rime-terminal-migrate writes it, and seeds a fallback copy of this
+# theme marked "# rime-os fallback" until the first render replaces it).
 [templates.ghostty]
 input_path = '@SRCDIR@/src/config/ghostty-colors.template'
-output_path = '@HOME@/.config/ghostty/rime-shell-colors'
+output_path = '@HOME@/.config/ghostty/themes/rime-os'
 
 # -- Terminal greeting accent -> ~/.cache/rime-shell/accent-ansi --------------
 # The fastfetch greeting (/usr/share/rime/shell/greeting.sh) reads this file and
@@ -72,3 +75,17 @@ output_path = '@HOME@/.cache/rime-shell/starship.toml'
 [templates.labwc]
 input_path = '@SRCDIR@/src/config/labwc-themerc.template'
 output_path = '@HOME@/.config/labwc/themerc-override'
+
+# -- Rime logo, recoloured -> ~/.cache/rime/logo/ -----------------------------
+# The terminal greeting (/usr/share/rime/shell/greeting.sh) shows the Rime
+# symbol with its accent plane (plane 3) in the wallpaper's primary and the
+# other three planes in on_surface. This writes those four colours, for BOTH
+# schemes (a light terminal beside a dark shell still gets a readable mark);
+# the post_hook substitutes them into Rime OS's adaptive symbol and renders
+# rime-symbol-{dark,light}.png next to this file, each written under a
+# temporary name and renamed into place. rime-logo-render ships with Rime OS;
+# where it is not installed the hook does nothing.
+[templates.rime_logo]
+input_path = '@SRCDIR@/src/config/rime-logo-colors.template'
+output_path = '@HOME@/.cache/rime/logo/colors'
+post_hook = "[ -x /usr/libexec/rime-logo-render ] && /usr/libexec/rime-logo-render '@HOME@/.cache/rime/logo' || true"

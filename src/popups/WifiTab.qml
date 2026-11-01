@@ -1,4 +1,5 @@
 import QtQuick
+import Quickshell
 import Quickshell.Io
 import "../"
 import "../components/controls"
@@ -175,26 +176,13 @@ Item {
         }
     }
 
-    // nmtui needs a terminal. Rather than hardcoding one emulator, honour
-    // $TERMINAL, then xdg-terminal-exec (the freedesktop spec helper), then the
-    // common emulators. Every one of these takes `-e CMD` except foot/wezterm,
-    // which are invoked without it.
+    // nmtui needs a terminal: the user's default one, through the shell's one
+    // terminal launcher (src/scripts/rime-terminal.sh — xdg-terminal-exec
+    // first, then $TERMINAL and the emulators it knows, each with its own exec
+    // flag). It sends the "No terminal found" notification itself.
     Process {
         id: nmtuiProc
-        command: ["bash", "-c",
-            "for t in \"$TERMINAL\" xdg-terminal-exec alacritty kitty ghostty foot wezterm " +
-            "gnome-terminal konsole xfce4-terminal xterm; do " +
-            "  [ -n \"$t\" ] || continue; " +
-            "  command -v \"$t\" >/dev/null 2>&1 || continue; " +
-            "  case \"$t\" in " +
-            "    xdg-terminal-exec) exec \"$t\" nmtui ;; " +
-            "    foot|wezterm)      exec \"$t\" nmtui ;; " +
-            "    *)                 exec \"$t\" -e nmtui ;; " +
-            "  esac; " +
-            "done; " +
-            "notify-send -a 'Rime Shell' 'No terminal found' " +
-            "'Install a terminal emulator or set $TERMINAL to use the advanced Wi-Fi editor.' " +
-            "2>/dev/null; exit 127"]
+        command: ["sh", Quickshell.shellDir + "/src/scripts/rime-terminal.sh", "nmtui"]
         running: false
     }
 
