@@ -146,8 +146,10 @@ awk -v d="$d" 'BEGIN { exit !(d < 2) }' && ok "Escape closes the guide only — 
     || bad "after Escape the page differs from before the guide (Δ $d) — the Dashboard closed, or the guide stayed"
 keys Return
 d="$(settle agents-5-reopened agents-0 "$GUIDE" gt 8)"
-awk -v d="$d" 'BEGIN { exit !(d > 8) }' && ok "and the keys went back to the entry: Return opens the guide again (Δ $d)" \
-    || bad "Return after Escape did not reopen the guide (Δ $d) — the keys were lost"
+bar="$(delta agents-0 agents-5-reopened "$TABBAR")"   # as above: tells a closed Dashboard apart
+awk -v d="$d" -v b="$bar" 'BEGIN { exit !(d > 8 && b < 2) }' \
+    && ok "and the keys went back to the entry: Return opens the guide again (Δ $d, tab bar Δ $bar)" \
+    || bad "Return after Escape did not reopen the guide (Δ $d, tab bar Δ $bar: over 2 = the Dashboard left)"
 keys Escape; sleep 0.6
 ipc dashboard-agents toggle; sleep 1.2
 
