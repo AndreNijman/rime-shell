@@ -681,6 +681,32 @@ want "self-test: a runner that only names it in a comment is caught" test -n "$(
 want "self-test: the unmutated runner passes" test -z "$(bus_orphans "$root/tests/run-rtl-test.sh")"
 rm -rf "$busfix"
 
+# ── ...nor open the machine's browser ───────────────────────────────────────
+# ReleaseService opens the release page in the REAL default browser 8 s after
+# the shell starts, wherever /usr/share/rime/release.json exists and HOME has
+# never seen it: every headless run on a Rime host. Measured 2026-11-02: a
+# Firefox window landed over run-config-agents-keys-test.sh's frames. The
+# library's headless_begin turns the service off; this keeps it turned off.
+release_unguarded() {   # release_unguarded <lib> — prints what headless_begin lacks
+    local body
+    body="$(awk '/^headless_begin\(\) \{/ { on = 1 } on { print } on && /^\}/ { exit }' "$1" \
+            | grep -vE '^[[:space:]]*#')"
+    [ "$(printf '%s\n' "$body" | grep -cE '^[[:space:]]*export RIME_RELEASE_OPENER=/bin/false[[:space:]]*$')" -gt 0 ] \
+        || echo "RIME_RELEASE_OPENER"
+    [ "$(printf '%s\n' "$body" | grep -cE '^[[:space:]]*export RIME_RELEASE_JSON=/nonexistent[[:space:]]*$')" -gt 0 ] \
+        || echo "RIME_RELEASE_JSON"
+}
+missing="$(release_unguarded "$root/tests/lib/headless.sh")"
+want "headless_begin turns the release page off (RIME_RELEASE_OPENER, RIME_RELEASE_JSON)${missing:+ — missing: $(echo $missing)}" \
+    test -z "$missing"
+relfix="$(mktemp -d)"
+grep -v 'export RIME_RELEASE_OPENER=' "$root/tests/lib/headless.sh" > "$relfix/no-opener.sh"
+sed 's/^\([[:space:]]*\)export RIME_RELEASE_JSON=/\1# export RIME_RELEASE_JSON=/' \
+    "$root/tests/lib/headless.sh" > "$relfix/commented.sh"
+want "self-test: a library without the opener guard is caught" test -n "$(release_unguarded "$relfix/no-opener.sh")"
+want "self-test: a guard that is only a comment is caught" test -n "$(release_unguarded "$relfix/commented.sh")"
+rm -rf "$relfix"
+
 echo
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]
