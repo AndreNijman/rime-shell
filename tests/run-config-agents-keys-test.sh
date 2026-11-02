@@ -72,7 +72,8 @@ sleep 3
 
 ipc()  { quickshell -p "$root/shell.qml" ipc call "$@" >/dev/null 2>&1; }
 keys() { local k; for k in "$@"; do wtype -k "$k"; sleep 0.3; done; }
-grab() { grim -g "480,0 960x600" "$HEADLESS_W/$1.png"; [ -n "${SHOTS:-}" ] && mkdir -p "$SHOTS" && cp "$HEADLESS_W/$1.png" "$SHOTS/"; }
+# grab <name> — the Dashboard's part of the screen, or GEOM (grim -g) when set.
+grab() { grim -g "${GEOM:-480,0 960x600}" "$HEADLESS_W/$1.png"; [ -n "${SHOTS:-}" ] && mkdir -p "$SHOTS" && cp "$HEADLESS_W/$1.png" "$SHOTS/"; }
 delta() {   # delta <a> <b> <x0,y0,x1,y1> — mean abs difference of the region
     python3 - "$HEADLESS_W/$1.png" "$HEADLESS_W/$2.png" "$3" <<'PY'
 import sys
@@ -124,8 +125,13 @@ fi
 # (that passed as "the guide opened" from a46ee749 on), so the tab bar tells
 # them apart.
 GUIDE="220,40,940,560"; TABBAR="0,0,960,40"
+# Arrival is a state too: the frame must differ from the desktop grabbed before
+# the toggle, and be still. (Compared with itself it was only a stillness wait,
+# which an empty desktop passes at once when the Dashboard is late.)
+ALL="0,0,960,600"
+grab agents-pre
 ipc dashboard-agents toggle
-settle agents-0 agents-0 "$GUIDE" lt 1 >/dev/null   # it has arrived and is still
+echo "  ....  the Dashboard is up (Δ from the desktop $(settle agents-0 agents-pre "$ALL" gt 5))"
 keys Tab Tab Tab Return
 d="$(settle agents-1-open agents-0 "$GUIDE" gt 8)"
 bar="$(delta agents-0 agents-1-open "$TABBAR")"
@@ -151,7 +157,8 @@ awk -v d="$d" -v b="$bar" 'BEGIN { exit !(d > 8 && b < 2) }' \
     && ok "and the keys went back to the entry: Return opens the guide again (Δ $d, tab bar Δ $bar)" \
     || bad "Return after Escape did not reopen the guide (Δ $d, tab bar Δ $bar: over 2 = the Dashboard left)"
 keys Escape; sleep 0.6
-ipc dashboard-agents toggle; sleep 1.2
+ipc dashboard-agents toggle
+echo "  ....  the Dashboard is gone (Δ from the desktop $(settle agents-6-gone agents-pre "$ALL" lt 1))"
 
 # ── Settings (Nexus): Appearance ────────────────────────────────────────────
 # Stops (PROBE=nexus): the page list, Close, the profile picture's field, its
@@ -159,7 +166,10 @@ ipc dashboard-agents toggle; sleep 1.2
 # field, its Reset, Rescan, then the wallpaper strip. (In the Dashboard's
 # Config tab it was seven: its tab bar and "Open in window" came first; Phase
 # 19 removed it.)
-ipc nexus open appearance; sleep 1.5
+# Nexus is its own window, so these two frames are the whole output.
+GEOM="0,0 1920x1080" grab nexus-pre
+ipc nexus open appearance
+echo "  ....  Nexus is up (Δ from the desktop $(GEOM="0,0 1920x1080" settle nexus-0 nexus-pre "0,0,1920,1080" gt 3))"
 keys Tab Tab Tab Tab Tab Tab Tab Tab Tab Right Return
 for _ in $(seq 1 20); do grep -q 'bbb-second.png' "$SETTER_LOG" && break; sleep 0.25; done
 grep -q 'img .*bbb-second.png' "$SETTER_LOG" \
