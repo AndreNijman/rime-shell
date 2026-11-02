@@ -170,6 +170,17 @@ FAKE
     export XDG_SESSION_TYPE=wayland
     export QT_QPA_PLATFORM=wayland
 
+    # ReleaseService opens the release page in the REAL default browser 8 s
+    # after the shell starts, on a host that ships /usr/share/rime/release.json
+    # and a HOME that has never seen it — which every harness HOME is. Measured
+    # 2026-11-02 on a Rime host: run-config-agents-keys-test.sh got a Firefox
+    # window over its frames from the third step on, sooner or later with the
+    # machine's load. No release, no opener; the suites about the service
+    # (run-release-service-test.sh, run-updates-page-test.sh) set their own per
+    # command, which wins over these.
+    export RIME_RELEASE_JSON=/nonexistent
+    export RIME_RELEASE_OPENER=/bin/false
+
     # A private session bus. A private XDG_RUNTIME_DIR does not move the bus:
     # DBUS_SESSION_BUS_ADDRESS still named the desktop's, so every shell under
     # test saw the user's own media players, tray icons and notification name —

@@ -20,6 +20,10 @@
 #            second wallpaper — the fake setter is told that file, and
 #            ~/.curr_wall points at it.
 #
+#  Every verdict waits for the state it names, not for a time: `settle` grabs
+#  until the frame has stopped moving and the change is there (up to ${WAIT:-10}
+#  s). A fixed sleep before one grab passed or failed with the machine's load.
+#
 #  PROBE=agents|nexus grabs a frame after every Tab instead, to re-derive the
 #  stop counts. Skips (status 0) without quickshell, labwc, wtype, grim or
 #  python3 with PIL.
@@ -68,7 +72,8 @@ sleep 3
 
 ipc()  { quickshell -p "$root/shell.qml" ipc call "$@" >/dev/null 2>&1; }
 keys() { local k; for k in "$@"; do wtype -k "$k"; sleep 0.3; done; }
-grab() { grim -g "480,0 960x600" "$HEADLESS_W/$1.png"; [ -n "${SHOTS:-}" ] && mkdir -p "$SHOTS" && cp "$HEADLESS_W/$1.png" "$SHOTS/"; }
+# grab <name> — the Dashboard's part of the screen, or GEOM (grim -g) when set.
+grab() { grim -g "${GEOM:-480,0 960x600}" "$HEADLESS_W/$1.png"; [ -n "${SHOTS:-}" ] && mkdir -p "$SHOTS" && cp "$HEADLESS_W/$1.png" "$SHOTS/"; }
 delta() {   # delta <a> <b> <x0,y0,x1,y1> — mean abs difference of the region
     python3 - "$HEADLESS_W/$1.png" "$HEADLESS_W/$2.png" "$3" <<'PY'
 import sys
@@ -77,6 +82,25 @@ box = tuple(int(v) for v in sys.argv[3].split(","))
 a = Image.open(sys.argv[1]).convert("L").crop(box); b = Image.open(sys.argv[2]).convert("L").crop(box)
 print(f"{ImageStat.Stat(ImageChops.difference(a, b)).mean[0]:.2f}")
 PY
+}
+# settle <name> <ref> <box> <gt|lt> <threshold> — grab <name> until it is still
+# (two grabs 0.25 s apart differ by under 0.3 in <box>) AND its delta from <ref>
+# is past <threshold> the way <gt|lt> says; give up after ${WAIT:-10} s. Prints
+# the last delta either way: the verdict is the caller's, on what was seen.
+settle() {
+    local name="$1" ref="$2" box="$3" op="$4" thr="$5" d="" still="" t0=$SECONDS
+    grab "$name"
+    while :; do
+        sleep 0.25
+        cp "$HEADLESS_W/$name.png" "$HEADLESS_W/$name.prev.png"
+        grab "$name"
+        still="$(delta "$name.prev" "$name" "$box")"
+        d="$(delta "$ref" "$name" "$box")"
+        awk -v s="$still" -v d="$d" -v t="$thr" -v op="$op" \
+            'BEGIN { exit !(s < 0.3 && ((op == "gt") ? (d > t) : (d < t))) }' && break
+        [ $((SECONDS - t0)) -ge "${WAIT:-10}" ] && break
+    done
+    echo "$d"
 }
 wtype -k Shift_L; sleep 0.3          # the first wtype key of a session is lost
 
@@ -93,43 +117,63 @@ if [ -n "${PROBE:-}" ]; then
 fi
 
 # ── Agents ───────────────────────────────────────────────────────────────────
-# Stops (PROBE=agents): the tab bar, the guide's entry, the onboarding card's
-# two buttons. Frames: the guide covers the page (220,40 → 940,560).
-GUIDE="220,40,940,560"
-ipc dashboard-agents toggle; sleep 1.5
-grab agents-0
-keys Tab Tab Return; sleep 0.8; grab agents-1-open
-d="$(delta agents-0 agents-1-open "$GUIDE")"
-awk -v d="$d" 'BEGIN { exit !(d > 8) }' && ok "Tab to the guide's entry, Return opens the guide (Δ $d)" \
-    || bad "the guide did not open from its entry (Δ $d)"
-keys Down; sleep 0.6; grab agents-2-section
-d="$(delta agents-1-open agents-2-section "$GUIDE")"
+# Stops (PROBE=agents): the tab bar's list, its Settings action (a stop of its
+# own since a46ee749, TabSwitcher `action`), the guide's entry, the onboarding
+# card's two buttons. Frames: the guide covers the page (220,40 → 940,560) and
+# leaves the tab bar (0,0 → 960,40) alone. Return on the Settings action
+# closes the Dashboard for the Nexus, which changes the GUIDE box just as much
+# (that passed as "the guide opened" from a46ee749 on), so the tab bar tells
+# them apart.
+GUIDE="220,40,940,560"; TABBAR="0,0,960,40"
+# Arrival is a state too: the frame must differ from the desktop grabbed before
+# the toggle, and be still. (Compared with itself it was only a stillness wait,
+# which an empty desktop passes at once when the Dashboard is late.)
+ALL="0,0,960,600"
+grab agents-pre
+ipc dashboard-agents toggle
+echo "  ....  the Dashboard is up (Δ from the desktop $(settle agents-0 agents-pre "$ALL" gt 5))"
+keys Tab Tab Tab Return
+d="$(settle agents-1-open agents-0 "$GUIDE" gt 8)"
+bar="$(delta agents-0 agents-1-open "$TABBAR")"
+awk -v d="$d" -v b="$bar" 'BEGIN { exit !(d > 8 && b < 2) }' \
+    && ok "Tab to the guide's entry, Return opens the guide (Δ $d, tab bar Δ $bar)" \
+    || bad "the guide did not open from its entry (Δ $d, tab bar Δ $bar: over 2 = the Dashboard left)"
+keys Down
+d="$(settle agents-2-section agents-1-open "$GUIDE" gt 3)"
 awk -v d="$d" 'BEGIN { exit !(d > 3) }' && ok "it opens on its section list: Down moves to the next section (Δ $d)" \
     || bad "Down in the open guide changed nothing (Δ $d) — the section list does not have the keys"
-keys Tab Tab Down; sleep 0.6; grab agents-3-trapped
-d="$(delta agents-2-section agents-3-trapped "$GUIDE")"
+keys Tab Tab Down
+d="$(settle agents-3-trapped agents-2-section "$GUIDE" gt 3)"
 awk -v d="$d" 'BEGIN { exit !(d > 3) }' && ok "Tab ×2 stays inside the guide (list → Close → list): Down moves the section again (Δ $d)" \
     || bad "after Tab ×2 Down changed nothing (Δ $d) — Tab left the guide"
-keys Escape; sleep 0.8; grab agents-4-closed
-d="$(delta agents-0 agents-4-closed "$GUIDE")"
+keys Escape
+d="$(settle agents-4-closed agents-0 "$GUIDE" lt 2)"
 awk -v d="$d" 'BEGIN { exit !(d < 2) }' && ok "Escape closes the guide only — the page is back as it was (Δ $d)" \
     || bad "after Escape the page differs from before the guide (Δ $d) — the Dashboard closed, or the guide stayed"
-keys Return; sleep 0.8; grab agents-5-reopened
-d="$(delta agents-0 agents-5-reopened "$GUIDE")"
-awk -v d="$d" 'BEGIN { exit !(d > 8) }' && ok "and the keys went back to the entry: Return opens the guide again (Δ $d)" \
-    || bad "Return after Escape did not reopen the guide (Δ $d) — the keys were lost"
+keys Return
+d="$(settle agents-5-reopened agents-0 "$GUIDE" gt 8)"
+bar="$(delta agents-0 agents-5-reopened "$TABBAR")"   # as above: tells a closed Dashboard apart
+awk -v d="$d" -v b="$bar" 'BEGIN { exit !(d > 8 && b < 2) }' \
+    && ok "and the keys went back to the entry: Return opens the guide again (Δ $d, tab bar Δ $bar)" \
+    || bad "Return after Escape did not reopen the guide (Δ $d, tab bar Δ $bar: over 2 = the Dashboard left)"
 keys Escape; sleep 0.6
-ipc dashboard-agents toggle; sleep 1.2
+ipc dashboard-agents toggle
+echo "  ....  the Dashboard is gone (Δ from the desktop $(settle agents-6-gone agents-pre "$ALL" lt 1))"
 
 # ── Settings (Nexus): Appearance ────────────────────────────────────────────
-# Stops (PROBE=nexus): the page list, Close, the lock background field, its
-# Reset, Rescan, then the wallpaper strip. (In the Dashboard's Config tab it
-# was seven: its tab bar and "Open in window" came first; Phase 19 removed it.)
-ipc nexus open appearance; sleep 1.5
-keys Tab Tab Tab Tab Tab Tab Right Return
+# Stops (PROBE=nexus): the page list, Close, the profile picture's field, its
+# Choose… and its Reset (3fbdd996 added those three), the lock background
+# field, its Reset, Rescan, then the wallpaper strip. (In the Dashboard's
+# Config tab it was seven: its tab bar and "Open in window" came first; Phase
+# 19 removed it.)
+# Nexus is its own window, so these two frames are the whole output.
+GEOM="0,0 1920x1080" grab nexus-pre
+ipc nexus open appearance
+echo "  ....  Nexus is up (Δ from the desktop $(GEOM="0,0 1920x1080" settle nexus-0 nexus-pre "0,0,1920,1080" gt 3))"
+keys Tab Tab Tab Tab Tab Tab Tab Tab Tab Right Return
 for _ in $(seq 1 20); do grep -q 'bbb-second.png' "$SETTER_LOG" && break; sleep 0.25; done
 grep -q 'img .*bbb-second.png' "$SETTER_LOG" \
-    && ok "Tab ×6 to the wallpaper strip, Right, Return: the setter was told the second wallpaper" \
+    && ok "Tab ×9 to the wallpaper strip, Right, Return: the setter was told the second wallpaper" \
     || bad "the wallpaper strip by keyboard — the setter was told: $(tr '\n' '|' < "$SETTER_LOG")"
 # shellcheck disable=SC2088  # "~/.curr_wall" is prose in the verdicts, not a path
 [ "$(readlink "$HOME/.curr_wall" 2>/dev/null)" = "$HOME/Pictures/Wallpapers/bbb-second.png" ] \
