@@ -2,6 +2,7 @@ import QtQuick
 import QtTest
 import QtQuick.Window
 import "components"
+import "shapes/fluid"
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SurfaceLifecycle — the one clock a transient surface runs on.
@@ -18,6 +19,13 @@ import "components"
 //   * a lifecycle BORN open (a LazyPopup built by its flag) opens by itself;
 //   * with spatial motion off (Reduce Motion) the same machine still runs: the
 //     shape is simply there and a short fade carries the change.
+// And, from the smooth-motion work (2026-11-03):
+//   * a kept window stays shown between opens, parked (contentless, no updates
+//     once its 1x1 frame is out), and the springs wait for its real size;
+//   * a liquid channel released by another starts at the instant of the
+//     crossing, inside the frame it happened in;
+//   * a FluidShape on a lifecycle's `frame` builds its path once a frame that
+//     moved, and never for a frame that did not.
 // ─────────────────────────────────────────────────────────────────────────────
 TestCase {
     id: tc
@@ -34,6 +42,26 @@ TestCase {
             Rectangle { id: probe; anchors.fill: parent; color: "black" }
         }
     }
+
+    Component {
+        id: keptWinC
+        Window {
+            width: 80; height: 60; visible: false
+            property alias item: probe
+            Rectangle { id: probe; anchors.fill: parent; color: "black" }
+        }
+    }
+    Component {
+        id: shapeC
+        FluidShape {
+            width: 200; height: 100
+            family: "centerBloom"
+            color: "black"
+            geometry: ({ cx: 100, strip: 6, notchW: 60, notchH: 30, shoulder: 8, notchBottom: 10,
+                         w: 160, h: 90, r: 20, shoulderW1: 28, shoulderH1: 22 })
+        }
+    }
+    Component { id: springC; Spring {} }
 
     function make(props) {
         var o = createTemporaryObject(lifeC, tc, props || {})
@@ -375,5 +403,153 @@ TestCase {
         l.open = false
         compare(l.mapped, false, "an instant close unmaps at once")
         compare(l.phase, "Closed")
+    }
+
+    // ── The kept window ──────────────────────────────────────────────────────
+    // A window driven the way a surface drives its PanelWindow: shown while
+    // `windowVisible`, 1x1 while parked.
+    function keptWindow(l, w) {
+        w.visible = Qt.binding(function () { return l.windowVisible })
+        w.width = Qt.binding(function () { return l.parked ? 1 : 80 })
+        w.height = Qt.binding(function () { return l.parked ? 1 : 60 })
+    }
+
+    function test_a_kept_window_parks_between_opens() {
+        var w = createTemporaryObject(keptWinC, tc)
+        var l = make({ surface: w.item, keepWindow: true })
+        keptWindow(l, w)
+        compare(l.windowVisible, false, "nothing is shown before the first open")
+        var hides = 0
+        w.visibleChanged.connect(function () { if (!w.visible) hides++ })
+        for (var i = 0; i < 3; i++) {
+            l.open = true
+            tryCompare(l, "phase", "Open", 2000)
+            compare(w.item.visible, true, "the content shows while open")
+            compare(l.parked, false)
+            l.open = false
+            tryCompare(l, "mapped", false, 2000)
+            compare(l.windowVisible, true, "the window stays shown after close " + (i + 1))
+            compare(l.parked, true, "parked")
+            compare(w.item.visible, false, "and its content is hidden while parked")
+            tryCompare(l, "windowUpdates", false, 1000)
+        }
+        compare(hides, 0, "the window was never hidden, so never destroyed and rebuilt")
+        l.open = true
+        compare(l.windowUpdates, true, "an open updates the window again at once")
+        tryCompare(l, "phase", "Open", 2000)
+    }
+
+    function test_a_kept_window_not_parkable_is_hidden() {
+        // A fullscreen window on the output: a parked layer could keep it off
+        // direct scan-out, so the window goes as it did before.
+        var w = createTemporaryObject(keptWinC, tc)
+        var l = make({ surface: w.item, keepWindow: true, parkable: false })
+        keptWindow(l, w)
+        l.open = true
+        tryCompare(l, "phase", "Open", 2000)
+        l.open = false
+        tryCompare(l, "mapped", false, 2000)
+        compare(l.windowVisible, false, "hidden on close")
+        l.parkable = true
+        compare(l.windowVisible, true, "parked once nothing is fullscreen")
+        compare(l.parked, true)
+    }
+
+    function test_a_kept_window_waits_for_its_real_size() {
+        // A parked window opening renders at 1x1 until the compositor's
+        // configure arrives. Those frames are not the open's first frame.
+        var w = createTemporaryObject(keptWinC, tc)
+        var l = make({ surface: w.item, keepWindow: true })
+        w.visible = Qt.binding(function () { return l.windowVisible })
+        w.width = 1; w.height = 1
+        l.open = true
+        wait(150)
+        compare(l.progress, 0, "held at the notch while the window is 1x1")
+        compare(w.item.visible, false, "and nothing of it is drawn at 1x1")
+        w.width = 80; w.height = 60              // the configure arrives
+        tryVerify(function () { return l.progress > 0 }, 1000, "moves once it has its size")
+        compare(w.item.visible, true)
+        tryCompare(l, "phase", "Open", 2000)
+    }
+
+    // ── The analytic handoff ─────────────────────────────────────────────────
+    // The frame clock is stopped and the lifecycle stepped by hand at 60 Hz.
+    // In the frame a channel is released, it has already moved for the part of
+    // the frame after the crossing: exactly the closed form over dt - tc.
+    function copyOf(sp) {
+        var c = createTemporaryObject(springC, tc, {
+            value: sp.value, velocity: sp.velocity, target: sp.target,
+            response: sp.response, dampingFraction: sp.dampingFraction, external: true })
+        c._moving = sp._moving    // whatever order the properties landed in
+        return c
+    }
+    function handoff(l, released, driver, level, settledTarget) {
+        var dt = 1 / 60
+        for (var n = 0; n < 120; n++) {
+            var before = copyOf(driver), rest = copyOf(released)
+            l._tick(dt)
+            if (released.target === settledTarget) {
+                var tcross = before.crossingTime(dt, level)
+                verify(tcross > 0 && tcross <= dt, "the crossing is inside the frame: " + tcross)
+                before.advance(tcross)
+                verify(Math.abs(before.value - level) < 1e-4,
+                       "the driver is on the release level at the crossing: " + before.value)
+                rest.target = settledTarget
+                rest._moving = true
+                rest.advance(dt - tcross)
+                verify(Math.abs(released.value - rest.value) < 1e-9,
+                       "released at the crossing: " + released.value + ", closed form " + rest.value)
+                verify(Math.abs(released.value - (settledTarget === 1 ? 0 : 1)) > 1e-6,
+                       "and it moved inside that frame: " + released.value)
+                return n
+            }
+        }
+        fail("the channel was never released")
+    }
+
+    function test_the_body_is_released_at_the_crossing() {
+        var l = make({ liquid: true })
+        l.open = true
+        l._clock.running = false
+        handoff(l, l._body, l._lead, l.openRelease, 1)
+    }
+
+    function test_the_lead_is_released_at_the_crossing() {
+        var l = make({ liquid: true })
+        l.open = true
+        tryCompare(l, "phase", "Open", 2000)
+        tryVerify(function () { return l.lead === 1 && l.body === 1 }, 3000)
+        l.open = false
+        l._clock.running = false
+        handoff(l, l._lead, l._body, l.closeRelease, 0)
+    }
+
+    // ── The path is built once a frame that moved ────────────────────────────
+    function test_the_fluid_path_builds_once_a_moving_frame() {
+        var l = make({ liquid: true })
+        var s = createTemporaryObject(shapeC, tc)
+        s.motion = Qt.binding(function () { return l.frame })
+        var frames = 0
+        l.frameChanged.connect(function () { frames++ })
+        l._clock.running = false
+        var b0 = s._stats.builds
+        l._tick(0); l._tick(1 / 60)
+        compare(s._stats.builds - b0, 0, "nothing moved, nothing built")
+        l.open = true
+        l._clock.running = false
+        frames = 0; b0 = s._stats.builds
+        for (var i = 0; i < 20; i++) l._tick(1 / 60)
+        verify(frames >= 18, "the frames moved: " + frames)
+        compare(s._stats.builds - b0, frames, "one build per moved frame")
+        frames = 0; b0 = s._stats.builds
+        l._tick(0)
+        compare(frames, 0, "a zero step publishes nothing")
+        compare(s._stats.builds - b0, 0, "and builds nothing")
+        for (var j = 0; j < 400 && l.phase !== "Open"; j++) l._tick(1 / 60)
+        for (var k = 0; k < 400 && (l.lead !== 1 || l.body !== 1 || l.trail !== 1); k++) l._tick(1 / 60)
+        compare(l.body, 1, "at rest")
+        b0 = s._stats.builds
+        for (var m = 0; m < 10; m++) l._tick(1 / 60)
+        compare(s._stats.builds - b0, 0, "at rest, nothing is built")
     }
 }
