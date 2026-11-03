@@ -41,5 +41,19 @@ Item {
                 }
             }
         }
+
+        // Why a press did not change the profile (refused, daemon down). Without
+        // this the pill snapped back and the switch looked like it did nothing.
+        Text {
+            objectName: "powerProfileError"
+            width: parent.width
+            visible: text !== ""
+            text: root.powerProfileService.error || ""
+            wrapMode: Text.WordWrap
+            font.pixelSize: theme.typeCaption
+            color: Theme.danger
+            Accessible.role: Accessible.AlertMessage
+            Accessible.name: text
+        }
     }
 }
