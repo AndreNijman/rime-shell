@@ -23,14 +23,31 @@ import "../services/config_tab/pages"
 // therefore be told whether they are genuinely on screen (see ServiceRef). Data
 // & Storage and Misc do; getting it wrong on a new page means a poller that
 // never stops, so it is declared rather than inferred.
+//
+// `shellOnly` marks pages that configure Rime Shell or Hyprland themselves (the
+// bar, the layout, monitors through Hyprland, keybinds, the compositor). They
+// are listed in the Shell's Nexus and left out of Rime Settings, the standalone
+// app (settings.qml) that GNOME, KDE Plasma and COSMIC users open: there is no
+// Shell and no Hyprland to configure there (rime-os docs/nixos/desktops.md §5).
+// settings.qml sets `appMode`, and `pages` is then the list without them; every
+// reader (SettingsHost, NavPane, IpcManager, search) reads `pages`, so a
+// Shell-only page cannot be reached in the app by any path.
 // ─────────────────────────────────────────────────────────────────────────────
 
 QtObject {
     id: root
 
-    readonly property var pages: [
+    // True in Rime Settings (settings.qml), false in the Shell.
+    property bool appMode: false
+
+    // `appOnly` is the other direction: About, which the Shell keeps inside
+    // Misc (with the compositor and Shell rows), is a page of its own in the app.
+    readonly property var pages: root.allPages.filter(p => root.appMode ? !p.shellOnly : !p.appOnly)
+
+    readonly property var allPages: [
         {
             "id": "appearance",
+            "shellOnly": true,
             "group": "Look & feel",
             "title": "Appearance",
             "subtitle": "Palette, wallpaper, lock screen, shape",
@@ -40,6 +57,7 @@ QtObject {
         },
         {
             "id": "layout",
+            "shellOnly": true,
             "group": "Look & feel",
             "title": "Layout & Behavior",
             "subtitle": "Scaling, bar, motion, spacing, dimensions",
@@ -49,6 +67,7 @@ QtObject {
         },
         {
             "id": "display",
+            "shellOnly": true,
             "group": "Look & feel",
             "title": "Display",
             "subtitle": "Resolution, refresh, scale, rotation, arrangement",
@@ -58,6 +77,7 @@ QtObject {
         },
         {
             "id": "input",
+            "shellOnly": true,
             "group": "Input",
             "title": "Input",
             "subtitle": "Touchpad, mouse, keyboard repeat",
@@ -67,6 +87,7 @@ QtObject {
         },
         {
             "id": "keybinds",
+            "shellOnly": true,
             "group": "Input",
             "title": "Keybinds",
             "subtitle": "Shortcuts for every popup",
@@ -76,6 +97,7 @@ QtObject {
         },
         {
             "id": "privacy",
+            "shellOnly": false,
             "group": "Privacy & agents",
             "title": "Privacy & Permissions",
             "subtitle": "Camera, microphone, capture, files, and who enforces each",
@@ -89,6 +111,7 @@ QtObject {
         },
         {
             "id": "firewall",
+            "shellOnly": false,
             "group": "Privacy & agents",
             "title": "Firewall",
             "subtitle": "What is reachable from the network, and what you opened",
@@ -100,6 +123,7 @@ QtObject {
         },
         {
             "id": "agents",
+            "shellOnly": false,
             "group": "Privacy & agents",
             "title": "Agents",
             "subtitle": "The sandbox new agent sessions start in",
@@ -113,6 +137,7 @@ QtObject {
         },
         {
             "id": "remote-pair",
+            "shellOnly": false,
             "group": "Devices",
             "title": "Pair a device",
             "subtitle": "Show a code for Rime Remote on your phone to scan",
@@ -125,6 +150,7 @@ QtObject {
         },
         {
             "id": "remote-devices",
+            "shellOnly": false,
             "group": "Devices",
             "title": "Paired devices",
             "subtitle": "Every phone that can reach this machine, and how to revoke one",
@@ -134,6 +160,7 @@ QtObject {
         },
         {
             "id": "data",
+            "shellOnly": false,
             "group": "System",
             "title": "Data & Storage",
             "subtitle": "Disks, memory, clipboard, notifications",
@@ -143,6 +170,7 @@ QtObject {
         },
         {
             "id": "lid",
+            "shellOnly": false,
             "group": "System",
             "title": "Closing the Lid",
             "subtitle": "What a shut lid does while work is running, and what it cost last time",
@@ -156,6 +184,7 @@ QtObject {
         },
         {
             "id": "gaming",
+            "shellOnly": false,
             "group": "System",
             "title": "Gaming",
             "subtitle": "Gaming Mode, what it needs, and the performance policy",
@@ -169,7 +198,31 @@ QtObject {
             "component": gamingComp
         },
         {
+            "id": "power",
+            "shellOnly": false,
+            "group": "System",
+            "title": "Power",
+            "subtitle": "Power tier, switching with the charger, battery charge limit",
+            "icon": "󰂄",
+            // Reads rimed's AutoSwitch and battery thresholds when it arrives
+            // on screen, and holds PowerProfileService (whose rimed fallback
+            // polls) only while it is looked at.
+            "needsScreen": true,
+            "component": powerComp
+        },
+        {
+            "id": "desktops",
+            "shellOnly": false,
+            "group": "System",
+            "title": "Desktops",
+            "subtitle": "GNOME, KDE Plasma and COSMIC beside Rime's own sessions",
+            "icon": "󰍺",
+            "needsScreen": false,
+            "component": desktopsComp
+        },
+        {
             "id": "updates",
+            "shellOnly": false,
             "group": "System",
             "title": "Updates",
             "subtitle": "Whether a newer Rime is out, and what the last update changed live",
@@ -182,6 +235,7 @@ QtObject {
         },
         {
             "id": "recovery",
+            "shellOnly": false,
             "group": "System",
             "title": "Recovery",
             "subtitle": "Health, rollback, repair, ways back in",
@@ -195,6 +249,7 @@ QtObject {
         },
         {
             "id": "blueprint",
+            "shellOnly": false,
             "group": "System",
             "title": "Blueprint",
             "subtitle": "What this machine should be, and what differs",
@@ -204,6 +259,7 @@ QtObject {
         },
         {
             "id": "misc",
+            "shellOnly": true,
             "group": "System",
             "title": "Misc",
             "subtitle": "Compositor, release notes, about",
@@ -213,6 +269,18 @@ QtObject {
             // whether anyone is looking.
             "needsScreen": true,
             "component": miscComp
+        },
+        {
+            "id": "about",
+            "shellOnly": false,
+            "appOnly": true,
+            "group": "System",
+            "title": "About",
+            "subtitle": "Rime OS, this machine, and where the code lives",
+            "icon": "󰋽",
+            // SystemStats again: one subprocess, only while looked at.
+            "needsScreen": true,
+            "component": aboutComp
         }
     ]
 
@@ -279,7 +347,16 @@ QtObject {
     readonly property Component keybindsComp: Component {
         KeybindsPage {}
     }
+    readonly property Component powerComp: Component {
+        PowerPage {}
+    }
+    readonly property Component desktopsComp: Component {
+        DesktopsPage {}
+    }
     readonly property Component miscComp: Component {
         MiscPage {}
+    }
+    readonly property Component aboutComp: Component {
+        AboutPage {}
     }
 }
