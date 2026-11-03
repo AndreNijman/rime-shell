@@ -15,8 +15,8 @@ import "../spring.js" as S
 // values moved at ~62 Hz whatever the display did: invisible on a 60 Hz panel,
 // a judder on katana's 144 Hz one (review, 2026-09-26). This steps the same
 // closed-form spring the surfaces run on (theme/spring.js) once per frame on
-// the wall clock, so it is exact at any refresh rate — and a pill and the bloom
-// it sits in move on literally the same physics.
+// the frame clock (FrameAnimation.frameTime), so it is exact at any refresh
+// rate — and a pill and the bloom it sits in move on literally the same physics.
 //
 //   role     a Motion spring role (motion.js SPRINGS): the response and damping
 //   live     false: jump straight to the target (a Behavior's `enabled: false`
@@ -56,24 +56,19 @@ QtObject {
             f.velocity = 0
             return
         }
-        if (!f._frames.running) {
-            f._last = Date.now()
-            f._frames.running = true
-        }
+        // A (re)start: Qt measures the first tick's frameTime from here.
+        f._frames.running = true
     }
     onTargetChanged: f._go()
     onLiveChanged: if (!f.live) f.snap()
     Component.onCompleted: { f.snap(); f._born = true }
 
-    property real _last: 0
     property FrameAnimation _frames: FrameAnimation {
         running: false
         onTriggered: {
-            const now = Date.now()
-            // Wall clock, clamped: a stalled frame costs one slower step, not a
-            // teleport.
-            const dt = Math.min(0.05, Math.max(0, (now - f._last) / 1000))
-            f._last = now
+            // The frame clock (ns; Date.now() counted whole ms), clamped: a
+            // stalled frame costs one slower step, not a teleport.
+            const dt = Math.min(0.05, frameTime)
             if (dt > 0) {
                 const r = S.step(f.value, f.velocity, f.target, f._p.response, f._p.damping, dt)
                 f.velocity = r[1]

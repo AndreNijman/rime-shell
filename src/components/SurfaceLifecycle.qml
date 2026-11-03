@@ -129,26 +129,31 @@ QtObject {
     property real minFraction: 0.35
 
     // ── Output ───────────────────────────────────────────────────────────────
-    readonly property real progress: Math.max(0, Math.min(1, life._body.value))
-    readonly property real body:  life._body.value
-    readonly property real lead:  life.liquid ? life._lead.value  : life._body.value
-    readonly property real trail: life.liquid ? life._trail.value : life._body.value
-    readonly property real velocity:     life._body.velocity
-    readonly property real leadVelocity: life.liquid ? life._lead.velocity : life._body.velocity
+    // All of these change together, ONCE per frame: the springs are stepped
+    // in one tick and published as one snapshot (`frame`). A binding that
+    // reads several of them — a silhouette's channels — used to re-run for
+    // every spring write, six times a frame, each time rebuilding and parsing
+    // the whole path. Bind to `frame` to run once.
+    readonly property real progress: Math.max(0, Math.min(1, life._f.body))
+    readonly property real body:  life._f.body
+    readonly property real lead:  life._f.lead
+    readonly property real trail: life._f.trail
+    readonly property real velocity:     life._f.velocity
+    readonly property real leadVelocity: life._f.leadVelocity
     // FLOW: speed relative to the peak of a nominal open — a critically damped
     // spring from rest peaks at 2π/(e·response) ≈ 2.3/response — so about 1 at
     // the fastest and exactly 0 at rest. geometry.js bends edges by it.
-    readonly property real bodyFlow: life._body.response > 0
-                                     ? life._body.velocity * life._body.response / 2.3 : 0
-    readonly property real leadFlow: !life.liquid ? life.bodyFlow
-                                     : life._lead.response > 0
-                                       ? life._lead.velocity * life._lead.response / 2.3 : 0
+    readonly property real bodyFlow: life._f.bodyFlow
+    readonly property real leadFlow: life._f.leadFlow
+    // The snapshot itself: { progress, body, lead, trail, velocity,
+    // leadVelocity, bodyFlow, leadFlow }. A new object only when a value moved.
+    readonly property var frame: life._f
     property real content:  0
     property real alpha:    0
 
     readonly property bool mapped: life.open || life._settling
                                    || life.progress > 0 || life.content > 0 || life.alpha > 0
-                                   || (life.liquid && (life._lead.value > 0 || life._trail.value > 0))
+                                   || (life.liquid && (life._f.lead > 0 || life._f.trail > 0))
 
     readonly property string phase: {
         if (!life.mapped) return "Closed"
@@ -178,31 +183,86 @@ QtObject {
     property bool _contentPending: false
 
     // ── Springs ──────────────────────────────────────────────────────────────
-    property Spring _body: Spring {
-        epsilon: 0.0005
-        onValueChanged: life._onStep()
-        onSettled: { life._onStep(); life._check() }
-    }
-    property Spring _lead: Spring {
-        epsilon: 0.0005
-        onValueChanged: if (life.liquid) life._onStep()
-        onSettled: if (life.liquid) { life._onStep(); life._check() }
-    }
-    // A follower: its target is wherever the body is right now.
-    property Spring _trail: Spring {
-        epsilon: 0.0005
-        target: life.liquid ? life._body.value : 0
-        dampingFraction: 1.0
-        onValueChanged: if (life.liquid) life._onStep()
-        onSettled: if (life.liquid) { life._onStep(); life._check() }
-    }
+    // Stepped together by `_clock`, once a frame, on the frame clock.
+    property Spring _body:  Spring { epsilon: 0.0005; external: true }
+    property Spring _lead:  Spring { epsilon: 0.0005; external: true }
+    // A follower: its target is wherever the body is right now (set each tick).
+    property Spring _trail: Spring { epsilon: 0.0005; external: true; dampingFraction: 1.0 }
     function _anyRunning() {
         return life._body.running || (life.liquid && (life._lead.running || life._trail.running))
     }
     function _snapAll(to) {
         life._body.target = to; life._body.snap()
         life._lead.target = to; life._lead.snap()
-        life._trail.snap()      // its target follows the body's value
+        life._trail.target = life.liquid ? life._body.value : 0
+        life._trail.snap()
+        life._publish()
+    }
+
+    property var _f: ({ progress: 0, body: 0, lead: 0, trail: 0, velocity: 0,
+                        leadVelocity: 0, bodyFlow: 0, leadFlow: 0 })
+    function _publish() {
+        const B = life._body, L = life.liquid ? life._lead : life._body
+        const T = life.liquid ? life._trail : life._body
+        const f = life._f
+        if (f.body === B.value && f.lead === L.value && f.trail === T.value
+                && f.velocity === B.velocity && f.leadVelocity === L.velocity)
+            return
+        const bodyFlow = B.response > 0 ? B.velocity * B.response / 2.3 : 0
+        life._f = {
+            progress: Math.max(0, Math.min(1, B.value)),
+            body: B.value, lead: L.value, trail: T.value,
+            velocity: B.velocity, leadVelocity: L.velocity,
+            bodyFlow: bodyFlow,
+            leadFlow: !life.liquid ? bodyFlow
+                      : L.response > 0 ? L.velocity * L.response / 2.3 : 0
+        }
+    }
+
+    // ── The clock ────────────────────────────────────────────────────────────
+    // One tick a frame steps every spring, in order, then publishes. A channel
+    // released by another (the body once the lead crosses `openRelease`, the
+    // lead once the body falls below `closeRelease`) starts at the INSTANT of
+    // the crossing, found on the closed form, not at the next frame: checked
+    // once a frame, the release lagged up to a whole frame — at the lead's
+    // fastest, ~40 px of a Dashboard at 60 Hz.
+    property FrameAnimation _clock: FrameAnimation {
+        running: life._anyRunning()
+        // The first tick after a start carries the time since the start.
+        onTriggered: life._tick(Math.min(0.05, frameTime))
+    }
+    function _tick(dt) {
+        const B = life._body, L = life._lead, T = life._trail
+        let done = false
+        if (life.liquid && life._ready && dt > 0
+                && (life.open ? life.enterDuration : life.exitDuration) > 0) {
+            if (life.open && B.target < 1) {
+                const tc = L.crossingTime(dt, life.openRelease)
+                if (tc >= 0) {
+                    L.advance(dt)
+                    B.advance(tc); B.target = 1; B.advance(dt - tc)
+                    done = true
+                }
+            } else if (!life.open && L.target > 0) {
+                const tc = B.crossingTime(dt, life.closeRelease)
+                if (tc >= 0) {
+                    B.advance(dt)
+                    L.advance(tc); L.target = 0; L.advance(dt - tc)
+                    done = true
+                }
+            }
+        }
+        if (!done) {
+            if (life.liquid) L.advance(dt)
+            B.advance(dt)
+        }
+        if (life.liquid) {
+            T.target = B.value
+            T.advance(dt)
+        }
+        life._publish()
+        life._onStep()
+        life._check()
     }
 
     // ── The first frame ──────────────────────────────────────────────────────
