@@ -30,7 +30,11 @@ PanelWindow {
     WlrLayershell.layer:         WlrLayer.Overlay
 
     property bool wantsFocus: false
-    WlrLayershell.keyboardFocus: wantsFocus && !life.parked ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+    // Closing while another surface opens, it keeps the keyboard until its
+    // close ends: released at once, the compositor could hand the keys to a
+    // window before the opener's grab lands, and that focus move closes the
+    // opener (a parked window's grab lands with its next frame).
+    WlrLayershell.keyboardFocus: (wantsFocus || life.closing && Popups.anyOpen) && !life.parked ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
 
     Timer {
         id: focusGrabTimer

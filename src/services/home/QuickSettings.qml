@@ -782,7 +782,7 @@ StatCard {
                             // ChannelColumn, the same).
                             SpringFollower { id: bfillW; role: "valueFollow"
                                              live: !bdrag.pressed
-                                                   && (btrack.Window.window ? btrack.Window.window.visible : false)
+                                                   && btrack.visible && (btrack.Window.window ? btrack.Window.window.visible : false)
                                              target: Math.max(btrack.radius * 2, btrack.width * root._brightVal) }
                             radius: parent.radius; color: Theme.active
                         }
@@ -809,7 +809,7 @@ StatCard {
                         x: bthumbX.value
                         SpringFollower { id: bthumbX; role: "valueFollow"
                                          live: !bdrag.pressed
-                                               && (btrack.Window.window ? btrack.Window.window.visible : false)
+                                               && btrack.visible && (btrack.Window.window ? btrack.Window.window.visible : false)
                                          target: Math.max(0, Math.min(btw.width - btw.thumbD, root._brightVal * (btw.width - btw.thumbD))) }
                     }
                 }

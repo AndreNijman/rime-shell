@@ -110,7 +110,7 @@ Item {
                     // for the whole drag. Hidden or dragged, it snaps.
                     SpringFollower { id: fillH; role: "valueFollow"
                                      live: !dragArea.pressed
-                                           && (fill.Window.window ? fill.Window.window.visible : false)
+                                           && fill.visible && (fill.Window.window ? fill.Window.window.visible : false)
                                      target: Math.max(fill.radius * 2, fill.parent.height * col.value) }
                     radius: parent.radius
                     color:  col.muted ? Qt.rgba(Theme.text.r, Theme.text.g, Theme.text.b, 0.15) : Theme.active

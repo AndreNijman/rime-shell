@@ -332,6 +332,7 @@ QtObject {
     }
     onMappedChanged: {
         if (!life.mapped) life._presented = false
+        else life._everOpened = true   // see _everOpened
         // For tests/visual/stress-matrix.sh: every map and unmap, by name.
         if (Motion.pacingLog)
             console.info("Rime pacing: " + (life.name || "surface") + " mapped=" + life.mapped)
@@ -368,6 +369,11 @@ QtObject {
         }
     }
     property real _openedAt: 0
+    // Set in onMappedChanged once `mapped` is true, never from onOpenChanged: a handler there runs
+    // before `mapped` has re-evaluated, so windowVisible would see the window
+    // as parked and create it parked (1x1, no keyboard focus). With no
+    // exclusive layer for that frame, labwc hands focus to a toplevel, and the
+    // focus move closes the popup being opened.
     property bool _everOpened: false
     property bool _parkFlushed: false
     onParkedChanged: if (!life.parked) life._parkFlushed = false
@@ -642,7 +648,6 @@ QtObject {
     onOpenChanged: {
         if (life.open) {
             life._openedAt = Date.now()
-            life._everOpened = true
             if (life.resetsFocusRing) InputModality.surfaceOpened()
         }
         life._drive()

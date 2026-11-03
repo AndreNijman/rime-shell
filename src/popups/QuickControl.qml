@@ -69,7 +69,11 @@ PanelWindow {
     // layer (PopupDismiss) never saw that click (2026-09-27, found with the
     // right-notch panes). Opened by hover it holds no keys and needs no catcher.
     readonly property bool grabbing: Popups.quickOpen
-    WlrLayershell.keyboardFocus: root.grabbing && !life.parked ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+    // Closing while another surface opens, it keeps the keyboard until its
+    // close ends: released at once, the compositor could hand the keys to a
+    // window before the opener's grab lands, and that focus move closes the
+    // opener (a parked window's grab lands with its next frame).
+    WlrLayershell.keyboardFocus: (root.grabbing || life.closing && Popups.anyOpen) && !life.parked ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
     MouseArea {
         id: outside
         anchors.fill: parent
@@ -150,9 +154,12 @@ PanelWindow {
     }
 
     // Make sure the slider is accurate the instant the panel appears, in case
-    // the level moved while it was closed.
-    onVisibleChanged: if (visible)
-        BrightnessService.refresh()
+    // the level moved while it was closed. On `mapped`, not `visible`: a kept
+    // window stays visible while parked.
+    Connections {
+        target: life
+        function onMappedChanged() { if (life.mapped) BrightnessService.refresh() }
+    }
 
     // ── Body ──────────────────────────────────────────────────────────────────
     Item {

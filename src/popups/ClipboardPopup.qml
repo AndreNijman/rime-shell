@@ -42,7 +42,11 @@ PanelWindow {
     // layer (PopupDismiss) never saw that click (2026-09-27, found with the
     // right-notch panes).
     readonly property bool grabbing: Popups.clipboardOpen
-    WlrLayershell.keyboardFocus: root.grabbing && !life.parked ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+    // Closing while another surface opens, it keeps the keyboard until its
+    // close ends: released at once, the compositor could hand the keys to a
+    // window before the opener's grab lands, and that focus move closes the
+    // opener (a parked window's grab lands with its next frame).
+    WlrLayershell.keyboardFocus: (root.grabbing || life.closing && Popups.anyOpen) && !life.parked ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
     MouseArea {
         id: outside
         anchors.fill: parent

@@ -102,7 +102,11 @@ PanelWindow {
     // 2026-09-27: "when i open anything from right notch … i cant close it").
     // One condition drives both, so the grab and the catcher cannot disagree.
     readonly property bool grabbing: root.life.open && root.pane !== "" && root.pane !== "toast"
-    WlrLayershell.keyboardFocus: root.grabbing && !root.life.parked ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+    // Closing while another surface opens, it keeps the keyboard until its
+    // close ends: released at once, the compositor could hand the keys to a
+    // window before the opener's grab lands, and that focus move closes the
+    // opener (a parked window's grab lands with its next frame).
+    WlrLayershell.keyboardFocus: (root.grabbing || root.life.closing && Popups.anyOpen) && !root.life.parked ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
 
     // Outside the body: a click there closes the pane. Lowest in the stack.
     MouseArea {
