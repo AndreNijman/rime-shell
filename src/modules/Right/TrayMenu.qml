@@ -22,7 +22,7 @@ PopupWindow {
     required property Item target
     property var menu: null
 
-    readonly property ThemeSet theme: ThemeSet { scale: Theme.factorForHeight(Screen.height) }
+    readonly property ThemeSet theme: ThemeSet { scale: Theme.factorForSize(Screen.width, Screen.height) }
 
     // Submenus drilled into, outermost first. Empty = the top level.
     property var stack: []

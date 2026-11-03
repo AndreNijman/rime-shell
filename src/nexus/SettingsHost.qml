@@ -27,7 +27,7 @@ Item {
     id: host
 
     // The host window's own sizes (P1-040) — Nexus passes its screen's set.
-    property ThemeSet theme: ThemeSet { scale: Theme.factorForHeight(Screen.height) }
+    property ThemeSet theme: ThemeSet { scale: Theme.factorForSize(Screen.width, Screen.height) }
 
     property string page: PageRegistry.pages.length > 0 ? PageRegistry.pages[0].id : ""
     // True while a person can see the pages: gates the refcounted telemetry

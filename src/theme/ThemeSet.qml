@@ -20,7 +20,7 @@ import "../services"
 // A surface takes the set for the output it is drawn on:
 //
 //     readonly property ThemeSet theme: ThemeSet { scale: Theme.factorForScreen(root.screen) }     // a window
-//     readonly property ThemeSet theme: ThemeSet { scale: Theme.factorForHeight(Screen.height) }   // an Item
+//     readonly property ThemeSet theme: ThemeSet { scale: Theme.factorForSize(Screen.width, Screen.height) }   // an Item
 //
 // and reads `theme.px(...)` where it used to read `Theme.px(...)`. There is one
 // table and every set is an instance of it, so a token changed here changes for

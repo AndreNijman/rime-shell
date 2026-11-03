@@ -16,7 +16,7 @@ import "../"
 // ─────────────────────────────────────────────────────────────────────────────
 Text {
     id: root
-    readonly property ThemeSet theme: ThemeSet { scale: Theme.factorForHeight(Screen.height) }
+    readonly property ThemeSet theme: ThemeSet { scale: Theme.factorForSize(Screen.width, Screen.height) }
 
     font.family:         Theme.fontUi
     font.pixelSize:      theme.typeSection

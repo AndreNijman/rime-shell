@@ -45,7 +45,7 @@ import "../services/qr.js" as QR
 // ─────────────────────────────────────────────────────────────────────────────
 Item {
     id: root
-    readonly property ThemeSet theme: ThemeSet { scale: Theme.factorForHeight(Screen.height) }   // P1-040: this output's sizes
+    readonly property ThemeSet theme: ThemeSet { scale: Theme.factorForSize(Screen.width, Screen.height) }   // P1-040: this output's sizes
 
 
     // The `apex-remote:` payload. Empty draws nothing at all -- deliberately  // rime-rename: keep (the pairing scheme rime-remote-core prints and the installed phone app parses)

@@ -74,7 +74,7 @@ ShellRoot {
                         color: "white"
                         font.pixelSize: aTheme.typeIcon
                         font.family: Theme.fontIcon
-                        readonly property ThemeSet aTheme: ThemeSet { scale: Theme.factorForHeight(Screen.height) }
+                        readonly property ThemeSet aTheme: ThemeSet { scale: Theme.factorForSize(Screen.width, Screen.height) }
                         OpenPill { shown: true }
                     }
                 }

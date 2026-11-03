@@ -90,7 +90,7 @@ QtObject {
     // set:
     //
     //     readonly property ThemeSet theme: ThemeSet { scale: Theme.factorForScreen(root.screen) }
-    //     readonly property ThemeSet theme: ThemeSet { scale: Theme.factorForHeight(Screen.height) }
+    //     readonly property ThemeSet theme: ThemeSet { scale: Theme.factorForSize(Screen.width, Screen.height) }
     //
     // and reads `theme.px(...)` for sizes while still reading `Theme.<colour>`
     // for colours, because a palette belongs to the shell rather than to a
@@ -104,6 +104,7 @@ QtObject {
     // answering two different questions.
     function factorForScreen(screen) { return OutputScale.factorForScreen(screen) }
     function factorForHeight(h)      { return OutputScale.factorForHeight(h) }
+    function factorForSize(w, h)     { return OutputScale.factorForSize(w, h) }
 
 
     // Metrics

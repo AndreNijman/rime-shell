@@ -1475,6 +1475,9 @@ jobs:
       - name: Shell scaling arithmetic (P1-040)
         run: node tests/scaling-test.js
 
+      - name: Keyboard layout chip arithmetic
+        run: node tests/kblayout-test.js
+
       - name: Shell scaling, live on two outputs (P1-040)
         run: |
           ./tests/run-scaling-test.sh

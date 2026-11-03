@@ -115,3 +115,4 @@ AgentHelpEntry agents/AgentHelpEntry.qml
 AgentHelpCard agents/AgentHelpCard.qml
 AgentHelpPanel agents/AgentHelpPanel.qml
 AgentHelpBlock agents/AgentHelpBlock.qml
+singleton KeyboardLayoutService 1.0 KeyboardLayoutService.qml

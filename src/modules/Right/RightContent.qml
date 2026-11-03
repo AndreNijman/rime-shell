@@ -6,7 +6,7 @@ import "../../"
 
 Item {
     id: root
-    readonly property ThemeSet theme: ThemeSet { scale: Theme.factorForHeight(Screen.height) }   // P1-040: this output's sizes
+    readonly property ThemeSet theme: ThemeSet { scale: Theme.factorForSize(Screen.width, Screen.height) }   // P1-040: this output's sizes
 
 
     // The TopBar widens the notch for whatever pours out of it (RightPanel);
@@ -37,6 +37,7 @@ Item {
         // width when no plugin is installed, which is the common case.
         PluginWidgets{}
 
+        KeyboardLayout{}
         Network{}
         // Percentages beside the icons: on hover, or always (Settings → Layout → Bar).
         Audio   { showPercentage: SettingsService.showVolumePercent }

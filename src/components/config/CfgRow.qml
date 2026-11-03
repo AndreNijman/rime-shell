@@ -6,7 +6,7 @@ import "settings-semantics.js" as Semantics
 // right. Put the control as a child — it is placed in the right-hand slot.
 Item {
     id: root
-    readonly property ThemeSet theme: ThemeSet { scale: Theme.factorForHeight(Screen.height) }   // P1-040: this output's sizes
+    readonly property ThemeSet theme: ThemeSet { scale: Theme.factorForSize(Screen.width, Screen.height) }   // P1-040: this output's sizes
 
     // ── right-to-left (roadmap P2-004) ────────────────────────────────────────
     // RTL in this shell was recorded for nineteen rounds as "the image cannot
