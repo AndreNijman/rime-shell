@@ -22,6 +22,8 @@ singleton ScreenRecService 1.0 ScreenRecService.qml
 # output and all of them show one selection.
 singleton WindowSwitcherService 1.0 WindowSwitcherService.qml
 singleton ReleaseService 1.0 ReleaseService.qml
+# What the top bar's update icon shows, read once for every screen's bar.
+singleton UpdateStateService 1.0 UpdateStateService.qml
 singleton SettingsService 1.0 SettingsService.qml
 KanbanBoard KanbanBoard.qml
 AppLauncher AppLauncher.qml

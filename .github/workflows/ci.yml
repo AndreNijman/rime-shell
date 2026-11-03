@@ -1805,12 +1805,16 @@ jobs:
       # taken or released as locked, and the old git updater stays gone (with
       # mutants); the runner draws the page from fixtures, presses its buttons
       # against a recording terminal stub and calls the IPC from outside while
-      # the real lock is held. The last SKIPS without labwc and quickshell.
+      # the real lock is held. The top bar's update icon is drawn in two bars'
+      # real right notches from files written the way the OS writes them, with
+      # and without Reduce Motion. The runners SKIP without labwc and quickshell.
       - name: Updates page and the shell's live-update IPC
         run: |
           node tests/liveupdate-test.js
           ./tests/check-updates-page.sh --self-test
           ./tests/run-updates-page-test.sh
+          ./tests/run-update-indicator-test.sh
+          REDUCE_MOTION=true ./tests/run-update-indicator-test.sh
 
       # Every app icon the Shell draws goes through IconService: a name nobody
       # has is "" (Quickshell's placeholder for it reports Ready, so no
