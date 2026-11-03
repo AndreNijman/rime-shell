@@ -65,6 +65,18 @@ Item {
     }
     Component.onCompleted: host._pageIdx = host._indexOf(host.page)
 
+    // The page item built for `id`, or null when it has not been visited yet
+    // (pages are built on first visit). Rime Settings' IPC test hook calls a
+    // page's own handler through this.
+    function pageItem(id) {
+        for (let i = 0; i < pageRepeater.count; i++) {
+            const l = pageRepeater.itemAt(i)
+            if (l && l.modelData && l.modelData.id === id)
+                return l.item
+        }
+        return null
+    }
+
     // ── Left: navigation ────────────────────────────────────────────
     NavPane {
         id: nav
@@ -173,6 +185,7 @@ Item {
             opacity: host._part(0.35, 1)
 
             Repeater {
+                id: pageRepeater
                 model: PageRegistry.pages
 
                 delegate: LazyPage {
