@@ -21,7 +21,7 @@ import "../../../components/config"
 // is the safe way to set up a layout for a monitor that is not plugged in yet.
 CfgScroll {
     id: root
-    readonly property ThemeSet theme: ThemeSet { scale: Theme.factorForHeight(Screen.height) }   // P1-040: this output's sizes
+    readonly property ThemeSet theme: ThemeSet { scale: Theme.factorForSize(Screen.width, Screen.height) }   // P1-040: this output's sizes
 
 
     // Criterion 1, in one line: this page holds changes until you ask for them.
@@ -34,11 +34,50 @@ CfgScroll {
     // not enumerate the outputs is about the page.
     lifecycleError: DisplayService.dirty ? "" : DisplayService.lastError
 
-    // Whether the first output card is genuinely the top of the page. Two
-    // sections can precede it and each one is conditional, so the flag has to
-    // be one expression rather than two copies that drift.
-    readonly property bool nothingAbove: DisplayService.confirmSeconds === 0
-                                         && DisplayService.lastNotice === ""
+    // ── The draft ─────────────────────────────────────────────────────────────
+    // Three CfgRows with three buttons became one bar, and the bar floats over
+    // the bottom of the page (the settings host's CfgApplyBar) instead of
+    // ending it. The words and the order are the bar's, shared with Blueprint
+    // and Keybinds; what stays here is the part only this page knows — that
+    // Save writes files a login or a hotplug reads, how long the countdown
+    // runs, and that the countdown is answered with Keep.
+    commit: CfgCommit {
+        count: DisplayService.stagedCount
+        noun:  "change"
+
+        canApply: true
+        canSave:  true
+
+        busy:  DisplayService.applying
+        error: DisplayService.lastError
+
+        // "module", not "conf": P0-018 made the Hyprland artifact a Lua module
+        // at ~/.config/hypr/rime/monitors.lua. The sentence is the only part of
+        // the bar this page owns, so this is where that fact belongs.
+        note: "Do nothing after an apply and the previous layout comes back in "
+              + DisplayService.confirmTotal + " seconds. Save writes the "
+              + "Hyprland monitor module and the kanshi profile, which the next "
+              + "login or hotplug reads."
+
+        // While an apply waits for an answer the bar asks it. Apply stays
+        // inert until then: the previous apply has not been answered yet.
+        countdown: DisplayService.confirmSeconds
+        countdownTitle: "Keep this layout?"
+        countdownNote: "Answer on screen. If you do nothing, the previous layout comes back in "
+                       + DisplayService.confirmSeconds
+                       + (DisplayService.confirmSeconds === 1 ? " second." : " seconds.")
+        canKeep: true
+
+        onApplyRequested:  DisplayService.apply()
+        onSaveRequested:   DisplayService.save()
+        onRevertRequested: DisplayService.revert()
+        onKeepRequested:   DisplayService.confirm()
+    }
+
+    // Whether the first output card is genuinely the top of the page. A
+    // section can precede it and it is conditional, so the flag is one
+    // expression rather than copies that drift.
+    readonly property bool nothingAbove: DisplayService.lastNotice === ""
 
     // Enumeration is on demand: DisplayService is constructed at startup now
     // (it has to settle an abandoned transaction), so the `list` has to be
@@ -46,33 +85,17 @@ CfgScroll {
     Component.onCompleted: DisplayService.refresh()
 
     // ── Confirmation ──────────────────────────────────────────────────────────
-    // The buttons that answer the countdown are NOT here any more; they are a
-    // layer-shell overlay on every output (src/windows/DisplayConfirm.qml).
-    // This section is what is left over: an in-page echo, for the case where
-    // the dialog is up on a monitor other than the one the settings window is
-    // on. It answers "what is that countdown" without being the only way to
-    // answer it — which is what it used to be, and why nobody ever saw it.
-    CfgSection {
-        title: "Waiting for you"
-        first: true
-        visible: DisplayService.confirmSeconds > 0
-
-        CfgRow {
-            label: "Keep this layout?"
-            description: "Answer on screen. If you do nothing, the previous " +
-                         "layout comes back in " + DisplayService.confirmSeconds +
-                         (DisplayService.confirmSeconds === 1 ? " second." : " seconds.")
-            hoverable: false
-            CfgButton {
-                label: "Keep it"
-                onClicked: DisplayService.confirm()
-            }
-        }
-    }
+    // The buttons that answer the countdown are a layer-shell overlay on every
+    // output (src/windows/DisplayConfirm.qml). The in-page echo of it — for the
+    // dialog being up on a monitor other than the one Settings is on — is the
+    // apply bar now (`commit` above): it asks the same question with the same
+    // Keep, and unlike a section at the top of the page it is in view however
+    // the page is scrolled. Putting the old layout back stays the dialog's.
 
     // ── What happened without you ─────────────────────────────────────────────
     CfgSection {
         title: "Display"
+        first: true
         visible: DisplayService.lastNotice !== ""
 
         CfgRow {
@@ -508,35 +531,5 @@ CfgScroll {
                 Item { width: 1; height: theme.px(6) }
             }
         }
-    }
-
-    // ── The draft ─────────────────────────────────────────────────────────────
-    // Three CfgRows with three buttons became one bar. The words, the order and
-    // the sentence above them are CfgCommit's, shared with Blueprint and
-    // Keybinds; what stays here is the part only this page knows — that Save
-    // writes files a login or a hotplug reads, and how long the countdown runs.
-    CfgCommit {
-        count: DisplayService.stagedCount
-        noun:  "change"
-
-        canApply: true
-        canSave:  true
-
-        // Also inert while a countdown is running: the previous apply has not
-        // been answered yet, and the answer is on the confirmation window.
-        busy:  DisplayService.applying || DisplayService.confirmSeconds > 0
-        error: DisplayService.lastError
-
-        // "module", not "conf": P0-018 made the Hyprland artifact a Lua module
-        // at ~/.config/hypr/rime/monitors.lua. The sentence is the only part of
-        // the bar this page owns, so this is where that fact belongs.
-        note: "Do nothing after an apply and the previous layout comes back in "
-              + DisplayService.confirmTotal + " seconds. Save writes the "
-              + "Hyprland monitor module and the kanshi profile, which the next "
-              + "login or hotplug reads."
-
-        onApplyRequested:  DisplayService.apply()
-        onSaveRequested:   DisplayService.save()
-        onRevertRequested: DisplayService.revert()
     }
 }

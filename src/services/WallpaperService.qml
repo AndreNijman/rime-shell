@@ -335,7 +335,13 @@ QtObject {
             // first login the shell can get here first: wait for it to answer
             // (5 s at most) rather than lose the image to a refused connection.
             "if [ -n \"$SETTER\" ]; then for _ in $(seq 50); do \"$SETTER\" query >/dev/null 2>&1 && break; sleep 0.1; done; fi; " +
-            "[ -n \"$SETTER\" ] && \"$SETTER\" img --transition-type grow --transition-step 200 --transition-duration 1.2 --transition-fps 60 --transition-pos bottom \"$1\"; " +
+            // The transition runs at the fastest output's refresh rate, not a
+            // fixed 60 that held a faster display to 60. The daemon draws on
+            // frame callbacks, so a slower output is not drawn faster than it
+            // shows; on a 60 Hz panel this is still 60.
+            "FPS=$(wlr-randr 2>/dev/null | awk '/current/ { for (i = 2; i <= NF; i++) if ($i ~ /^Hz/) { v = $(i-1) + 0; if (v > m) m = v } } END { printf \"%d\", m + 0.5 }'); " +
+            "case \"$FPS\" in ''|0|*[!0-9]*) FPS=60 ;; esac; " +
+            "[ -n \"$SETTER\" ] && \"$SETTER\" img --transition-type grow --transition-step 200 --transition-duration 1.2 --transition-fps \"$FPS\" --transition-pos bottom \"$1\"; " +
             // -n: never follow an existing ~/.curr_wall that points at a directory —
             // plain -sf descends into it, fails there, and `exit 1` then skipped
             // saveConfig while the new wallpaper was already on screen.

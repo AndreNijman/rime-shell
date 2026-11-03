@@ -1,9 +1,23 @@
 import QtQuick
-import "../../"
-import "settings-semantics.js" as Semantics
 
-// The bar a page shows while it is holding changes the machine has not seen
-// (roadmap P0-023, criteria 2, 3 and 4).
+// What a page is holding that the machine has not seen, and the acts it can
+// perform on it (roadmap P0-023, criteria 2, 3 and 4). A DECLARATION: it draws
+// nothing. The one bar that shows it is CfgApplyBar, which the settings host
+// (src/nexus/SettingsHost.qml) floats over the bottom of whichever page is
+// current, so a page with a draft has its Apply in view however far it is
+// scrolled.
+//
+// A page declares it as a property rather than as a child:
+//
+//     CfgScroll {
+//         commit: CfgCommit {
+//             count: Service.stagedCount
+//             canApply: true
+//             onApplyRequested: Service.apply()
+//             onRevertRequested: Service.revert()
+//         }
+//         …
+//     }
 //
 // ── One bar, because three pages had three ways out ─────────────────────────
 //
@@ -14,29 +28,29 @@ import "settings-semantics.js" as Semantics
 // one labelled Discard. Three pages, three orders, two words for putting the
 // draft back and two meanings for Save.
 //
-// So the words, the order and the sentence above them come from here, and the
-// page supplies only what is true about itself: how many changes it holds, what
-// it calls them, which of the three acts it can actually perform, and one
-// sentence of its own if the general one is not enough.
+// So the words, the order and the sentence come from the bar, and the page
+// supplies only what is true about itself: how many changes it holds, what it
+// calls them, which of the acts it can actually perform, and one sentence of
+// its own if the general one is not enough.
 //
-// ── Why Revert is on the left and Apply on the right ────────────────────────
+// ── Why the bar floats instead of ending the page ───────────────────────────
 //
-// Reading order, and the cost of a mis-click. The rightmost button is the one
-// under the thumb and the one a user reaches for without looking; it should be
-// the one that does what they came here to do. Throwing the draft away sits at
-// the far end of the row from it.
+// It used to be the last child of the page's column, so on a long page the
+// button that makes a change real was below the fold, and on the Keybinds page
+// it was above a seventy-row list that scrolled away from it. A draft the user
+// cannot see the way out of is a draft they leave behind. The page's content
+// gets the bar's height as bottom padding (CfgScroll.bottomInset), so the bar
+// never covers the last control.
 //
 // ── Why a failed act does not clear the bar ─────────────────────────────────
 //
 // `error` renders in place of the hint and the staged count stays exactly as it
 // was. That is criterion 4: a refused write must leave the user's intent where
-// they can press the button again, and this bar is where they can see that it
+// they can press the button again, and the bar is where they can see that it
 // is still there. A page that clears its draft and then reports a failure has
 // told the user about work it already destroyed.
-Item {
+QtObject {
     id: root
-    readonly property ThemeSet theme: ThemeSet { scale: Theme.factorForHeight(Screen.height) }   // P1-040: this output's sizes
-
 
     // How many changes are held, and what this page calls one of them.
     property int    count: 0
@@ -61,114 +75,34 @@ Item {
     // knows: which files a Save writes, how long a countdown runs.
     property string note: ""
 
-    // The act is destructive and the page has already said why, immediately
-    // above this bar. The button keeps its word — a second word for Save is how
-    // the vocabulary stops meaning anything — and takes the danger weight, so
-    // the change of meaning is visible without being renamed (criterion 5).
+    // The act is destructive and the page has already said why. The button
+    // keeps its word — a second word for Save is how the vocabulary stops
+    // meaning anything — and takes the danger weight, so the change of meaning
+    // is visible without being renamed (criterion 5).
     property bool dangerous: false
+
+    // ── A confirmation that is running ──────────────────────────────────────
+    // Seconds left before an applied change puts itself back (the Display
+    // page's keep-or-revert). While it is above zero the bar asks the
+    // question instead of offering Apply, and `canKeep` adds the button that
+    // answers it. What happens on no answer is the page's own sentence,
+    // `countdownNote`; the bar adds nothing it cannot know.
+    property int    countdown: 0
+    property string countdownTitle: ""
+    property string countdownNote: ""
+    property bool   canKeep: false
+
+    // False while the page itself needs the keys a shortcut would take — the
+    // Keybinds page capturing a combination, where Ctrl+S may be the very
+    // combination being bound.
+    property bool shortcutsEnabled: true
 
     signal applyRequested()
     signal saveRequested()
     signal revertRequested()
+    signal keepRequested()
 
     readonly property bool held: root.count > 0
-
-    width: parent ? parent.width : 0
-    visible: root.held
-    implicitHeight: root.held
-                    ? Math.max(theme.px(46), lines.implicitHeight + theme.px(16))
-                    : 0
-    height: implicitHeight
-    clip: true
-    Behavior on implicitHeight { MotionMove { role: "surfaceEnterSmall" } }
-
-    readonly property color _tone: root.error !== "" ? Theme.danger : Theme.warning
-
-    Rectangle {
-        anchors.fill: parent
-        anchors.leftMargin: 10
-        anchors.rightMargin: 2
-        radius: 8
-        color: Qt.rgba(root._tone.r, root._tone.g, root._tone.b, 0.07)
-        border.color: Qt.rgba(root._tone.r, root._tone.g, root._tone.b, 0.20)
-        border.width: 1
-        Behavior on color { MotionColor { role: "state" } }
-        Behavior on border.color { MotionColor { role: "state" } }
-
-        Column {
-            id: lines
-            anchors {
-                left: parent.left
-                right: buttons.left
-                verticalCenter: parent.verticalCenter
-                leftMargin: 12
-                rightMargin: 12
-            }
-            spacing: 2
-
-            Text {
-                width: parent.width
-                text: Semantics.stagedLine(root.count, root.noun)
-                font.pixelSize: theme.fs(11)
-                font.weight: Font.Medium
-                color: root._tone
-                elide: Text.ElideRight
-            }
-            Text {
-                width: parent.width
-                text: root.error !== ""
-                      ? root.error
-                      : Semantics.stagedHint(root.canApply, root.canSave)
-                font.pixelSize: theme.fs(10)
-                color: root.error !== "" ? Theme.danger : Theme.subtext
-                wrapMode: Text.WordWrap
-                maximumLineCount: 2
-                elide: Text.ElideRight
-            }
-            Text {
-                width: parent.width
-                visible: root.note !== "" && root.error === ""
-                text: root.note
-                font.pixelSize: theme.fs(10)
-                color: Theme.subtext
-                wrapMode: Text.WordWrap
-                maximumLineCount: 2
-                elide: Text.ElideRight
-            }
-        }
-
-        Row {
-            id: buttons
-            anchors {
-                right: parent.right
-                verticalCenter: parent.verticalCenter
-                rightMargin: 10
-            }
-            spacing: 6
-
-            CfgButton {
-                visible: root.canRevert
-                label:   Semantics.verbLabel("revert")
-                enabled: !root.busy
-                onClicked: root.revertRequested()
-            }
-            CfgButton {
-                visible: root.canSave
-                variant: root.dangerous ? "danger" : "default"
-                // Only one button says it is working, and it is the one that
-                // is: where a page offers both, `busy` belongs to Apply.
-                label:   (root.busy && !root.canApply)
-                         ? "Saving…" : Semantics.verbLabel("save")
-                enabled: !root.busy
-                onClicked: root.saveRequested()
-            }
-            CfgButton {
-                visible: root.canApply
-                variant: "accent"
-                label:   root.busy ? "Applying…" : Semantics.verbLabel("apply")
-                enabled: !root.busy
-                onClicked: root.applyRequested()
-            }
-        }
-    }
+    // What the bar shows for: a draft, or a confirmation still running.
+    readonly property bool shown: root.held || root.countdown > 0
 }

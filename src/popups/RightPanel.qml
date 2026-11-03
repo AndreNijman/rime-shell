@@ -80,9 +80,11 @@ PanelWindow {
     // y = 0 is the screen top: the band is drawn over the bar's strip, and
     // the seam (the notch's bottom edge) is at y = notchHeight.
     anchors.top:    true
-    anchors.right:  true
-    anchors.left:   true
-    anchors.bottom: true
+    anchors.right:  !root.life.parked
+    anchors.left:   !root.life.parked
+    anchors.bottom: !root.life.parked
+    implicitWidth:  1
+    implicitHeight: 1
 
     exclusionMode: ExclusionMode.Ignore
     color:         "transparent"
@@ -100,7 +102,11 @@ PanelWindow {
     // 2026-09-27: "when i open anything from right notch … i cant close it").
     // One condition drives both, so the grab and the catcher cannot disagree.
     readonly property bool grabbing: root.life.open && root.pane !== "" && root.pane !== "toast"
-    WlrLayershell.keyboardFocus: root.grabbing ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+    // Closing while another surface opens, it keeps the keyboard until its
+    // close ends: released at once, the compositor could hand the keys to a
+    // window before the opener's grab lands, and that focus move closes the
+    // opener (a parked window's grab lands with its next frame).
+    WlrLayershell.keyboardFocus: (root.grabbing || root.life.closing && Popups.anyOpen) && !root.life.parked ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
 
     // Outside the body: a click there closes the pane. Lowest in the stack.
     MouseArea {
@@ -122,7 +128,8 @@ PanelWindow {
         Keys.onPressed: function (event) { InputModality.key(event); event.accepted = false }
     }
 
-    visible: root.life.mapped
+    visible: root.life.windowVisible
+    updatesEnabled: root.life.windowUpdates
 
     // ── Finished sizes per pane ─────────────────────────────────────────────
     // Sized to what the network tab has to show, between 320 and 648 (brief
@@ -187,10 +194,9 @@ PanelWindow {
             width: root.width
             height: root.height
             family:   "rightPour"
-            progress: root.life.progress
             // Depth is the lead channel, width the body (TopBar.rightLife).
-            channels: ({ d: root.life.lead, w: root.life.body, n: root.life.trail,
-                         fd: root.life.leadFlow, fw: root.life.bodyFlow })
+            motion:   root.life.frame
+            depthLeads: true
             color:    Theme.background
             opacity:  root.life.alpha
             geometry: ({

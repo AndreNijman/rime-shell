@@ -6,8 +6,11 @@ import "../../"
 
 Item {
     id: root
-    readonly property ThemeSet theme: ThemeSet { scale: Theme.factorForHeight(Screen.height) }   // P1-040: this output's sizes
+    readonly property ThemeSet theme: ThemeSet { scale: Theme.factorForSize(Screen.width, Screen.height) }   // P1-040: this output's sizes
 
+
+    // This bar's output (TopBar), for what opens a surface on it.
+    property string screenName: ""
 
     // The TopBar widens the notch for whatever pours out of it (RightPanel);
     // this is only the notch's natural content.
@@ -37,6 +40,12 @@ Item {
         // width when no plugin is installed, which is the common case.
         PluginWidgets{}
 
+        // Only while an update asks something of the user (Updates.qml), and
+        // zero width otherwise. Left of the shell's own indicators for the
+        // same reason as the plugins: appearing must not move the clock.
+        Updates { screenName: root.screenName }
+
+        KeyboardLayout{}
         Network{}
         // Percentages beside the icons: on hover, or always (Settings → Layout → Bar).
         Audio   { showPercentage: SettingsService.showVolumePercent }

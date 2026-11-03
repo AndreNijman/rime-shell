@@ -161,6 +161,28 @@ function eq(name, got, want) {
           S.bucketsDisagree([fourK2, hd, { width: 0, height: 0, scale: 1 }]) === false);
 }
 
+// ── What an output can hold: a manual factor never outgrows its output ─────
+{
+    console.log("");
+    console.log("fit clamp");
+    const hd = S.maxFitScale(1920, 1080), qhd = S.maxFitScale(2560, 1440), uhd = S.maxFitScale(3840, 2160);
+    check("1080p holds more than 1.0 but less than 1.5 (measured broken at 1.5)", hd >= 1.0 && hd < 1.5);
+    check("a bigger output holds a bigger factor", hd <= qhd && qhd <= uhd);
+    check("the auto 4K factor (1.5) fits a 4K panel", S.clampToFit(1.5, 3840, 2160) === 1.5);
+    check("manual 3.0 on 1080p is brought down, not passed through", S.clampToFit(3.0, 1920, 1080) === hd);
+    check("a clamp never raises a factor", S.clampToFit(0.8, 1920, 1080) === 0.8);
+    check("a small output is never clamped below 1.0", S.clampToFit(1.0, 1280, 720) === 1.0
+          && S.clampToFit(1.4, 1280, 720) === 1.0);
+    check("an unknown size is not clamped", S.clampToFit(2.5, 0, 0) === 2.5);
+    const sweep = [[1366,768],[1920,1080],[1920,1200],[2560,1440],[2560,1600],[3440,1440],[3840,2160]];
+    let ok = true;
+    for (const [w,h] of sweep) for (let f = 0.5; f <= 3.0; f += 0.05) {
+        const c = S.clampToFit(f, w, h);
+        if (c > f + 1e-9 || c > Math.max(S.maxFitScale(w, h), 1.0) + 1e-9) ok = false;
+    }
+    check("no requested factor on a common output exceeds what it holds", ok);
+}
+
 console.log("");
 console.log("passed=" + passed + " failed=" + failed);
 process.exit(failed === 0 ? 0 : 1);

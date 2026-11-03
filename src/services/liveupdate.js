@@ -213,6 +213,66 @@ function hero(status, checker) {
              detail: s.error || "This computer has not looked for an update since it started." }
 }
 
+// indicator(status, checker) → { kind, glyph, tone, tooltip }
+// The top bar's update icon: shown only when there is something for the user
+// to do or to know, so `kind` is "" (draw nothing, take no width) whenever the
+// machine is up to date, never checked, or in the middle of an update.
+//   kind  "" | available | restart | rolled-back | failed
+// The glyphs are hero()'s, so the bar and Settings → Updates agree.
+var INDICATOR_NONE = { kind: "", glyph: "", tone: "neutral", tooltip: "" }
+
+function indicator(status, checker) {
+    var s = status || { ok: false }
+    var c = checker || { state: "", digest: "" }
+
+    if (s.ok) {
+        switch (s.state) {
+        case "failed":
+            // A failure after the release was queued for boot still installs
+            // it at the next restart (docs/live-update.md: "either
+            // download-only or queued, both safe").
+            return { kind: "failed", glyph: "󰅙", tone: "bad",
+                     tooltip: s.stagedForBoot ? "An update could not be applied live; it applies at the next restart"
+                                              : "An update could not be applied" }
+        case "rolled-back":
+            return { kind: "rolled-back", glyph: "󰕍", tone: "bad",
+                     tooltip: s.stagedForBoot ? "An update was undone and applies at the next restart"
+                                              : "An update was undone" }
+        case "active":
+        case "deferred":
+        case "idle":
+            // A restart finishes the job only when something is queued for
+            // the next boot: `--plan` and `--live-only` leave a restart owed
+            // in `remaining` with nothing queued, and restarting would not
+            // install anything.
+            if (s.stagedForBoot && (s.state === "idle" || _needsRestart(s.remaining)))
+                return { kind: "restart", glyph: "󰜉", tone: "warn",
+                         tooltip: s.remaining === "session-restart"
+                                  ? "Log out and back in to finish the update"
+                                  : "Restart to finish the update" }
+            break
+        case "staged":
+        case "activating":
+        case "verifying":
+            // `sudo rime update` is running in a terminal that says so.
+            return INDICATOR_NONE
+        }
+    }
+
+    // "available" with no digest is a partial write (rime-update-notice
+    // ignores it too). A digest that is already running, or already queued or
+    // applied by `sudo rime update`, is not news: the checker only notices on
+    // its next run, up to six hours later.
+    if (c.state === "available" && c.digest !== "") {
+        if (s.ok && s.booted && s.booted.digest === c.digest) return INDICATOR_NONE
+        if (s.ok && s.target && s.target.digest === c.digest
+                && (s.stagedForBoot || s.state === "active")) return INDICATOR_NONE
+        return { kind: "available", glyph: "󰚰", tone: "warn",
+                 tooltip: "A Rime update is available" }
+    }
+    return INDICATOR_NONE
+}
+
 // chip(componentState) → { text, tone }
 function chip(state) {
     switch (state) {
@@ -256,6 +316,7 @@ if (typeof module !== "undefined" && module.exports)
         parseStatus: parseStatus,
         parseChecker: parseChecker,
         hero: hero,
+        indicator: indicator,
         chip: chip,
         componentLine: componentLine,
         requirementLine: requirementLine,

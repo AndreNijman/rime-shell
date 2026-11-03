@@ -86,6 +86,39 @@ function recommendedScale(w, h) {
     return best
 }
 
+// ── What an output can actually hold ────────────────────────────────────────
+//
+// A factor is only usable if the surfaces drawn at it still fit the output. The
+// Dashboard is the binding one: it is DASH_W wide BETWEEN the two side notches,
+// whose caps scale with the factor too, so its room is
+//     width - 2 * (NOTCH_CAP + NOTCH_PAD) * f      against      DASH_W * f
+// and on a 1920-wide output that stops holding at about 1.15. Past it
+// DashboardLayout yields and the panel shrinks while everything INSIDE it keeps
+// growing, so the clock, calendar and tiles draw over each other (measured at
+// 1.5, 2.0 and 3.0 on 1920x1080). Settings clips the same way on height.
+//
+// All in 1080p-baseline units; FIT_SLACK is how far the Dashboard may yield
+// before its content stops reflowing (measured: clean at 1.2, cramped at 1.3 on 1920x1080).
+var DASH_W = 900
+var DASH_H = 620          // 520 body + notch + borders
+var NOTCH_CAP = 360
+var NOTCH_PAD = 30
+var FIT_SLACK = 1.1
+
+/// The largest factor an output of this LOGICAL size can carry, never below 1.
+function maxFitScale(w, h) {
+    var fw = (w > 0) ? w * FIT_SLACK / (DASH_W + 2 * (NOTCH_CAP + NOTCH_PAD)) : 99
+    var fh = (h > 0) ? h / DASH_H : 99
+    return Math.max(1.0, Math.floor(Math.min(fw, fh) * 20) / 20)
+}
+
+/// A requested factor, brought inside what the output can hold. Never raises
+/// a factor, and never takes it below 1.0 (a small output is handled by
+/// DashboardLayout's own yielding, as before).
+function clampToFit(f, w, h) {
+    return Math.max(Math.min(f, maxFitScale(w, h)), Math.min(f, 1.0))
+}
+
 /// What `scaleForHeight` would answer for a mode at a given compositor scale.
 /// Both halves of the magnification in one call, so a caller does not have to
 /// remember which of them takes physical pixels.
@@ -131,5 +164,7 @@ if (typeof module !== "undefined" && module.exports)
         scaleForHeight: scaleForHeight,
         recommendedScale: recommendedScale,
         shellScaleFor: shellScaleFor,
+        maxFitScale: maxFitScale,
+        clampToFit: clampToFit,
         bucketsDisagree: bucketsDisagree
     }

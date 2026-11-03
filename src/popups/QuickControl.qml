@@ -50,9 +50,11 @@ PanelWindow {
     // strip between the bar and the bottom corner; that band's middle is still
     // where it centres (midY).
     anchors.top:    true
-    anchors.bottom: true
-    anchors.right:  true
-    anchors.left:   true
+    anchors.bottom: !life.parked
+    anchors.right:  !life.parked
+    anchors.left:   !life.parked
+    implicitWidth:  1
+    implicitHeight: 1
     readonly property real midY: theme.notchHeight + (root.height - theme.notchHeight - theme.cornerRadius) / 2
 
     exclusionMode: ExclusionMode.Ignore
@@ -67,7 +69,11 @@ PanelWindow {
     // layer (PopupDismiss) never saw that click (2026-09-27, found with the
     // right-notch panes). Opened by hover it holds no keys and needs no catcher.
     readonly property bool grabbing: Popups.quickOpen
-    WlrLayershell.keyboardFocus: root.grabbing ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+    // Closing while another surface opens, it keeps the keyboard until its
+    // close ends: released at once, the compositor could hand the keys to a
+    // window before the opener's grab lands, and that focus move closes the
+    // opener (a parked window's grab lands with its next frame).
+    WlrLayershell.keyboardFocus: (root.grabbing || life.closing && Popups.anyOpen) && !life.parked ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
     MouseArea {
         id: outside
         anchors.fill: parent
@@ -124,8 +130,13 @@ PanelWindow {
         // window's first frame, so it grows out of the strip.
         liquid:  true
         surface: body
+        // Kept between opens, parked only with no fullscreen window
+        // (SurfaceLifecycle: the kept window).
+        keepWindow: true
+        parkable:   ShellState.activeFullscreenToplevel === null
     }
-    visible: life.mapped
+    visible: life.windowVisible
+    updatesEnabled: life.windowUpdates
 
     // ── Audio State ───────────────────────────────────────────────────────────
     readonly property var sink: Pipewire.defaultAudioSink
@@ -143,9 +154,12 @@ PanelWindow {
     }
 
     // Make sure the slider is accurate the instant the panel appears, in case
-    // the level moved while it was closed.
-    onVisibleChanged: if (visible)
-        BrightnessService.refresh()
+    // the level moved while it was closed. On `mapped`, not `visible`: a kept
+    // window stays visible while parked.
+    Connections {
+        target: life
+        function onMappedChanged() { if (life.mapped) BrightnessService.refresh() }
+    }
 
     // ── Body ──────────────────────────────────────────────────────────────────
     Item {
@@ -168,9 +182,8 @@ PanelWindow {
             id: body
             anchors.fill: parent
             family:   "edgeSpillRight"
-            progress: life.progress
-            channels: ({ w: life.lead, d: life.body, n: life.trail, fw: life.leadFlow, fd: life.bodyFlow })
-            readonly property var chGeometry: Object.assign({}, geometry, { ch: channels })
+            motion:   life.frame
+            readonly property var chGeometry: Object.assign({}, geometry, { ch: ch })
             color:    Theme.background
             geometry: ({
                 x1:    root.width - theme.borderWidth,
@@ -184,7 +197,7 @@ PanelWindow {
         }
     }
 
-    mask: Region { item: root.grabbing ? outside : hit }
+    mask: Region { item: life.parked ? null : root.grabbing ? outside : hit }
     Item {
         id: hit
         x: life.open ? body.result.bounds.x : 0

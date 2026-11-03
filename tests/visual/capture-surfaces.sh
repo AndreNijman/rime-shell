@@ -21,6 +21,7 @@
 #                      (default 1200 — the slider's maximum — so a 70 ms grim
 #                      cadence lands ~15 frames inside one open)
 #   CAPTURE_MODE       output mode, default 1920x1080
+#   CAPTURE_SCALE      a manual shell scale (0.5-3.0); unset = automatic
 #   CAPTURE_REDUCED    true to capture with Reduce Motion on (default false)
 #   CAPTURE_FRAMES     frames grabbed per open / per close burst (default 14)
 #   CAPTURE_PALETTE    colors.json to seed (default: the shipped example is a
@@ -71,7 +72,7 @@ mkdir -p "$ud"
 printf '{"currentWall":"%s","wallpaperDir":"~/Pictures/Wallpapers","scheme":"content"}' "$HEADLESS_WALLPAPER" > "$ud/wallpaper.json"
 mkdir -p "$ud" "$HOME/.cache/rime-shell"
 cat > "$ud/settings.json" <<JSON
-{"cornerRadius":17,"borderWidth":6,"notchRadius":15,"notchHeight":40,"barEnabled":false,"spacing":10,"exclusionGap":34,"animDuration":${anim},"reduceMotion":${CAPTURE_REDUCED:-false},"dashboardWidth":900,"dashboardHeight":520,"notificationsWidth":400,"lockBackground":"","scaleMode":"auto","scaleManual":1,"scaleScreen":"","nightLightTemp":5600,"motionSpeed":"balanced","motionScale":$(python3 -c "print(round(${anim}/320, 3))")}
+{"cornerRadius":17,"borderWidth":6,"notchRadius":15,"notchHeight":40,"barEnabled":false,"spacing":10,"exclusionGap":34,"animDuration":${anim},"reduceMotion":${CAPTURE_REDUCED:-false},"dashboardWidth":900,"dashboardHeight":520,"notificationsWidth":400,"lockBackground":"","scaleMode":"$([ -n "${CAPTURE_SCALE:-}" ] && echo manual || echo auto)","scaleManual":${CAPTURE_SCALE:-1},"scaleScreen":"","nightLightTemp":5600,"motionSpeed":"balanced","motionScale":$(python3 -c "print(round(${anim}/320, 3))")}
 JSON
 if [ -n "${CAPTURE_PALETTE:-}" ] && [ -f "$CAPTURE_PALETTE" ]; then
     cp "$CAPTURE_PALETTE" "$HOME/.cache/rime-shell/colors.json"

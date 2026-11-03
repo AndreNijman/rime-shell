@@ -8,7 +8,7 @@
 #  up the shell. Since P1-040 those components do not read sizes from Theme at
 #  all: each declares its own token set for the output it is drawn on,
 #
-#      readonly property ThemeSet theme: ThemeSet { scale: Theme.factorForHeight(Screen.height) }
+#      readonly property ThemeSet theme: ThemeSet { scale: Theme.factorForSize(Screen.width, Screen.height) }
 #
 #  which needs two things the hand-written stub cannot provide by itself — the
 #  `ThemeSet` TYPE, and `Theme.factorForHeight`. Without them the staged tree

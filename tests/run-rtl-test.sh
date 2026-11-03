@@ -570,6 +570,7 @@ QtObject {
     function px(v) { return Math.round(v) }
     function factorForHeight(h)      { return 1.0 }
     function factorForScreen(screen) { return 1.0 }
+    function factorForSize(w, h)     { return 1.0 }
 }
 THEME
 
@@ -902,11 +903,15 @@ else
     diff <(printf '%s\n' "$x_expect") <(printf '%s\n' "$x_now") | sed 's/^/      /'
 fi
 
-# The two declarations this round added, asserted as an exact pair. A third
-# appearing without the ledger moving is the drift this pin exists to catch.
-cfg_mirrored="$(grep -rl 'LayoutMirroring' "$root/src/components/config" 2>/dev/null | wc -l)"
-[ "$cfg_mirrored" -eq 2 ] \
-    && ok "exactly 2 shared config components declare mirroring (CfgRow, CfgScroll)" \
-    || bad "exactly 2 shared config components declare mirroring" "counted $cfg_mirrored"
+# The declarations, asserted as an exact set. CfgApplyBar joined CfgRow and
+# CfgScroll when the apply bar left the page's column: it floats in the
+# settings host, outside any CfgScroll, so nothing above it passes mirroring
+# down and its Revert/Apply order flips only on its own declaration. A fourth
+# appearing without this list moving is the drift this pin exists to catch.
+cfg_mirrored="$(cd "$root/src/components/config" 2>/dev/null \
+                && grep -l 'LayoutMirroring' -- *.qml 2>/dev/null | sort | paste -sd' ')"
+[ "$cfg_mirrored" = "CfgApplyBar.qml CfgRow.qml CfgScroll.qml" ] \
+    && ok "exactly 3 shared config components declare mirroring (CfgApplyBar, CfgRow, CfgScroll)" \
+    || bad "exactly 3 shared config components declare mirroring (CfgApplyBar, CfgRow, CfgScroll)" "found: $cfg_mirrored"
 
 finish

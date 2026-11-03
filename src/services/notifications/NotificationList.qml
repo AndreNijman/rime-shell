@@ -41,7 +41,7 @@ import "notiftime.js" as TimeFmt
 // ─────────────────────────────────────────────────────────────────────────────
 Item {
     id: root
-    readonly property ThemeSet theme: ThemeSet { scale: Theme.factorForHeight(Screen.height) }   // P1-040: this output's sizes
+    readonly property ThemeSet theme: ThemeSet { scale: Theme.factorForSize(Screen.width, Screen.height) }   // P1-040: this output's sizes
 
     // The clock the cards' timestamps read ("now", "12 min"). Ticks only while
     // the centre is OPEN with something in it: `visible` alone was not enough,

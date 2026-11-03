@@ -1501,6 +1501,9 @@ jobs:
       - name: Shell scaling arithmetic (P1-040)
         run: node tests/scaling-test.js
 
+      - name: Keyboard layout chip arithmetic
+        run: node tests/kblayout-test.js
+
       - name: Shell scaling, live on two outputs (P1-040)
         run: |
           ./tests/run-scaling-test.sh
@@ -1649,6 +1652,12 @@ jobs:
       - name: How far Reduce Motion reaches
         run: ./tests/check-reduce-motion.sh
 
+      # The wallpaper transition runs at the fastest output's refresh rate
+      # (60 when unknown): WallpaperService's real lines against a fake
+      # wlr-randr, with three mutants that must be caught.
+      - name: The wallpaper transition follows the display's refresh rate
+        run: ./tests/check-wallpaper-fps.sh
+
       # Every button big enough to hit (Phase 21): the design system's
       # hitMin (32 px) outside the bar, hitBar (24 px) the floor anywhere,
       # counting hitMargin. Under 24 fails; the count under 32 is ratcheted.
@@ -1677,6 +1686,9 @@ jobs:
       # survives open/close spam, and opens by itself when a LazyPopup builds it
       # already open. The real component under qmltestrunner -platform
       # offscreen; skips here without qt6-declarative's test runner.
+      # Also: a kept window parks between opens, a released liquid channel
+      # starts at the instant of the crossing, and a FluidShape builds its
+      # path once a moved frame; five mutants must be caught.
       - name: The surface lifecycle
         run: ./tests/run-surface-lifecycle-test.sh
 
@@ -1764,6 +1776,14 @@ jobs:
       - name: The Dashboard's Home and Tasks tabs answer the keyboard (Reduce Motion)
         run: REDUCE_MOTION=true ./tests/run-dashboard-keys-test.sh
 
+      # A surface keeps its window between opens: the Dashboard and the right
+      # panel opened three times each get one window, draw on every reopen
+      # (grim against the closed screen) and present nothing while parked;
+      # two mutated trees must fail. Needs labwc, grim and Pillow; skips
+      # cleanly without them.
+      - name: Surfaces keep their windows between opens
+        run: ./tests/run-kept-window-test.sh
+
       # Alt+Space's launcher takes the keys on every open: the first of the
       # session, reopens 50-300 ms after a close (before it has finished, so
       # the page never changed), after Escape, and from another page. Each
@@ -1836,6 +1856,14 @@ jobs:
           ./tests/check-release-service.sh
           ./tests/run-release-service-test.sh
 
+      # The Dashboard's Power profile pills (PowerProfileService + PowerPanel):
+      # a refused or failed `rime tier` is said in words on the panel instead
+      # of the pill silently snapping back, and a read during the call does not
+      # flip the pick back. Real service and panel, `rime` and `busctl`
+      # stubbed. SKIPS without labwc and quickshell, as the others do here.
+      - name: Power profile switch
+        run: ./tests/run-power-profile-test.sh
+
       # Settings → Updates and the `shell` IPC target the OS's live update
       # engine calls before and after it replaces the running shell. The node
       # suite drives every state the page tells apart (and a hostile status
@@ -1844,12 +1872,16 @@ jobs:
       # taken or released as locked, and the old git updater stays gone (with
       # mutants); the runner draws the page from fixtures, presses its buttons
       # against a recording terminal stub and calls the IPC from outside while
-      # the real lock is held. The last SKIPS without labwc and quickshell.
+      # the real lock is held. The top bar's update icon is drawn in two bars'
+      # real right notches from files written the way the OS writes them, with
+      # and without Reduce Motion. The runners SKIP without labwc and quickshell.
       - name: Updates page and the shell's live-update IPC
         run: |
           node tests/liveupdate-test.js
           ./tests/check-updates-page.sh --self-test
           ./tests/run-updates-page-test.sh
+          ./tests/run-update-indicator-test.sh
+          REDUCE_MOTION=true ./tests/run-update-indicator-test.sh
 
       # Every app icon the Shell draws goes through IconService: a name nobody
       # has is "" (Quickshell's placeholder for it reports Ready, so no
@@ -2714,6 +2746,19 @@ jobs:
           # Skips cleanly without quickshell or a compositor.
           ./tests/run-settings-staged-test.sh
 
+      # The apply bar: one CfgApplyBar in the settings host floats over the
+      # bottom of whichever page holds a draft. The runner opens the real
+      # SettingsHost in a window and checks the bar is hidden while clean, up
+      # on a change, inside the viewport scrolled to the top and to the
+      # bottom, padding the page so the last control scrolls clear of it,
+      # that Apply / Revert / Ctrl+Enter / Ctrl+S reach the page, the Display
+      # keep-or-revert countdown, and that it snaps under Reduce Motion.
+      # Private HOME and stubs, so the Apply it presses writes nowhere real.
+      # SKIPS without labwc and quickshell.
+      - name: Settings apply bar
+        run: |
+          ./tests/run-apply-bar-test.sh
+
       - name: Remote agent status smoke test
         run: |
           # Needs a compositor AND the rime-os runtime built; the harness skips
@@ -2928,6 +2973,7 @@ jobs:
             "tests/run-slider-wheel-test.sh"
             "src/components/config/settings-semantics.js"
             "src/components/config/CfgCommit.qml"
+            "src/components/config/CfgApplyBar.qml"
             "src/components/config/CfgLifecycle.qml"
             "tests/settings-semantics-test.js"
             "tests/settings-controls-test.qml"
@@ -2963,6 +3009,8 @@ jobs:
             "tests/run-settings-pages-test.sh"
             "tests/settings-staged-test.qml"
             "tests/run-settings-staged-test.sh"
+            "tests/apply-bar-test.qml"
+            "tests/run-apply-bar-test.sh"
             "src/services/qr.js"
             "tests/qr-test.js"
             "src/services/remotepairing.js"

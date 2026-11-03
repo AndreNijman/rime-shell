@@ -87,7 +87,7 @@ ShellRoot {
         "windows", "windowGeometry", "outputGeometry",
         "windowFocus", "windowMove", "windowClose", "windowPreview",
         "overview", "accentBorder", "gaps", "tilingLayout",
-        "keyboardInterception", "screenShader", "nightLight", "motion"
+        "keyboardInterception", "screenShader", "nightLight", "keyboardLayouts", "motion"
     ]
 
     // The product names, duplicated on purpose for the same reason as the
@@ -238,6 +238,7 @@ ShellRoot {
                 ["keyboardInterception", function () { return CompositorService.setKeyboardInterception(true) }],
                 ["screenShader",         function () { return CompositorService.setScreenShader("") }],
                 ["nightLight",           function () { return CompositorService.setNightLight(true) }],
+                ["keyboardLayouts",      function () { return CompositorService.switchKeyboardLayout("next") }],
                 ["motion",               function () { return CompositorService.syncMotion() }]
             ]
 

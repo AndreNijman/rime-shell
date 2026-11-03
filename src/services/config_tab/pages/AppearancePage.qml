@@ -14,7 +14,7 @@ import "../../../components/controls"
 //   • Shape sliders — corner radius / border / notch — reflow the shell live
 CfgScroll {
     id: root
-    readonly property ThemeSet theme: ThemeSet { scale: Theme.factorForHeight(Screen.height) }   // P1-040: this output's sizes
+    readonly property ThemeSet theme: ThemeSet { scale: Theme.factorForSize(Screen.width, Screen.height) }   // P1-040: this output's sizes
 
     // ── Keyboard (UI/UX roadmap v3 Phase 21) ─────────────────────────────────
     // The wallpaper strip is ONE Tab stop: Left/Right move a highlight kept by
