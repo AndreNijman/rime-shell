@@ -128,9 +128,50 @@ Singleton {
         }
     }
 
+    // A set asked for before the owner check answered (the IPC hook can call
+    // setProfile while no page holds the service): kept here, the latest one
+    // wins, and applied on the backend the check finds. Sent straight away it
+    // would take the `rime tier` path, which is the wrong writer when rimed
+    // owns the power-profiles name.
+    property string _pendingSet: ""
+
+    // Applies the queued set on the backend the owner check found. Quickshell's
+    // PowerProfiles reads the daemon's Profiles list on first use and until it
+    // has, refuses `performance` ("not present for this device"); a queued set
+    // is often that first use, so a queued performance waits for the list
+    // (hasPerformanceProfile), 2 s at most, then goes anyway (a device without
+    // a performance tier is refused as before).
+    function _flushPending(force) {
+        if (root._pendingSet === "" || root.backend === "")
+            return
+        if (!force && root.usesPowerProfiles && root._pendingSet === "performance"
+                && !PowerProfiles.hasPerformanceProfile) {
+            if (!root._listWait.running)
+                root._listWait.start()
+            return
+        }
+        root._listWait.stop()
+        const id = root._pendingSet
+        root._pendingSet = ""
+        root.setProfile(id)
+    }
+    readonly property Timer _listWait: Timer {
+        interval: 2000
+        onTriggered: root._flushPending(true)
+    }
+    readonly property Connections _profilesList: Connections {
+        target: root.usesPowerProfiles ? PowerProfiles : null
+        function onHasPerformanceProfileChanged() { root._flushPending(false) }
+    }
+
     function setProfile(id) {
         root.error = ""                             // the next press clears the message at once
         root.errorDetail = ""
+        if (root.backend === "") {
+            root._pendingSet = id
+            root._checkOwner()                      // with no consumer nothing has asked yet
+            return
+        }
         if (root.usesPowerProfiles) {
             // Writes ActiveProfile; rimed answers with PropertiesChanged.
             PowerProfiles.profile = root._enumOf(id)
@@ -182,14 +223,22 @@ Singleton {
             if (code !== 0)
                 root.ownerProc.owned = false
             root.backend = root.ownerProc.owned ? "ppd" : "rimed"
+            if (root._pendingSet !== "") {
+                root._flushPending(false)           // the set's own exit reads the tier back
+                return
+            }
             // The fallback's first read. Not while a set is in flight (see poll).
             if (root.backend === "rimed" && root.refCount > 0 && !root.setProc.running)
                 root._refresh()
         }
     }
     function _checkOwner() {
+        // One in flight answers for everyone. Restarting it would end it early,
+        // and that exit (code != 0) would read as "rimed" and send a queued set
+        // down the wrong path.
+        if (root.ownerProc.running)
+            return
         root.ownerProc.owned = false
-        root.ownerProc.running = false
         root.ownerProc.running = true
     }
     property int _lastRefs: 0

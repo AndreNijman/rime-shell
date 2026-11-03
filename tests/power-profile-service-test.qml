@@ -10,10 +10,12 @@ import "./src/services/system"
 
 // Harness for tests/run-power-profile-service-test.sh: holds one reference on
 // PowerProfileService (as the dashboard's power panel does while it is shown)
-// and answers the runner over IPC. Staged into the repository root by the
+// and answers the runner over IPC (or none: PPS_TEST_NO_REF=1). Staged into the repository root by the
 // runner so the relative imports resolve.
 ShellRoot {
-    ServiceRef { service: PowerProfileService; active: true }
+    // PPS_TEST_NO_REF=1: nothing holds the service (the Settings page off
+    // screen), and a set arrives only over IPC, as through the IPC hook.
+    ServiceRef { service: PowerProfileService; active: Quickshell.env("PPS_TEST_NO_REF") !== "1" }
 
     IpcHandler {
         target: "pps"

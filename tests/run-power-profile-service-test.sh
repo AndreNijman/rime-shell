@@ -22,9 +22,15 @@
 #    other     the name is owned by another daemon (bootc runs
 #              power-profiles-daemon beside rimed): backend "rimed", a set
 #              runs `rime tier <id>` and never reaches that daemon
+#    queued    the owner check answers 3 s late and a set arrives first: it
+#              waits and lands on the backend the check finds (ActiveProfile
+#              under ppd, one `rime tier` in the fallback)
+#    no consumer  nothing holds the service (the Settings page off screen)
+#              and a set comes over IPC: it starts the owner check itself
 #
 #  Mutants (tests/mutate-settings-app.sh): fallback removed; polling put back;
-#  owner check by name only (NameHasOwner).
+#  owner check by name only (NameHasOwner); no queue (a set before the check
+#  goes to `rime tier`); no kick (a queued set with no consumer never asks).
 #  Skips (status 0) without quickshell, dbus-daemon, busctl or python3-gi.
 # ─────────────────────────────────────────────────────────────────────────────
 set -uo pipefail
@@ -48,9 +54,13 @@ headless_begin
 real_busctl="$(PATH="${PATH#"$HEADLESS_W/bin:"}" command -v busctl)"
 CALLS="$HEADLESS_W/calls.log"; : > "$CALLS"
 # Logging wrappers: every busctl and rime the Shell starts is counted.
+SLOW="$HEADLESS_W/slow-owner-check"
+# With $SLOW present the owner check (and only it) answers 3 s late, logged
+# before the wait so the count stays one call.
 cat > "$HEADLESS_W/bin/busctl" <<WRAP
 #!/usr/bin/env bash
 echo "busctl \$*" >> "$CALLS"
+case "\$*" in *"call org.freedesktop.UPower.PowerProfiles /org/rimeos/Rimed1 "*) [ -e "$SLOW" ] && sleep 3 ;; esac
 exec "$real_busctl" "\$@"
 WRAP
 cat > "$HEADLESS_W/bin/rime" <<WRAP
@@ -157,6 +167,64 @@ grep -qx "rime tier power-saver" "$CALLS" && ok "set runs rime tier power-saver,
     || bad "set did not run rime tier:$(sed 's/^/ | /' "$CALLS")"
 stop_shell
 kill "$other" 2>/dev/null; wait "$other" 2>/dev/null
+fake_rimed_stop
+
+# ── 4. a set before the owner check answers (ppd) ───────────────────────────
+# The check answers 3 s late; a set sent the moment the harness loads must wait
+# for it and then go to the power-profiles API, not to `rime tier`.
+echo "queued: a set before the owner check answers, rimed owns the API"
+fake_rimed_start || exit 1
+: > "$CALLS"; touch "$SLOW"
+start_shell
+ipc set power-saver >/dev/null
+early="$(ipc backend)"
+[ -z "$early" ] && ok "the set landed before the owner check answered" \
+    || bad "the owner check had already answered ('$early'): this case tested nothing"
+if wait_for backend ppd 10; then ok "queued: backend is ppd"; else bad "queued: backend is '$(ipc backend)', expected ppd"; fi
+if wait_for current power-saver 4; then ok "queued: the early set shows power-saver"; else bad "queued: current is '$(ipc current)'"; fi
+grep -q "Set org.freedesktop.UPower.PowerProfiles.ActiveProfile power-saver" "$FAKE_RIMED_LOG" \
+    && ok "queued: the early set wrote ActiveProfile" || bad "queued: the early set did not write ActiveProfile"
+[ "$(count '^rime ' "$CALLS")" = 0 ] && ok "queued: no rime CLI call (the early set waited for the owner check)" \
+    || bad "queued: the early set went to the rime CLI:$(sed 's/^/ | /' "$CALLS")"
+stop_shell
+fake_rimed_stop
+rm -f "$SLOW"
+
+# ── 5. a set before the owner check answers (fallback) ──────────────────────
+echo "queued: a set before the owner check answers, nothing owns the API"
+fake_rimed_start --no-ppd || exit 1
+: > "$CALLS"; touch "$SLOW"
+start_shell
+ipc set performance >/dev/null
+[ -z "$(ipc backend)" ] && ok "fallback: the set landed before the owner check answered" \
+    || bad "fallback: the owner check had already answered: this case tested nothing"
+if wait_for backend rimed 10; then ok "queued fallback: backend is rimed"; else bad "queued fallback: backend is '$(ipc backend)'"; fi
+sleep 1
+[ "$(grep -cx "rime tier performance" "$CALLS")" = 1 ] && ok "queued fallback: the early set ran rime tier performance once" \
+    || bad "queued fallback: rime tier calls:$(sed 's/^/ | /' "$CALLS")"
+stop_shell
+fake_rimed_stop
+rm -f "$SLOW"
+
+# ── 6. a set with nothing holding the service (the IPC hook, page off screen) ─
+echo "no consumer: a set over IPC with no page holding the service"
+fake_rimed_start || exit 1
+: > "$CALLS"
+export PPS_TEST_NO_REF=1
+start_shell
+unset PPS_TEST_NO_REF
+sleep 1
+[ "$(count '^busctl ' "$CALLS")" = 0 ] && ok "no consumer: no owner check before the set" \
+    || bad "no consumer: busctl ran before any set:$(sed 's/^/ | /' "$CALLS")"
+ipc set performance >/dev/null
+if wait_for backend ppd 10; then ok "no consumer: the set asked who owns the API (ppd)"; else bad "no consumer: backend is '$(ipc backend)', expected ppd"; fi
+for _ in $(seq 1 12); do grep -q "ActiveProfile performance" "$FAKE_RIMED_LOG" && break; sleep 0.25; done
+grep -q "Set org.freedesktop.UPower.PowerProfiles.ActiveProfile performance" "$FAKE_RIMED_LOG" \
+    && ok "no consumer: the set wrote ActiveProfile" || bad "no consumer: the set did not write ActiveProfile"
+[ "$(count '^rime ' "$CALLS")" = 0 ] && ok "no consumer: no rime CLI call" \
+    || bad "no consumer: the set went to the rime CLI:$(sed 's/^/ | /' "$CALLS")"
+stop_shell
+fake_rimed_stop
 
 echo "RESULT: passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

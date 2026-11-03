@@ -23,6 +23,13 @@
 #    owner-by-name the owner check asks only whether the power-profiles name
 #                  HAS an owner (NameHasOwner), as on bootc's
 #                  power-profiles-daemon → "another daemon ... expected rimed"
+#    no-queue      a set before the owner check answers is sent at once
+#                  (backend "" → the `rime tier` path) → "went to the rime CLI"
+#    no-kick       a queued set does not start the owner check itself → with
+#                  no consumer the backend stays "" ("no consumer: backend is")
+#    no-list-wait  a queued performance set is written before Quickshell has
+#                  read the daemon's Profiles list → refused ("not present for
+#                  this device"), "the set did not write ActiveProfile"
 #
 #  A mutant whose sed changed nothing is reported NOT APPLIED and fails the run,
 #  as does a suite that printed no RESULT line (a crash is not a catch).
@@ -73,6 +80,13 @@ mutant polling run-power-profile-service-test.sh "busctl calls|Tier was read" \
 
 mutant owner-by-name run-power-profile-service-test.sh "with another daemon owning the API, expected rimed" \
     src/services/system/PowerProfileService.qml 's#"org\.freedesktop\.UPower\.PowerProfiles", "/org/rimeos/Rimed1",#"org.freedesktop.DBus", "/org/freedesktop/DBus",#; s#"org\.freedesktop\.DBus\.Properties", "Get", "ss", "org\.rimeos\.Rimed1\.Power", "Tier"\]#"org.freedesktop.DBus", "NameHasOwner", "s", "org.freedesktop.UPower.PowerProfiles"]#; s#/\^v\\s\+s\\s\+"/#/^b\\s+true/#'
+
+mutant no-queue run-power-profile-service-test.sh "the early set went to the rime CLI|the set went to the rime CLI" \
+    src/services/system/PowerProfileService.qml 's/if \(root\.backend === ""\) \{/if (false) {/'
+mutant no-kick run-power-profile-service-test.sh "no consumer: backend is" \
+    src/services/system/PowerProfileService.qml 's/^( *)root\._checkOwner\(\) *\/\/ with no consumer.*$/\1\/\/ no kick/'
+mutant no-list-wait run-power-profile-service-test.sh "no consumer: the set did not write ActiveProfile" \
+    src/services/system/PowerProfileService.qml 's/if \(!force \&\& root\.usesPowerProfiles/if (false \&\& root.usesPowerProfiles/'
 
 echo "mutate-settings-app: caught=$caught survived=$survived broken=$broken (logs: $logs)"
 [ "$survived" -eq 0 ] && [ "$broken" -eq 0 ]
