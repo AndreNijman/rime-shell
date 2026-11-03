@@ -164,9 +164,8 @@ PanelWindow {
 			id: body
 			anchors.fill: parent
 			family:   "leftSpill"
-			progress: life.progress
-			channels: ({ w: life.lead, d: life.body, n: life.trail, fw: life.leadFlow, fd: life.bodyFlow })
-			readonly property var chGeometry: Object.assign({}, geometry, { ch: channels })
+			motion:   life.frame
+			readonly property var chGeometry: Object.assign({}, geometry, { ch: ch })
 			color:    Theme.background
 			geometry: root.spillGeometry
 		}

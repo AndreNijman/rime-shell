@@ -196,7 +196,8 @@ PanelWindow {
         FluidDrop {
             id: body
             anchors.fill: parent
-            channels: ({ w: life.lead, d: life.body, n: life.trail })
+            // From the one per-frame snapshot: the drop is built once a frame.
+            channels: ({ w: life.frame.lead, d: life.frame.body, n: life.frame.trail })
             geometry: root.dropGeometry
             color:    Theme.background
             opacity:  life.alpha

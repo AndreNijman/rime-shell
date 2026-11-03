@@ -187,10 +187,9 @@ PanelWindow {
             width: root.width
             height: root.height
             family:   "rightPour"
-            progress: root.life.progress
             // Depth is the lead channel, width the body (TopBar.rightLife).
-            channels: ({ d: root.life.lead, w: root.life.body, n: root.life.trail,
-                         fd: root.life.leadFlow, fw: root.life.bodyFlow })
+            motion:   root.life.frame
+            depthLeads: true
             color:    Theme.background
             opacity:  root.life.alpha
             geometry: ({

@@ -227,8 +227,7 @@ PanelWindow {
         id: body
         anchors.fill: parent
         family:   "centerBloom"
-        progress: life.progress
-        channels: ({ w: life.lead, d: life.body, n: life.trail, fw: life.leadFlow, fd: life.bodyFlow })
+        motion:   life.frame
         hole:     (life.alpha >= 1 && root._coverK < 1)
                   ? Geo.notchHole(root._hole.x, root._hole.y, root._hole.w, root._hole.h, root._hole.rb) : ""
         geometry: root.bloomGeometry

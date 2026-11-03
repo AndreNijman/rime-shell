@@ -103,9 +103,9 @@ PanelWindow {
         id: body
         anchors.fill: parent
         family:   "cornerRise"
-        progress: life.progress
-        channels: ({ d: life.lead, w: life.body, n: life.trail, fd: life.leadFlow, fw: life.bodyFlow })
-        readonly property var chGeometry: Object.assign({}, geometry, { ch: channels })
+        motion:   life.frame
+        depthLeads: true
+        readonly property var chGeometry: Object.assign({}, geometry, { ch: ch })
         geometry: root.riseGeometry
         color:    Theme.background
         opacity:  life.alpha * Math.min(1, Math.max(0,
