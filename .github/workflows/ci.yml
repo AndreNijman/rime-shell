@@ -1626,6 +1626,12 @@ jobs:
       - name: How far Reduce Motion reaches
         run: ./tests/check-reduce-motion.sh
 
+      # The wallpaper transition runs at the fastest output's refresh rate
+      # (60 when unknown): WallpaperService's real lines against a fake
+      # wlr-randr, with three mutants that must be caught.
+      - name: The wallpaper transition follows the display's refresh rate
+        run: ./tests/check-wallpaper-fps.sh
+
       # Every button big enough to hit (Phase 21): the design system's
       # hitMin (32 px) outside the bar, hitBar (24 px) the floor anywhere,
       # counting hitMargin. Under 24 fails; the count under 32 is ratcheted.
@@ -1654,6 +1660,9 @@ jobs:
       # survives open/close spam, and opens by itself when a LazyPopup builds it
       # already open. The real component under qmltestrunner -platform
       # offscreen; skips here without qt6-declarative's test runner.
+      # Also: a kept window parks between opens, a released liquid channel
+      # starts at the instant of the crossing, and a FluidShape builds its
+      # path once a moved frame; five mutants must be caught.
       - name: The surface lifecycle
         run: ./tests/run-surface-lifecycle-test.sh
 
@@ -1740,6 +1749,14 @@ jobs:
       # collapsing over a few frames.
       - name: The Dashboard's Home and Tasks tabs answer the keyboard (Reduce Motion)
         run: REDUCE_MOTION=true ./tests/run-dashboard-keys-test.sh
+
+      # A surface keeps its window between opens: the Dashboard and the right
+      # panel opened three times each get one window, draw on every reopen
+      # (grim against the closed screen) and present nothing while parked;
+      # two mutated trees must fail. Needs labwc, grim and Pillow; skips
+      # cleanly without them.
+      - name: Surfaces keep their windows between opens
+        run: ./tests/run-kept-window-test.sh
 
       # Alt+Space's launcher takes the keys on every open: the first of the
       # session, reopens 50-300 ms after a close (before it has finished, so
