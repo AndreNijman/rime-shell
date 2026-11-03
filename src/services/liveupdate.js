@@ -228,8 +228,12 @@ function indicator(status, checker) {
     if (s.ok) {
         switch (s.state) {
         case "failed":
+            // A failure after the release was queued for boot still installs
+            // it at the next restart (docs/live-update.md: "either
+            // download-only or queued, both safe").
             return { kind: "failed", glyph: "󰅙", tone: "bad",
-                     tooltip: "An update could not be applied" }
+                     tooltip: s.stagedForBoot ? "An update could not be applied live; it applies at the next restart"
+                                              : "An update could not be applied" }
         case "rolled-back":
             return { kind: "rolled-back", glyph: "󰕍", tone: "bad",
                      tooltip: s.stagedForBoot ? "An update was undone and applies at the next restart"

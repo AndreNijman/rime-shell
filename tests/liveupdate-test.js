@@ -187,6 +187,10 @@ eq("rolled back, queued for boot: says when it applies",
 eq("failed: shown", ind(st("failed"), AVAILABLE), "failed");
 eq("failed: the page's glyph", L.indicator(st("failed"), NONE).glyph, L.hero(st("failed"), NONE).glyph);
 eq("failed: drawn as bad", L.indicator(st("failed"), NONE).tone, "bad");
+eq("failed, nothing queued: its tooltip", L.indicator(st("failed"), NONE).tooltip, "An update could not be applied");
+eq("failed after it was queued for boot: says when it applies",
+   L.indicator(js({ state: "failed", staged_for_boot: true }), NONE).tooltip,
+   "An update could not be applied live; it applies at the next restart");
 eq("staged (in progress, queued): nothing yet", ind(js({ state: "staged", staged_for_boot: true, remaining: "reboot" }), AVAILABLE), "");
 eq("activating: nothing yet", ind(st("activating"), AVAILABLE), "");
 eq("verifying: nothing yet", ind(st("verifying"), AVAILABLE), "");
