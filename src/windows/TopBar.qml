@@ -324,6 +324,7 @@ PanelWindow {
 
             RightContent {
                 id: rightContent
+                screenName: root.screenName
                 anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
                 anchors.rightMargin: theme.notchPadding

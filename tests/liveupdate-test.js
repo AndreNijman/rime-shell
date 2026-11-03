@@ -138,6 +138,70 @@ eq("versions capped at 8", long.components[0].versions.length, 8);
 eq("a label-less component is named by its id", L.parseStatus(JSON.stringify({ schema: 1,
     components: [{ component: "kernel" }] })).components[0].label, "kernel");
 
+console.log("── the top bar's indicator ──");
+// What the icon in the bar's right notch shows, or "" for nothing at all.
+const ind = (status, checker) => L.indicator(status, checker).kind;
+const js = (o) => L.parseStatus(JSON.stringify(Object.assign({ schema: 1 }, o)));
+const D1 = "sha256:" + "1".repeat(64), D2 = "sha256:" + "2".repeat(64), D3 = "sha256:" + "3".repeat(64);
+const avail = (d) => L.parseChecker("state=available\ndigest=" + d + "\n");
+eq("nothing known: nothing shown", ind(missing, NONE), "");
+eq("no arguments at all: nothing shown", ind(undefined, undefined), "");
+eq("the checker says none: nothing shown", ind(missing, UPTODATE), "");
+eq("the checker says available: available", ind(missing, AVAILABLE), "available");
+eq("available: its glyph is the page's", L.indicator(missing, AVAILABLE).glyph, L.hero(missing, AVAILABLE).glyph);
+eq("available: its tooltip", L.indicator(missing, AVAILABLE).tooltip, "A Rime update is available");
+eq("available without a digest is a partial write", ind(missing, L.parseChecker("state=available\n")), "");
+eq("the fallback text: digest still counts as new", ind(missing, avail("text:abc")), "available");
+eq("an unreadable status leaves it to the checker", ind(bad, AVAILABLE), "available");
+eq("available, but it is the image already booted", ind(js({ state: "superseded", booted: { digest: D2 } }), avail(D2)), "");
+eq("available, a different one from the booted", ind(js({ state: "superseded", booted: { digest: D1 } }), avail(D2)), "available");
+eq("available, already queued by rime update (plain staged, nothing owed)",
+   ind(js({ state: "active", booted: { digest: D1 }, target: { digest: D2 }, staged_for_boot: true, remaining: "nothing" }), avail(D2)), "");
+eq("available, already applied live (live-only, nothing owed)",
+   ind(js({ state: "active", booted: { digest: D1 }, target: { digest: D2 }, staged_for_boot: false, remaining: "nothing" }), avail(D2)), "");
+eq("available, only planned (downloaded, not queued): still available",
+   ind(js({ state: "deferred", booted: { digest: D1 }, target: { digest: D2 }, staged_for_boot: false, remaining: "soft-reboot" }), avail(D2)), "available");
+eq("available, a newer one than the target: available",
+   ind(js({ state: "active", booted: { digest: D1 }, target: { digest: D2 }, staged_for_boot: true, remaining: "nothing" }), avail(D3)), "available");
+eq("pending reboot: restart", ind(reboot, NONE), "restart");
+eq("restart: its glyph is the page's", L.indicator(reboot, NONE).glyph, L.hero(reboot, NONE).glyph);
+eq("restart: its tooltip", L.indicator(reboot, NONE).tooltip, "Restart to finish the update");
+eq("pending reboot outranks the stale checker", ind(reboot, AVAILABLE), "restart");
+eq("deferred while locked: nothing, unlocking finishes it", ind(deferred, AVAILABLE), "");
+eq("deferred with a restart owed, queued for boot: restart",
+   ind(js({ state: "deferred", staged_for_boot: true, remaining: "soft-reboot" }), NONE), "restart");
+eq("idle with an image staged for boot: restart", ind(idleStaged, NONE), "restart");
+eq("everything live, a boot queued: nothing", ind(active, AVAILABLE), "");
+eq("an app restart is not the computer's", ind(js({ state: "active", staged_for_boot: true, remaining: "app-restart" }), NONE), "");
+const relogin = js({ state: "active", staged_for_boot: true, remaining: "session-restart" });
+eq("a session restart: restart", ind(relogin, NONE), "restart");
+eq("a session restart says to log out", L.indicator(relogin, NONE).tooltip, "Log out and back in to finish the update");
+eq("a restart owed but nothing queued (plan only): nothing",
+   ind(js({ state: "deferred", staged_for_boot: false, remaining: "soft-reboot" }), NONE), "");
+eq("rolled back: shown", ind(rb, NONE), "rolled-back");
+eq("rolled back: the page's glyph", L.indicator(rb, NONE).glyph, L.hero(rb, NONE).glyph);
+eq("rolled back, nothing queued: its tooltip", L.indicator(rb, NONE).tooltip, "An update was undone");
+eq("rolled back, queued for boot: says when it applies",
+   L.indicator(js({ state: "rolled-back", staged_for_boot: true }), NONE).tooltip,
+   "An update was undone and applies at the next restart");
+eq("failed: shown", ind(st("failed"), AVAILABLE), "failed");
+eq("failed: the page's glyph", L.indicator(st("failed"), NONE).glyph, L.hero(st("failed"), NONE).glyph);
+eq("failed: drawn as bad", L.indicator(st("failed"), NONE).tone, "bad");
+eq("failed, nothing queued: its tooltip", L.indicator(st("failed"), NONE).tooltip, "An update could not be applied");
+eq("failed after it was queued for boot: says when it applies",
+   L.indicator(js({ state: "failed", staged_for_boot: true }), NONE).tooltip,
+   "An update could not be applied live; it applies at the next restart");
+eq("staged (in progress, queued): nothing yet", ind(js({ state: "staged", staged_for_boot: true, remaining: "reboot" }), AVAILABLE), "");
+eq("activating: nothing yet", ind(st("activating"), AVAILABLE), "");
+eq("verifying: nothing yet", ind(st("verifying"), AVAILABLE), "");
+eq("superseded leaves it to the checker", ind(st("superseded"), AVAILABLE), "available");
+eq("an unknown state leaves it to the checker", ind(st("teleporting"), UPTODATE), "");
+const kinds = {};
+for (const [s, c] of [[missing, AVAILABLE], [reboot, NONE], [rb, NONE], [st("failed"), NONE]])
+    kinds[L.indicator(s, c).glyph] = true;
+eq("four kinds, four glyphs", Object.keys(kinds).length, 4);
+eq("nothing shown has no glyph and no tooltip", [L.indicator(missing, NONE).glyph, L.indicator(missing, NONE).tooltip], ["", ""]);
+
 console.log("── the only commands ──");
 const HOLD = "\"$@\"; printf '\\nPress Enter to close this window. '; read -r _";
 eq("Update now", L.UPDATE_ARGV, ["sh", "-c", HOLD, "sh", "sudo", "rime", "update"]);
