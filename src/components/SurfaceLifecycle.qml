@@ -71,6 +71,23 @@ import "controls"
 //     SurfaceLifecycle { id: life; open: Popups.networkOpen; surface: body }
 //     PanelWindow { visible: life.mapped; … }
 //
+// ── The kept window (2026-11-03) ────────────────────────────────────────────
+// Most of that wait is the window itself: Quickshell destroys a layer window
+// the moment it is hidden and builds a new one (and its scene graph) on the
+// next show. With `keepWindow: true` the window outlives its first close:
+// instead of hiding, it PARKS — shrunk to 1x1, input region empty, keyboard
+// focus none — and stops rendering once that 1x1 frame is on screen
+// (`windowUpdates`), so a parked window costs no frames, no wakeups and no
+// compositor work. The next open only resizes it. A window parks only while
+// `parkable` (a surface binds it to "no fullscreen window covers this output",
+// so a parked overlay never sits over a game); otherwise it hides as before.
+//     PanelWindow {
+//         visible: life.windowVisible; updatesEnabled: life.windowUpdates
+//         anchors.left: !life.parked  …  implicitWidth: 1; implicitHeight: 1
+//     }
+// A window that is opening waits for a frame at its real size: the parked
+// window's own frames do not count.
+//
 // It observes `open` from construction, so a popup that a LazyPopup builds BY
 // its flag flipping true starts opening on its own; it needs no applyOpenState.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -167,6 +184,42 @@ QtObject {
     // there runs _drive(), which writes `alpha` (measured on the spills'
     // opacity). This reads a plain flag that _drive() sets, with no effects.
     readonly property bool closing: life._settling
+
+    // ── Kept window (see the header) ─────────────────────────────────────────
+    property bool keepWindow: false
+    property bool parkable: true
+    // Whether the window should exist: shown, or parked.
+    readonly property bool windowVisible: life.mapped
+        || (life.keepWindow && life.parkable && life._everOpened)
+    // Shown but closed: 1x1, no input, no focus.
+    readonly property bool parked: life.windowVisible && !life.mapped
+    // False once a parked window has presented its 1x1 frame.
+    readonly property bool windowUpdates: !life.parked || !life._parkFlushed
+    // The window has its real size: a kept window opening renders at 1x1
+    // until the compositor's configure arrives (its state is sent with a frame).
+    readonly property bool windowSized: !life.keepWindow || (life._win !== null && life._win.width > 2)
+    // A kept window's content is hidden while parked or unsized, as a hidden
+    // window's was (Quickshell orphans the content of a window it destroys,
+    // and an orphaned item is not visible). So neither its 1x1 frames nor the
+    // one it parks with can show a pixel of a surface, and what runs only
+    // while visible (a loading pulse) stops while it is parked: a running
+    // animation anywhere ticks the whole shell's animation timer.
+    // The item hidden is the surface's top item under the window's root (a
+    // Quickshell window's own contentItem), never the root itself: the root
+    // has no parent item, so once its `visible` is written it computes as
+    // hidden for good, whatever is written next.
+    readonly property Item _veiled: {
+        const root = life._win ? life._win.contentItem : null
+        let it = root ? life.surface : null
+        while (it && it.parent && it.parent !== root) it = it.parent
+        return it && it.parent === root ? it : null
+    }
+    property Binding _veil: Binding {
+        when: life.keepWindow && life._veiled !== null
+        target: life._veiled
+        property: "visible"
+        value: !life.parked && life.windowSized
+    }
 
     signal opened()
     signal closed()
@@ -268,8 +321,15 @@ QtObject {
     // ── The first frame ──────────────────────────────────────────────────────
     readonly property var _win: life.surface ? life.surface.Window.window : null
     property bool _presented: false
-    // A new backing window (Quickshell builds one per map) has shown nothing.
-    on_WinChanged: life._presented = false
+    // A new backing window (Quickshell builds one per map, unless it is kept)
+    // has shown nothing. Counted, for tests/run-kept-window-test.sh.
+    property int _windows: 0
+    on_WinChanged: {
+        life._presented = false
+        if (!life._win) return
+        life._windows++
+        if (Motion.pacingLog) console.info("Rime pacing: " + (life.name || "surface") + " window=" + life._windows)
+    }
     onMappedChanged: {
         if (!life.mapped) life._presented = false
         // For tests/visual/stress-matrix.sh: every map and unmap, by name.
@@ -280,6 +340,11 @@ QtObject {
         target: (life.surface && !life._presented) ? life._win : null
         ignoreUnknownSignals: true
         function onFrameSwapped() {
+            // A kept window's parked frames, or one presented before the
+            // compositor has given it its real size, are not this open's.
+            // (A swap queued before the first one disconnected this is late.)
+            if (life._presented) return
+            if (!life.windowSized || (life.keepWindow && !life.mapped)) return
             if (Motion.pacingLog && life.open)
                 console.info("Rime pacing: " + (life.name || "surface") + " first-frame ms="
                              + (Date.now() - life._openedAt))
@@ -303,6 +368,14 @@ QtObject {
         }
     }
     property real _openedAt: 0
+    property bool _everOpened: false
+    property bool _parkFlushed: false
+    onParkedChanged: if (!life.parked) life._parkFlushed = false
+    property Connections _parkSwaps: Connections {
+        target: (life.surface && life.parked && !life._parkFlushed) ? life._win : null
+        ignoreUnknownSignals: true
+        function onFrameSwapped() { if (life._win.width <= 2) life._parkFlushed = true }
+    }
     readonly property bool _ready: !life.surface || life._presented
     on_ReadyChanged: if (life._ready && life.open) life._drive()
     // Never hold longer than this for a window that does not report frames.
@@ -569,9 +642,10 @@ QtObject {
     onOpenChanged: {
         if (life.open) {
             life._openedAt = Date.now()
+            life._everOpened = true
             if (life.resetsFocusRing) InputModality.surfaceOpened()
         }
         life._drive()
     }
-    Component.onCompleted: if (life.open) { life._openedAt = Date.now(); life._drive() }
+    Component.onCompleted: if (life.open) { life._openedAt = Date.now(); life._everOpened = true; life._drive() }
 }

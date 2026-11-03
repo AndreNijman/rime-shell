@@ -18,9 +18,11 @@ PanelWindow {
 
 
     anchors.top:    true
-    anchors.left:   true
-    anchors.right:  true
-    anchors.bottom: true
+    anchors.left:   !life.parked
+    anchors.right:  !life.parked
+    anchors.bottom: !life.parked
+    implicitWidth:  1
+    implicitHeight: 1
 
     exclusionMode: ExclusionMode.Ignore
     color:         "transparent"
@@ -28,7 +30,7 @@ PanelWindow {
     WlrLayershell.layer:         WlrLayer.Overlay
 
     property bool wantsFocus: false
-    WlrLayershell.keyboardFocus: wantsFocus ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+    WlrLayershell.keyboardFocus: wantsFocus && !life.parked ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
 
     Timer {
         id: focusGrabTimer
@@ -56,9 +58,17 @@ PanelWindow {
         exitDuration:  Motion.morphExit
         liquid:        true
         surface:       body
+        // Kept between opens, parked only with no fullscreen window
+        // (SurfaceLifecycle: the kept window).
+        keepWindow: true
+        parkable:   ShellState.activeFullscreenToplevel === null
     }
     readonly property bool windowVisible: life.mapped
-    visible: life.mapped
+    // No input at all while parked (it has no mask of its own).
+    mask: life.parked ? root._parkMask : null
+    property Region _parkMask: Region {}
+    visible: life.windowVisible
+    updatesEnabled: life.windowUpdates
 
     // ── Self-hover tracking ───────────────────────────────────────────────────
     property bool selfHovered: true

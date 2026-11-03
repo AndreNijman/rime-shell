@@ -82,6 +82,10 @@ PanelWindow {
         // screen, so it grows out of the notch rather than appearing.
         liquid:  true
         surface: body
+        // Kept between opens, parked only with no fullscreen window
+        // (SurfaceLifecycle: the kept window).
+        keepWindow: true
+        parkable:   ShellState.activeFullscreenToplevel === null
         onClosed: tabBar.reset()
         // The launcher page is the one worth building ahead: once the first
         // open has finished, build it in the background (LazyPage.prewarm).
@@ -123,7 +127,9 @@ PanelWindow {
     Binding {
         target:   Popups
         property: "dashboardPageWidth"
-        value:    DashboardLayout.widthFor(root.theme, root.page, root.width)
+        // A kept window is 1x1 until the compositor sizes it: read that as
+        // "not sized yet" (0), as a new window's width was, not as an output.
+        value:    DashboardLayout.widthFor(root.theme, root.page, root.width > 2 ? root.width : 0)
         when:     root.open
         // Keep the last width when the close starts. Qt 6's default restores the
         // value from before the Binding took over — 900 — the moment `open` goes
@@ -139,19 +145,22 @@ PanelWindow {
     SpringFollower { id: _targetW; role: "page"; target: Popups.dashboardPageWidth }
 
     color:   "transparent"
-    visible: life.mapped
+    visible: life.windowVisible
+    updatesEnabled: life.windowUpdates
 
     anchors.top:   true
-    anchors.left:  true
-    anchors.right: true
-    anchors.bottom: true
+    anchors.left:  !life.parked
+    anchors.right: !life.parked
+    anchors.bottom: !life.parked
+    implicitWidth: 1
+    implicitHeight: 1
 
     exclusionMode: ExclusionMode.Ignore
 
     WlrLayershell.layer:         WlrLayer.Overlay
 
     property bool wantsFocus: false
-    WlrLayershell.keyboardFocus: wantsFocus ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+    WlrLayershell.keyboardFocus: wantsFocus && !life.parked ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
 
     // A closing Dashboard must not keep eating the clicks that follow it: while
     // it collapses, its input region is empty and the desktop is reachable.

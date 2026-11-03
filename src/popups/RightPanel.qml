@@ -80,9 +80,11 @@ PanelWindow {
     // y = 0 is the screen top: the band is drawn over the bar's strip, and
     // the seam (the notch's bottom edge) is at y = notchHeight.
     anchors.top:    true
-    anchors.right:  true
-    anchors.left:   true
-    anchors.bottom: true
+    anchors.right:  !root.life.parked
+    anchors.left:   !root.life.parked
+    anchors.bottom: !root.life.parked
+    implicitWidth:  1
+    implicitHeight: 1
 
     exclusionMode: ExclusionMode.Ignore
     color:         "transparent"
@@ -100,7 +102,7 @@ PanelWindow {
     // 2026-09-27: "when i open anything from right notch … i cant close it").
     // One condition drives both, so the grab and the catcher cannot disagree.
     readonly property bool grabbing: root.life.open && root.pane !== "" && root.pane !== "toast"
-    WlrLayershell.keyboardFocus: root.grabbing ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+    WlrLayershell.keyboardFocus: root.grabbing && !root.life.parked ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
 
     // Outside the body: a click there closes the pane. Lowest in the stack.
     MouseArea {
@@ -122,7 +124,8 @@ PanelWindow {
         Keys.onPressed: function (event) { InputModality.key(event); event.accepted = false }
     }
 
-    visible: root.life.mapped
+    visible: root.life.windowVisible
+    updatesEnabled: root.life.windowUpdates
 
     // ── Finished sizes per pane ─────────────────────────────────────────────
     // Sized to what the network tab has to show, between 320 and 648 (brief

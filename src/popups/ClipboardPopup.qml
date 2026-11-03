@@ -22,10 +22,12 @@ PanelWindow {
     // The whole screen, so that while it holds the keyboard it can also catch
     // the click outside itself (see `grabbing`); its shape is measured from the
     // right and bottom edges, which have not moved.
-    anchors.right:  true
-    anchors.bottom: true
+    anchors.right:  !life.parked
+    anchors.bottom: !life.parked
     anchors.top:    true
-    anchors.left:   true
+    anchors.left:   !life.parked
+    implicitWidth:  1
+    implicitHeight: 1
 
     exclusionMode: ExclusionMode.Ignore
     color:         "transparent"
@@ -40,7 +42,7 @@ PanelWindow {
     // layer (PopupDismiss) never saw that click (2026-09-27, found with the
     // right-notch panes).
     readonly property bool grabbing: Popups.clipboardOpen
-    WlrLayershell.keyboardFocus: root.grabbing ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+    WlrLayershell.keyboardFocus: root.grabbing && !life.parked ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
     MouseArea {
         id: outside
         anchors.fill: parent
@@ -49,7 +51,7 @@ PanelWindow {
         onClicked: Popups.closeAll()
     }
 
-    mask: Region { item: root.grabbing ? outside : maskProxy }
+    mask: Region { item: life.parked ? null : root.grabbing ? outside : maskProxy }
     Item {
         id: maskProxy
         x:      body.result.bounds.x
@@ -77,9 +79,14 @@ PanelWindow {
         exitDuration:  Motion.morphExit
         liquid:        true
         surface:       body
+        // Kept between opens, parked only with no fullscreen window
+        // (SurfaceLifecycle: the kept window).
+        keepWindow: true
+        parkable:   ShellState.activeFullscreenToplevel === null
     }
     readonly property bool windowVisible: life.mapped
-    visible: life.mapped
+    visible: life.windowVisible
+    updatesEnabled: life.windowUpdates
 
     // LazyPopup calls this right after building the window; the lifecycle is
     // born open and opens itself, so there is nothing left to apply.
