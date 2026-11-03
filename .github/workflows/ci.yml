@@ -1860,6 +1860,20 @@ jobs:
       - name: Installed apps never show a broken icon
         run: ./tests/run-app-icons-test.sh
 
+      # Rime Settings, the app for GNOME, KDE Plasma and COSMIC: one window
+      # with app id org.rimeos.Settings, a second launch reuses it, no
+      # Shell-only page and no hyprctl call; inside a Rime session the
+      # launcher opens Nexus. SKIPS without quickshell or labwc.
+      - name: Rime Settings is one app window without the Shell's pages
+        run: ./tests/run-settings-app-test.sh
+
+      # The Shell's power control against a fake rimed on a private bus:
+      # follows PropertiesChanged on the power-profiles API, sets through
+      # ActiveProfile, falls back to Rimed1 Tier when the name has no owner.
+      # SKIPS without quickshell.
+      - name: The power control follows rimed's power-profiles API
+        run: ./tests/run-power-profile-service-test.sh
+
       # The surface and text roles (src/theme/roles.js) against every palette
       # the shell ships — six wallpapers, both matugen schemes — with the
       # fallback rule applied and the fallbacks that fire pinned.

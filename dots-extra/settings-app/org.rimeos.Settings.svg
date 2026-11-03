@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <title>Rime Settings</title>
+  <!-- The Rime ridge (src/assets/brand/rime-ridge-symbol.svg, unchanged geometry) on an app tile. -->
+  <rect x="8" y="8" width="240" height="240" rx="56" fill="#E9EEF1"/>
+  <g transform="translate(32 64) scale(0.8)">
+    <polygon fill="#212224" points="11,175 162.5,140 220,159 235.5,175"/>
+    <polygon fill="#212224" points="0,175 153,108 212,91.5 194.5,139 160.5,128"/>
+    <polygon fill="#91C2DC" points="47.5,136 149,75 231,45 217.5,76"/>
+    <polygon fill="#212224" points="91.5,100 129.5,58 240,0 222,36 142.5,67"/>
+  </g>
+</svg>

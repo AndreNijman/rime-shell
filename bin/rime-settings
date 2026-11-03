@@ -1,0 +1,35 @@
+#!/bin/sh
+# ─────────────────────────────────────────────────────────────────────────────
+#  rime-settings [page] — open Rime's settings at <page> (Power, Gaming,
+#  Updates, Desktops, ...; the ids PageRegistry lists).
+#
+#  One entry point for every session (rime-os docs/nixos/desktops.md §5):
+#    1. Rime Shell runs in this session (it answers `qs -c <shellDir> ipc`):
+#       open the Shell's own Nexus at the page. Rime Settings, the app, is for
+#       sessions without the Shell.
+#    2. Rime Settings already runs: switch it to the page (one window, ever).
+#    3. Otherwise start it: QS_APP_ID makes the xdg app id org.rimeos.Settings,
+#       which org.rimeos.Settings.desktop names as StartupWMClass, and -n
+#       (--no-duplicate) refuses a second instance should two starts race.
+#
+#  The .desktop file runs `rime-settings %u`; a rime-settings:<page> URL is
+#  accepted as well as a bare page id.
+# ─────────────────────────────────────────────────────────────────────────────
+shellDir="${RIME_SHELL_DIR:-/usr/share/rime-shell}"
+qs="${RIME_SETTINGS_QUICKSHELL:-quickshell}"
+app="$shellDir/settings.qml"
+
+page="${1:-}"
+case "$page" in
+    rime-settings:*) page="${page#rime-settings:}"; page="${page#//}" ;;
+esac
+
+if "$qs" -c "$shellDir" ipc show >/dev/null 2>&1; then
+    exec "$qs" -c "$shellDir" ipc call nexus open "$page"
+fi
+
+if "$qs" -p "$app" ipc show >/dev/null 2>&1; then
+    exec "$qs" -p "$app" ipc call settings open "$page"
+fi
+
+RIME_SETTINGS_PAGE="$page" QS_APP_ID=org.rimeos.Settings exec "$qs" -n -p "$app"

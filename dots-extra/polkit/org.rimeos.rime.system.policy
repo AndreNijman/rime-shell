@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+
+<!--
+  Rime Settings: system changes that rimed has no D-Bus method for.
+
+  Rime Settings (settings.qml) and the Shell's Nexus run the system rime CLI
+  through pkexec for the few changes that need root and are not rimed's:
+  adding or removing a desktop (Config, Desktops: rime install gnome, rime
+  remove kde). rimed's own methods (power tier, battery limit, Gaming Mode)
+  keep their own polkit actions and ask nothing of the active session.
+
+  pkexec picks this action because the program it is asked to run is exactly
+  the exec.path below (the packager rewrites the prefix to the system
+  profile's on NixOS). The prompt is shown by the session's own polkit agent:
+  GNOME Shell's, Plasma's, COSMIC's or Rime Shell's.
+
+  auth_admin_keep: installing a desktop changes the whole system, so it asks
+  for an administrator; keep, so a remove right after an install does not ask
+  twice. Never for an inactive or remote session.
+-->
+<policyconfig>
+  <vendor>Rime OS</vendor>
+  <vendor_url>https://rimeos.com</vendor_url>
+
+  <action id="org.rimeos.rime.system">
+    <description>Change the Rime system</description>
+    <message>Authentication is required to change which parts of Rime this system runs</message>
+    <icon_name>org.rimeos.Settings</icon_name>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/rime</annotate>
+  </action>
+</policyconfig>
