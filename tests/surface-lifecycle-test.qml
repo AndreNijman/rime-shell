@@ -48,7 +48,11 @@ TestCase {
         Window {
             width: 80; height: 60; visible: false
             property alias item: probe
-            Rectangle { id: probe; anchors.fill: parent; color: "black" }
+            property alias field: field
+            Rectangle {
+                id: probe; anchors.fill: parent; color: "black"
+                TextInput { id: field; width: 40; height: 20; text: "x" }
+            }
         }
     }
     Component {
@@ -437,6 +441,24 @@ TestCase {
         l.open = true
         compare(l.windowUpdates, true, "an open updates the window again at once")
         tryCompare(l, "phase", "Open", 2000)
+    }
+
+    function test_a_parked_window_lets_go_of_its_text_field() {
+        // A focused field in a parked window blinks its cursor: two wakeups a
+        // second for as long as the window is parked.
+        var w = createTemporaryObject(keptWinC, tc)
+        var l = make({ surface: w.item, keepWindow: true })
+        keptWindow(l, w)
+        l.open = true
+        tryCompare(l, "phase", "Open", 2000)
+        w.field.forceActiveFocus()
+        compare(w.field.activeFocus, true, "the field has the focus while open")
+        l.open = false
+        tryCompare(l, "parked", true, 2000)
+        compare(w.field.activeFocus, false, "a parked window holds no focused field")
+        l.open = true
+        tryCompare(l, "phase", "Open", 2000)
+        compare(w.field.activeFocus, true, "the reopen gives the field its focus back")
     }
 
     function test_a_kept_window_not_parkable_is_hidden() {

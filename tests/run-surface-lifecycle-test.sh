@@ -84,6 +84,9 @@ mutant "body released a frame late (no analytic handoff)" \
     'const tc = L.crossingTime(dt, life.openRelease)' 'const tc = -1'
 mutant "lead released a frame late on close" \
     'const tc = B.crossingTime(dt, life.closeRelease)' 'const tc = -1'
+mutant "a parked window keeps its focused field" \
+    'if (f && f !== win.contentItem) { life._parkedFocus = f; f.focus = false }' \
+    'if (f && f !== win.contentItem) { life._parkedFocus = f }'
 mutant "frame republished when nothing moved" \
     'if (f.body === B.value' 'if (false && f.body === B.value'
 cp "$root/src/components/SurfaceLifecycle.qml" "$stage/components/SurfaceLifecycle.qml"

@@ -376,7 +376,25 @@ QtObject {
     // focus move closes the popup being opened.
     property bool _everOpened: false
     property bool _parkFlushed: false
-    onParkedChanged: if (!life.parked) life._parkFlushed = false
+    // A parked window keeps its active focus item, and a focused text field
+    // keeps blinking its cursor: two wakeups a second for as long as it is
+    // parked (measured on the wallpaper picker's search field). Parking takes
+    // the focus off it, and the next open gives it back unless the opening
+    // surface has already focused something itself.
+    property Item _parkedFocus: null
+    onParkedChanged: {
+        const win = life._win
+        if (life.parked) {
+            const f = win ? win.activeFocusItem : null
+            if (f && f !== win.contentItem) { life._parkedFocus = f; f.focus = false }
+            return
+        }
+        life._parkFlushed = false
+        const f = life._parkedFocus
+        life._parkedFocus = null
+        if (f && win && (!win.activeFocusItem || win.activeFocusItem === win.contentItem))
+            f.forceActiveFocus()
+    }
     property Connections _parkSwaps: Connections {
         target: (life.surface && life.parked && !life._parkFlushed) ? life._win : null
         ignoreUnknownSignals: true
