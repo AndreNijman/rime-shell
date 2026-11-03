@@ -226,6 +226,22 @@ QtObject {
             life._presented = true
         }
     }
+    // Pacing only: frames this window presented during an open or a close, and
+    // the first one presented after a spring left 0 — the open's first VISIBLE
+    // motion, so `motion` is the input-to-motion latency (UI/UX Phase 22).
+    property real _motionAt: 0
+    property Connections _paceSwaps: Connections {
+        target: (Motion.pacingLog && life.surface) ? life._win : null
+        ignoreUnknownSignals: true
+        function onFrameSwapped() {
+            const now = Date.now()
+            if (life.phase === "Opening" || life.phase === "Closing") life._pace.swaps++
+            else if (life.phase === "Closed")
+                console.info("Rime pacing: " + (life.name || "surface") + " swap-closed")
+            if (life.open && life._motionAt > 0 && life._pace.motion < 0)
+                life._pace.motion = now - life._openedAt
+        }
+    }
     property real _openedAt: 0
     readonly property bool _ready: !life.surface || life._presented
     on_ReadyChanged: if (life._ready && life.open) life._drive()
@@ -249,6 +265,9 @@ QtObject {
     }
 
     function _onStep() {
+        if (Motion.pacingLog && life.open && life._motionAt === 0
+                && (life._lead.value > 0 || life._body.value > 0))
+            life._motionAt = Date.now()
         var spatial = (life.open ? life.enterDuration : life.exitDuration) > 0
         if (life.liquid && spatial && life._ready) {
             // Sequencing, evaluated both ways so a reversal resumes it.
@@ -288,20 +307,29 @@ QtObject {
         property real worstT: 0
         property real first: -1
         property string ph: ""
+        property int swaps: 0
+        property real motion: -1
+        property var iv: []
         onRunningChanged: {
             if (running) {
                 t0 = Date.now(); last = t0; n = 0; worst = 0; worstT = t0; first = -1; ph = life.phase
+                swaps = 0; iv = []
+                if (ph === "Opening") { motion = -1; life._motionAt = 0 }
             } else if (n > 0) {
                 const span = Math.max(1, last - t0)
                 console.info("Rime pacing: " + (life.name || "surface") + " " + ph
                              + " ms=" + Math.round(last - t0) + " frames=" + n
                              + " worst=" + Math.round(worst)
                              + " at=" + ((worstT - t0) / span).toFixed(2)
-                             + " first=" + Math.round(first))
+                             + " first=" + Math.round(first)
+                             + " swaps=" + swaps
+                             + (ph === "Opening" ? " motion=" + Math.round(motion) : "")
+                             + " iv=" + iv.join(","))
             }
         }
         onTriggered: {
             const now = Date.now()
+            if (n > 0) iv.push((frameTime * 1000).toFixed(1))
             if (first < 0) first = now - t0
             if (now - last > worst) { worst = now - last; worstT = now }
             last = now
