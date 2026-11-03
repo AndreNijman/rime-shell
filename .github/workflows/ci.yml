@@ -2679,6 +2679,19 @@ jobs:
           # Skips cleanly without quickshell or a compositor.
           ./tests/run-settings-staged-test.sh
 
+      # The apply bar: one CfgApplyBar in the settings host floats over the
+      # bottom of whichever page holds a draft. The runner opens the real
+      # SettingsHost in a window and checks the bar is hidden while clean, up
+      # on a change, inside the viewport scrolled to the top and to the
+      # bottom, padding the page so the last control scrolls clear of it,
+      # that Apply / Revert / Ctrl+Enter / Ctrl+S reach the page, the Display
+      # keep-or-revert countdown, and that it snaps under Reduce Motion.
+      # Private HOME and stubs, so the Apply it presses writes nowhere real.
+      # SKIPS without labwc and quickshell.
+      - name: Settings apply bar
+        run: |
+          ./tests/run-apply-bar-test.sh
+
       - name: Remote agent status smoke test
         run: |
           # Needs a compositor AND the rime-os runtime built; the harness skips
@@ -2922,6 +2935,7 @@ jobs:
             "tests/run-slider-wheel-test.sh"
             "src/components/config/settings-semantics.js"
             "src/components/config/CfgCommit.qml"
+            "src/components/config/CfgApplyBar.qml"
             "src/components/config/CfgLifecycle.qml"
             "tests/settings-semantics-test.js"
             "tests/settings-controls-test.qml"
@@ -2957,6 +2971,8 @@ jobs:
             "tests/run-settings-pages-test.sh"
             "tests/settings-staged-test.qml"
             "tests/run-settings-staged-test.sh"
+            "tests/apply-bar-test.qml"
+            "tests/run-apply-bar-test.sh"
             "src/services/qr.js"
             "tests/qr-test.js"
             "src/services/remotepairing.js"

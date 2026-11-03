@@ -107,9 +107,11 @@ Item {
         var r = root._rowFor(root._curAction)
         if (!r) return
         var top = r.mapToItem(_col, 0, 0).y
+        // The bar covers the bottom of the list while it shows.
+        var view = _list.height - root.bottomInset
         if (top < _list.contentY) _list.contentY = top
-        else if (top + r.height > _list.contentY + _list.height)
-            _list.contentY = top + r.height - _list.height
+        else if (top + r.height > _list.contentY + view)
+            _list.contentY = top + r.height - view
     }
 
     // A row's own button just acted and, for Clear/Reset, may have hidden
@@ -147,13 +149,10 @@ Item {
         error: KeybindService.hasStaged ? "" : KeybindService.lastError
     }
 
-    CfgCommit {
-        id: _commit
-        anchors.left: parent.left
-        anchors.leftMargin: 12
-        y: _lifecycle.y + _lifecycle.height + (_commit.visible ? 6 : 0)
-        width: root.width - 16
-
+    // The draft's bar is the settings host's CfgApplyBar, floating over the
+    // bottom of the page. It used to sit up here, above a seventy-row list
+    // that scrolled away from it.
+    readonly property CfgCommit commit: CfgCommit {
         count: Object.keys(root._pending).length
         noun:  "shortcut"
 
@@ -165,15 +164,23 @@ Item {
         error:    KeybindService.lastError
         note:     KeybindService.lastError === "" ? Semantics.APPLY_IS_ALSO_SAVE : ""
 
+        // While a row is capturing, every key belongs to the capture: Ctrl+S
+        // may be the very combination being bound.
+        shortcutsEnabled: !root.anyCapturing
+
         onApplyRequested:  root._applyPending()
         onRevertRequested: KeybindService.revertStaged()
     }
+
+    // Room under the last row for that bar, set by the host while it shows
+    // (CfgScroll's property of the same name; this page has its own Flickable).
+    property real bottomInset: 0
 
     // ── Scrollable list ───────────────────────────────────────────────────────
     Flickable {
         id: _list
         anchors {
-            top:         _commit.visible ? _commit.bottom : _lifecycle.bottom
+            top:         _lifecycle.bottom
             left:        parent.left
             right:       parent.right
             bottom:      parent.bottom
@@ -186,7 +193,7 @@ Item {
             topMargin:   6
         }
         contentWidth:   width
-        contentHeight:  _col.implicitHeight + 16
+        contentHeight:  _col.implicitHeight + 16 + root.bottomInset
         clip:           true
         boundsBehavior: Flickable.StopAtBounds
 

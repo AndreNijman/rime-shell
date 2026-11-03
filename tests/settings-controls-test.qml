@@ -29,7 +29,8 @@ import "components/config/settings-semantics.js" as Semantics
 //
 //  The half of P0-023 that is about pressing things:
 //
-//    * the commit bar is not there when there is nothing staged
+//    * the apply bar (CfgApplyBar, showing a page's CfgCommit) is not there
+//      when there is nothing staged
 //    * each of its buttons emits its own act and no other
 //    * a bar that is busy emits nothing at all, so a second Apply cannot land
 //      on top of the first
@@ -40,6 +41,10 @@ import "components/config/settings-semantics.js" as Semantics
 //    * the lifecycle line renders the vocabulary's sentence, and renders
 //      nothing at all for a state the vocabulary does not define
 //    * a row that defers grows to fit the sentence saying so
+//    * Ctrl+Enter does the bar's primary act and Ctrl+S saves, and neither
+//      acts while the bar is busy or the page has the keys (a capture)
+//    * a running confirmation asks its question with Keep and offers no Apply
+//    * its buttons take Tab focus and say their names
 //    * and the ordinary controls apply the input they are given: a click
 //      toggles a switch, a click selects a segment, Enter accepts a field
 //
@@ -54,11 +59,12 @@ import "components/config/settings-semantics.js" as Semantics
 Item {
     id: fixture
     width:  520
-    height: 420
+    height: 520
 
     property int applies:  0
     property int saves:    0
     property int reverts:  0
+    property int keeps:    0
 
     property int toggles:  0
     property var lastToggle: null
@@ -71,50 +77,65 @@ Item {
         fixture.applies = 0
         fixture.saves   = 0
         fixture.reverts = 0
+        fixture.keeps   = 0
         fixture.toggles = 0
         fixture.selects = 0
         fixture.accepts = 0
     }
 
     // ── The bar under test ───────────────────────────────────────────────────
-    CfgCommit {
+    // A page declares its draft (CfgCommit); the settings host shows it in its
+    // one CfgApplyBar. Here the fixture is the host.
+    CfgApplyBar {
         id: bar
         y: 0
         width: fixture.width
+        height: implicitHeight
 
-        count: 2
-        noun:  "shortcut"
-        canApply: true
-        canSave:  true
+        model: CfgCommit {
+            id: barModel
+            count: 2
+            noun:  "shortcut"
+            canApply: true
+            canSave:  true
+            canKeep:  true
 
-        onApplyRequested:  fixture.applies++
-        onSaveRequested:   fixture.saves++
-        onRevertRequested: fixture.reverts++
+            onApplyRequested:  fixture.applies++
+            onSaveRequested:   fixture.saves++
+            onRevertRequested: fixture.reverts++
+            onKeepRequested:   fixture.keeps++
+        }
     }
 
     // A second bar, for the page shape that has one act. Kept as its own
     // instance rather than reconfiguring the first between tests, so a test
-    // that forgets to put a property back cannot poison the next one.
-    CfgCommit {
+    // that forgets to put a property back cannot poison the next one. Its keys
+    // are off: two bars in one window would make every shortcut ambiguous, and
+    // the host never builds two.
+    CfgApplyBar {
         id: oneAct
-        y: 120
+        y: 130
         width: fixture.width
-        count: 1
-        noun: "change"
-        canApply: true
-        canSave:  false
+        height: implicitHeight
+        keysEnabled: false
+        model: CfgCommit {
+            count: 1
+            noun: "change"
+            canApply: true
+            canSave:  false
+        }
     }
 
     CfgLifecycle {
         id: live
-        y: 200
+        y: 240
         width: fixture.width
         lifecycle: "live"
     }
 
     CfgLifecycle {
         id: nonsense
-        y: 250
+        y: 290
         width: fixture.width
         lifecycle: "sideways"
     }
@@ -122,7 +143,7 @@ Item {
     // ── Ordinary controls, for the input-application half ────────────────────
     CfgRow {
         id: plainRow
-        y: 300
+        y: 340
         width: fixture.width
         label: "Plain"
         description: "A row with no deferred effect"
@@ -135,7 +156,7 @@ Item {
 
     CfgRow {
         id: deferredRow
-        y: 340
+        y: 380
         width: fixture.width
         label: "Deferred"
         description: "A row that does not take effect where you change it"
@@ -150,7 +171,7 @@ Item {
 
     CfgTextField {
         id: field
-        y: 390
+        y: 430
         text: "before"
         onAccepted: function (t) { fixture.accepts++; fixture.lastAccept = t }
     }
@@ -201,7 +222,11 @@ Item {
         // passing because the item was never hit-testable.
         function test_000_fixture() {
             verify(fixture.visible, "the fixture must be visible or no click lands")
-            verify(bar.visible, "a bar holding two changes must be showing")
+            verify(bar.shown, "a bar holding two changes must be showing")
+            // It slides up on its spring when it first shows; a click before it
+            // lands would hit where it is going, not where it is.
+            tryCompare(bar, "progress", 1, 2000)
+            verify(bar.visible)
             verify(bar.height > 0, "the bar must have height")
             var apply = buttonSaying(bar, "Apply")
             verify(apply !== null, "the bar must have an Apply button to click")
@@ -237,18 +262,18 @@ Item {
 
         // ── nothing staged, nothing shown ────────────────────────────────────
         function test_030_no_bar_without_a_draft() {
-            var was = bar.count
-            bar.count = 0
-            verify(!bar.visible, "a bar with nothing staged must not be showing")
-            // The collapse is animated, so the height reaches zero a frame or
-            // two later. Waited for rather than asserted instantly, because
-            // "it is 49px tall" and "it is still on its way down" are the same
-            // reading and only one of them is a defect.
-            tryCompare(bar, "height", 0, 2000)
-            bar.count = was
-            waitForRendering(fixture)
-            verify(bar.visible, "and must come back when something is staged")
-            tryCompare(bar, "height", bar.implicitHeight, 2000)
+            var was = barModel.count
+            barModel.count = 0
+            verify(!bar.shown, "a bar with nothing staged must not be showing")
+            // It slides out on the surface springs, so it is gone a few frames
+            // later. Waited for rather than asserted instantly, because "it is
+            // still on its way down" and "it never left" read the same at once
+            // and only one of them is a defect.
+            tryCompare(bar, "visible", false, 2000)
+            barModel.count = was
+            verify(bar.shown, "and must come back when something is staged")
+            tryCompare(bar, "progress", 1, 2000)
+            verify(bar.visible)
         }
 
         // ── a busy bar is inert ──────────────────────────────────────────────
@@ -262,30 +287,30 @@ Item {
             verify(apply !== null && revert !== null,
                    "the bar must still have its buttons: " + textsOf(bar, []).join(" | "))
             fixture.resetCounts()
-            bar.busy = true
+            barModel.busy = true
             clickCentre(apply)
             clickCentre(revert)
             compare(fixture.applies, 0, "a busy bar must not apply again")
             compare(fixture.reverts, 0, "a busy bar must not revert underneath itself")
-            bar.busy = false
+            barModel.busy = false
             clickCentre(apply)
             compare(fixture.applies, 1, "and must work again once it is not busy")
         }
 
         // ── a refusal keeps the intent ───────────────────────────────────────
         function test_050_an_error_replaces_the_hint_and_keeps_the_count() {
-            var before = bar.count
-            var hint = Semantics.stagedHint(bar.canApply, bar.canSave)
+            var before = barModel.count
+            var hint = Semantics.stagedHint(barModel.canApply, barModel.canSave)
             waitForRendering(fixture)
             verify(textsOf(bar, []).indexOf(hint) >= 0,
                    "the bar must be showing the hint before anything fails; it "
                    + "shows: " + textsOf(bar, []).join(" | "))
 
-            bar.error = "Could not write /nowhere/keybinds.json (exit 1)."
+            barModel.error = "Could not write /nowhere/keybinds.json (exit 1)."
             var shown = textsOf(bar, [])
-            verify(shown.indexOf(bar.error) >= 0, "the refusal must be on the bar")
+            verify(shown.indexOf(barModel.error) >= 0, "the refusal must be on the bar")
             verify(shown.indexOf(hint) < 0, "and must replace the hint, not sit under it")
-            compare(bar.count, before, "a refusal must not change what is staged")
+            compare(barModel.count, before, "a refusal must not change what is staged")
             verify(bar.visible, "and must not make the bar go away")
 
             var apply = buttonSaying(bar, "Apply")
@@ -294,7 +319,7 @@ Item {
             clickCentre(apply)
             compare(fixture.applies, 1, "and pressing it must still ask")
 
-            bar.error = ""
+            barModel.error = ""
         }
 
         // ── one act, one button ──────────────────────────────────────────────
@@ -303,6 +328,91 @@ Item {
             verify(buttonSaying(oneAct, "Revert") !== null, "Revert must be there")
             compare(buttonSaying(oneAct, "Save"), null,
                     "a page where Apply is also the save must not grow a Save button")
+        }
+
+        // ── the keys ─────────────────────────────────────────────────────────
+        // Window shortcuts, so they reach the bar wherever focus is: the field
+        // at the bottom of the fixture holds it here, the way a page's control
+        // would.
+        function test_062_ctrl_enter_applies_and_ctrl_s_saves() {
+            waitForRendering(fixture)
+            fixture.resetCounts()
+            field.forceActiveFocus()
+            keyClick(Qt.Key_Return, Qt.ControlModifier)
+            compare(fixture.applies, 1, "Ctrl+Enter must apply")
+            keyClick(Qt.Key_Enter, Qt.ControlModifier)
+            compare(fixture.applies, 2, "Ctrl+Enter on the keypad too")
+            keyClick(Qt.Key_S, Qt.ControlModifier)
+            compare(fixture.saves, 1, "Ctrl+S must save where the page can")
+            compare(fixture.reverts, 0, "no key reverts")
+        }
+
+        function test_064_keys_do_nothing_while_busy_or_captured() {
+            fixture.resetCounts()
+            field.forceActiveFocus()
+            barModel.busy = true
+            keyClick(Qt.Key_Return, Qt.ControlModifier)
+            keyClick(Qt.Key_S, Qt.ControlModifier)
+            barModel.busy = false
+            compare(fixture.applies + fixture.saves, 0, "a busy bar must not act on a key")
+            barModel.shortcutsEnabled = false
+            keyClick(Qt.Key_Return, Qt.ControlModifier)
+            keyClick(Qt.Key_S, Qt.ControlModifier)
+            barModel.shortcutsEnabled = true
+            compare(fixture.applies + fixture.saves, 0,
+                    "a page that has the keys (a capture) must keep them")
+            barModel.count = 0
+            tryCompare(bar, "visible", false, 2000)
+            keyClick(Qt.Key_Return, Qt.ControlModifier)
+            compare(fixture.applies, 0, "a bar with nothing to apply must not apply")
+            barModel.count = 2
+            tryCompare(bar, "progress", 1, 2000)
+        }
+
+        // ── a confirmation ───────────────────────────────────────────────────
+        function test_066_a_countdown_asks_with_keep_and_offers_no_apply() {
+            fixture.resetCounts()
+            barModel.countdownTitle = "Keep this layout?"
+            barModel.countdownNote = "If you do nothing, it comes back in 5 seconds."
+            barModel.countdown = 5
+            waitForRendering(fixture)
+            var shown = textsOf(bar, [])
+            verify(shown.indexOf("Keep this layout?") >= 0, "the bar must ask: " + shown.join(" | "))
+            verify(shown.indexOf(barModel.countdownNote) >= 0, "and say what doing nothing does")
+            compare(buttonSaying(bar, "Apply"), null, "no Apply on top of an unanswered apply")
+            compare(buttonSaying(bar, "Revert"), null, "the draft's Revert is not the answer")
+            var keep = buttonSaying(bar, "Keep it")
+            verify(keep !== null, "Keep it must be there")
+            clickCentre(keep)
+            compare(fixture.keeps, 1, "Keep it must answer")
+            field.forceActiveFocus()
+            keyClick(Qt.Key_Return, Qt.ControlModifier)
+            compare(fixture.keeps, 2, "and Ctrl+Enter is Keep while the question is asked")
+            compare(fixture.applies, 0, "never Apply")
+            barModel.countdown = 0
+            waitForRendering(fixture)
+            verify(buttonSaying(bar, "Apply") !== null, "the draft's buttons come back after")
+        }
+
+        // ── reachable and named ──────────────────────────────────────────────
+        function test_068_buttons_take_tab_and_say_their_names() {
+            var revert = buttonSaying(bar, "Revert")
+            var save = buttonSaying(bar, "Save")
+            var apply = buttonSaying(bar, "Apply")
+            verify(revert.activeFocusOnTab && save.activeFocusOnTab && apply.activeFocusOnTab,
+                   "every button on the bar must be a Tab stop")
+            revert.forceActiveFocus()
+            keyClick(Qt.Key_Tab)
+            verify(save.activeFocus, "Tab from Revert must reach Save")
+            keyClick(Qt.Key_Tab)
+            verify(apply.activeFocus, "and then Apply")
+            compare(apply.Accessible.name, "Apply")
+            compare(bar.surface.Accessible.role, Accessible.ToolBar)
+            compare(bar.surface.Accessible.name, Semantics.stagedLine(2, "shortcut"),
+                    "the bar must be named by what it holds")
+            fixture.resetCounts()
+            keyClick(Qt.Key_Space)
+            compare(fixture.applies, 1, "Space on the focused Apply must apply")
         }
 
         // ── the lifecycle line ───────────────────────────────────────────────

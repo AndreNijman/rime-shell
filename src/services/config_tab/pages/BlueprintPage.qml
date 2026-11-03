@@ -65,6 +65,32 @@ CfgScroll {
     lifecycle: "staged"
     lifecycleError: BlueprintService.dirty ? "" : BlueprintService.lastError
 
+    // The same bar the Display and Keybinds pages show, floating over the
+    // bottom of the page (the settings host's CfgApplyBar), with the one
+    // difference this page really has: no Apply on it. Apply converges the
+    // machine and reads the FILE, so it cannot act on a draft; it lives further
+    // down, next to what it would change, and refuses to run while anything is
+    // unsaved.
+    commit: CfgCommit {
+        // Nothing to hold while the CLI is missing: the editor is hidden then,
+        // and a bar over an explanation would offer to save edits nobody can
+        // see.
+        count:     BlueprintService.available && BlueprintService.pending
+                   ? BlueprintService.pending.length : 0
+        noun:      "edit"
+        canApply:  false
+        canSave:   true
+        busy:      BlueprintService.saving
+        error:     BlueprintService.saveError
+        dangerous: BlueprintService.eraseWarning
+        note:      "Writes the file and changes the machine not at all."
+
+        onSaveRequested: BlueprintService.eraseWarning
+            ? BlueprintService.confirmErase()
+            : BlueprintService.save()
+        onRevertRequested: BlueprintService.revert()
+    }
+
     Component.onCompleted: BlueprintService.compare()
 
     // True before the first Save on a machine that has never had a blueprint.
@@ -374,30 +400,6 @@ CfgScroll {
             visible: BlueprintService.eraseWarning
         }
 
-    }
-
-    // The same bar the Display and Keybinds pages show, with the one difference
-    // this page really has: no Apply here. Apply converges the machine and
-    // reads the FILE, so it cannot act on a draft; it lives further down, next
-    // to what it would change, and refuses to run while anything is unsaved.
-    CfgCommit {
-        // `held` as well as `available`: CfgCommit hides itself when there is
-        // nothing staged, and a page-level `visible` that ignored that would
-        // put a zero-height visible item in the Column and eat its spacing.
-        visible:   BlueprintService.available && count > 0
-        count:     BlueprintService.pending ? BlueprintService.pending.length : 0
-        noun:      "edit"
-        canApply:  false
-        canSave:   true
-        busy:      BlueprintService.saving
-        error:     BlueprintService.saveError
-        dangerous: BlueprintService.eraseWarning
-        note:      "Writes the file and changes the machine not at all."
-
-        onSaveRequested: BlueprintService.eraseWarning
-            ? BlueprintService.confirmErase()
-            : BlueprintService.save()
-        onRevertRequested: BlueprintService.revert()
     }
 
     // ── Save result ───────────────────────────────────────────────────────────
