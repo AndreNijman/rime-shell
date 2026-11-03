@@ -17,15 +17,23 @@ import Quickshell.Services.UPower
 //            timer. GNOME's power menu, KDE's battery applet and COSMIC's
 //            applet talk to the same object, so a change made in any of them,
 //            in `rime tier`, or by an AC change shows here at once.
-//   "rimed"  the name has no owner: a machine on a rimed that predates the API
-//            (bootc today). The old path stays: `rime tier <id>` sets (rimed
-//            SetTier over D-Bus, polkit-authorized), and the Tier property is
-//            re-read with busctl every 4 s while something displays it.
+//   "rimed"  the name is not rimed's: nobody owns it (a rimed that predates the
+//            API), or another daemon does. bootc today is the second case:
+//            Containerfile.core enables power-profiles-daemon, which owns the
+//            name beside rimed, and writing to it would bypass rimed's tiers.
+//            The old path stays: `rime tier <id>` sets (rimed SetTier over
+//            D-Bus, polkit-authorized), and the Tier property is re-read with
+//            busctl every 4 s while something displays it.
 //
 // The owner is asked once each time the first consumer arrives (refCount 0 → 1),
-// with one `busctl NameHasOwner` call. That is the only process the "ppd" path
-// ever starts: the polling mutant in tests/run-power-profile-service-test.sh
-// counts the busctl calls and fails on a second one.
+// with ONE busctl call sent to the power-profiles NAME for rimed's own object
+// (Properties.Get org.rimeos.Rimed1.Power Tier at /org/rimeos/Rimed1). Only a
+// connection that is rimed answers it: power-profiles-daemon has no such object
+// and nobody answers an unowned name. So "ppd" means "the power-profiles name
+// is rimed's", not merely "the name has an owner". That call is the only
+// process the "ppd" path ever starts: the polling mutant in
+// tests/run-power-profile-service-test.sh counts the busctl calls and fails on
+// a second one.
 //
 // The three tier IDs are exactly rimed's AND power-profiles-daemon's
 // (performance, balanced, power-saver). Rime has no other tier: `ultra-max` and
@@ -112,17 +120,21 @@ Singleton {
 
     // ── which backend ───────────────────────────────────────────────────────
     readonly property Process ownerProc: Process {
-        command: ["busctl", "--system", "call", "org.freedesktop.DBus", "/org/freedesktop/DBus",
-                  "org.freedesktop.DBus", "NameHasOwner", "s", "org.freedesktop.UPower.PowerProfiles"]
+        // Addressed to the power-profiles name, asking for rimed's object: answered
+        // (`v s "<tier>"`, exit 0) only when rimed owns that name (see the header).
+        command: ["busctl", "--system", "call", "org.freedesktop.UPower.PowerProfiles", "/org/rimeos/Rimed1",
+                  "org.freedesktop.DBus.Properties", "Get", "ss", "org.rimeos.Rimed1.Power", "Tier"]
         running: false
         property bool owned: false
         stdout: SplitParser {
             onRead: function (line) {
-                if (/^b\s+true/.test(line.trim()))
+                if (/^v\s+s\s+"/.test(line.trim()))
                     root.ownerProc.owned = true
             }
         }
-        onExited: {
+        onExited: function (code) {
+            if (code !== 0)
+                root.ownerProc.owned = false
             root.backend = root.ownerProc.owned ? "ppd" : "rimed"
             if (root.backend === "rimed" && root.refCount > 0)
                 root._refresh()

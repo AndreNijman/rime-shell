@@ -19,8 +19,12 @@
 #    fallback  the name has no owner (an older rimed): backend "rimed", the
 #              tier read from org.rimeos.Rimed1 Power.Tier, a set runs
 #              `rime tier <id>`
+#    other     the name is owned by another daemon (bootc runs
+#              power-profiles-daemon beside rimed): backend "rimed", a set
+#              runs `rime tier <id>` and never reaches that daemon
 #
-#  Mutants (tests/mutate-settings-app.sh): fallback removed; polling put back.
+#  Mutants (tests/mutate-settings-app.sh): fallback removed; polling put back;
+#  owner check by name only (NameHasOwner).
 #  Skips (status 0) without quickshell, dbus-daemon, busctl or python3-gi.
 # ─────────────────────────────────────────────────────────────────────────────
 set -uo pipefail
@@ -130,6 +134,29 @@ ipc set performance >/dev/null
 sleep 1
 grep -qx "rime tier performance" "$CALLS" && ok "set runs rime tier performance" || bad "set did not run rime tier:$(sed 's/^/ | /' "$CALLS")"
 stop_shell
+fake_rimed_stop
+
+# ── 3. another daemon owns the API (bootc: power-profiles-daemon) ────────────
+# rimed runs without the API and a second process, standing in for
+# power-profiles-daemon, owns org.freedesktop.UPower.PowerProfiles. The name
+# HAS an owner, but it is not rimed: the Shell must keep driving rimed.
+echo "other owner: org.freedesktop.UPower.PowerProfiles is another daemon's"
+fake_rimed_start --no-ppd || exit 1
+other_ready="$HEADLESS_W/other-ppd.ready"; rm -f "$other_ready"
+PYTHONDONTWRITEBYTECODE=1 python3 "$here/lib/fake-rimed.py" --no-rimed --ready "$other_ready" \
+    > "$HEADLESS_W/other-ppd.out" 2>&1 &
+other=$!
+for _ in $(seq 1 100); do [ -s "$other_ready" ] && break; sleep 0.1; done
+[ -s "$other_ready" ] || { echo "the other power-profiles owner did not come up"; cat "$HEADLESS_W/other-ppd.out"; exit 1; }
+: > "$CALLS"
+start_shell
+if wait_for backend rimed 10; then ok "another daemon's power-profiles name: backend is rimed"; else bad "backend is '$(ipc backend)' with another daemon owning the API, expected rimed"; fi
+ipc set power-saver >/dev/null
+sleep 1
+grep -qx "rime tier power-saver" "$CALLS" && ok "set runs rime tier power-saver, not the other daemon" \
+    || bad "set did not run rime tier:$(sed 's/^/ | /' "$CALLS")"
+stop_shell
+kill "$other" 2>/dev/null; wait "$other" 2>/dev/null
 
 echo "RESULT: passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

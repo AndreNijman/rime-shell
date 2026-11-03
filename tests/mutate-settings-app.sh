@@ -11,11 +11,18 @@
 #    duplicate     --no-duplicate and the IPC hand-over to a running app dropped
 #                  → a second launch maps a second window
 #    display-in    the Display page not marked shellOnly
-#                  → Display is listed in the app and calls hyprctl/wlr-randr
+#                  → Display is listed in the app and can be opened (it is
+#                  caught there: opening it under labwc calls no hyprctl or
+#                  wlr-randr stub, so this mutant does not exercise the stub)
+#    hyprctl-page  a kept page (Updates) runs `hyprctl monitors -j` when built
+#                  → "no hyprctl, wlr-randr or niri call" fails (the stub check)
 #    no-fallback   PowerProfileService always takes the power-profiles path
 #                  → the Rimed1 fallback assertions fail
 #    polling       the 4 s Tier poll runs on the power-profiles path too
 #                  → "exactly one busctl" / "Tier read 0 times" fail
+#    owner-by-name the owner check asks only whether the power-profiles name
+#                  HAS an owner (NameHasOwner), as on bootc's
+#                  power-profiles-daemon → "another daemon ... expected rimed"
 #
 #  A mutant whose sed changed nothing is reported NOT APPLIED and fails the run,
 #  as does a suite that printed no RESULT line (a crash is not a catch).
@@ -57,10 +64,15 @@ mutant duplicate run-settings-app-test.sh "Rime Settings windows after a second 
     bin/rime-settings 's/ -n -p / -p /; s/^if "\$qs" -p "\$app" ipc show/if false \&\& "$qs" -p "$app" ipc show/'
 mutant display-in run-settings-app-test.sh "page display is listed|Hyprland/monitor tools were called" \
     src/nexus/PageRegistry.qml '/"id": "display"/,/shellOnly/ s/"shellOnly": true/"shellOnly": false/'
+mutant hyprctl-page run-settings-app-test.sh "Hyprland/monitor tools were called" \
+    src/services/config_tab/pages/UpdatesPage.qml '/^CfgScroll \{$/a\    Process { running: true; command: ["hyprctl", "monitors", "-j"] }'
 mutant no-fallback run-power-profile-service-test.sh "expected rimed|did not run rime tier" \
     src/services/system/PowerProfileService.qml 's/root\.backend = root\.ownerProc\.owned \? "ppd" : "rimed"/root.backend = "ppd"/'
 mutant polling run-power-profile-service-test.sh "busctl calls|Tier was read" \
     src/services/system/PowerProfileService.qml 's/running: root\.refCount > 0 \&\& root\.backend === "rimed"/running: root.refCount > 0/'
+
+mutant owner-by-name run-power-profile-service-test.sh "with another daemon owning the API, expected rimed" \
+    src/services/system/PowerProfileService.qml 's#"org\.freedesktop\.UPower\.PowerProfiles", "/org/rimeos/Rimed1",#"org.freedesktop.DBus", "/org/freedesktop/DBus",#; s#"org\.freedesktop\.DBus\.Properties", "Get", "ss", "org\.rimeos\.Rimed1\.Power", "Tier"\]#"org.freedesktop.DBus", "NameHasOwner", "s", "org.freedesktop.UPower.PowerProfiles"]#; s#/\^v\\s\+s\\s\+"/#/^b\\s+true/#'
 
 echo "mutate-settings-app: caught=$caught survived=$survived broken=$broken (logs: $logs)"
 [ "$survived" -eq 0 ] && [ "$broken" -eq 0 ]
