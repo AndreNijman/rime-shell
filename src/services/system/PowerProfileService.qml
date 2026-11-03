@@ -60,19 +60,60 @@ Singleton {
 
     property string current: "balanced"
 
+    // Why the last change did not happen, in words for the person who pressed
+    // the button; "" when it did. A refused `rime tier` used to be thrown away:
+    // the optimistic label snapped back on the next read and nothing said why,
+    // which reads as "the switch does nothing". `errorDetail` keeps rime's own
+    // line for anyone who needs it.
+    property string error: ""
+    property string errorDetail: ""
+
     // set: `rime tier <id>` → rimed SetTier (D-Bus, polkit-authorized). Refresh
     // from the daemon once the call returns so the UI settles on the real value.
     readonly property Process setProc: Process {
         command: []
         running: false
-        onExited: root._refresh()
+        stderr: StdioCollector { id: setErr }
+        onExited: function (code, status) {
+            if (code === 0) {
+                root.error = ""
+                root.errorDetail = ""
+            } else {
+                const text = (setErr.text || "").trim()
+                root.errorDetail = text.split("\n")[0] || ("rime tier exited " + code)
+                root.error = root.explain(text)
+            }
+            root._refresh()
+        }
+    }
+
+    // rime's refusal → a sentence. polkit allows the person signed in at this
+    // computer (the active local session) and nobody else, without a prompt.
+    function explain(detail) {
+        if (/not authori[sz]ed|AccessDenied/i.test(detail))
+            return "Not allowed: only the person signed in at this computer can change the power profile."
+        if (/rimed not running|cannot reach rimed|ServiceUnknown|NameHasNoOwner/i.test(detail))
+            return "The power service is not running, so the profile was not changed."
+        return "The power profile was not changed."
     }
 
     function setProfile(id) {
         root.current = id                       // optimistic; the daemon confirms
+        root.error = ""
         root.setProc.command = ["rime", "tier", id]
         root.setProc.running = false
         root.setProc.running = true
+    }
+
+    // An error stays up long enough to read, then goes; the next press clears
+    // it at once.
+    readonly property Timer errorTimer: Timer {
+        interval: 8000
+        running: root.error !== ""
+        onTriggered: {
+            root.error = ""
+            root.errorDetail = ""
+        }
     }
 
     // read: busctl get-property prints `s "balanced"`; pull the quoted value.
@@ -98,6 +139,9 @@ Singleton {
         running: root.refCount > 0
         repeat: true
         triggeredOnStart: true
-        onTriggered: root._refresh()
+        // Not while a set is in flight: the daemon still holds the OLD tier,
+        // and reading it would flip the label back under the user's finger.
+        // The set's own exit reads the real value.
+        onTriggered: if (!root.setProc.running) root._refresh()
     }
 }

@@ -1797,6 +1797,14 @@ jobs:
           ./tests/check-release-service.sh
           ./tests/run-release-service-test.sh
 
+      # The Dashboard's Power profile pills (PowerProfileService + PowerPanel):
+      # a refused or failed `rime tier` is said in words on the panel instead
+      # of the pill silently snapping back, and a read during the call does not
+      # flip the pick back. Real service and panel, `rime` and `busctl`
+      # stubbed. SKIPS without labwc and quickshell, as the others do here.
+      - name: Power profile switch
+        run: ./tests/run-power-profile-test.sh
+
       # Settings → Updates and the `shell` IPC target the OS's live update
       # engine calls before and after it replaces the running shell. The node
       # suite drives every state the page tells apart (and a hostile status
