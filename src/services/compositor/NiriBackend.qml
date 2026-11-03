@@ -76,6 +76,7 @@ QtObject {
         // false rather than dispatching a binary that is probably absent — the
         // day it ships, this is the one line that changes.
         nightLight:           true,
+        keyboardLayouts:     false,
         motion:               false
     })
 

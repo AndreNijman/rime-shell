@@ -47,8 +47,20 @@ QtObject {
     /// The attached property remains the right tool for an item that does NOT
     /// know its window — see ROADMAP/state/agents/p1-040.md.
     function factorForScreen(screen) {
-        return policy.factorForHeight(screen ? screen.height : 1080)
+        return policy.factorForSize(screen ? screen.width : 1920, screen ? screen.height : 1080)
     }
+
+    /// The factor for an output of this LOGICAL size, held to what the output
+    /// can carry (theme/scaling.js maxFitScale). Height alone cannot say: a
+    /// manual 200% fits a 4K panel and wrecks a 1080p one, and what breaks is
+    /// the Dashboard and Settings overflowing, not anything the height decides.
+    function factorForSize(w, h) {
+        return Scaling.clampToFit(policy.factorForHeight(h), w, h)
+    }
+
+    /// The most a manual factor can usefully be on this output, for the
+    /// Display page to say so instead of letting the slider do nothing.
+    function maxFor(w, h) { return Scaling.maxFitScale(w, h) }
 
     // ── Why every surface builds its OWN set, and does not share one ─────────
     //

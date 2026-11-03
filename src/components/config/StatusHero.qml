@@ -29,7 +29,7 @@ import "../../"
 // ─────────────────────────────────────────────────────────────────────────────
 Item {
     id: root
-    readonly property ThemeSet theme: ThemeSet { scale: Theme.factorForHeight(Screen.height) }
+    readonly property ThemeSet theme: ThemeSet { scale: Theme.factorForSize(Screen.width, Screen.height) }
 
     property string glyph:  ""
     property color  tone:   Theme.textSecondary

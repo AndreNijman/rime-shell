@@ -10,7 +10,7 @@ import "../components/controls"
 // pane uses this one now, with its own sizes and a worded mute button).
 Item {
     id: col
-    readonly property ThemeSet theme: ThemeSet { scale: Theme.factorForHeight(Screen.height) }
+    readonly property ThemeSet theme: ThemeSet { scale: Theme.factorForSize(Screen.width, Screen.height) }
 
     property string label:  ""
     property string icon:   ""

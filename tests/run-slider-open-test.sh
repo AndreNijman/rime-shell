@@ -73,6 +73,7 @@ QtObject {
     // factor, in a tree with no compositor: 1.0.
     function factorForHeight(h)      { return 1.0 }
     function factorForScreen(screen) { return 1.0 }
+    function factorForSize(w, h)     { return 1.0 }
 }
 THEME
 

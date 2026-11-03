@@ -46,6 +46,7 @@ QtObject {
         keyboardInterception: false,
         screenShader:         false,
         nightLight:           false,
+        keyboardLayouts:     false,
         motion:               false
     })
 

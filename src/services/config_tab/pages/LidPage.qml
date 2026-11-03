@@ -53,7 +53,7 @@ import "../../"
 // that, as root, and this is a window onto it.
 CfgScroll {
     id: root
-    readonly property ThemeSet theme: ThemeSet { scale: Theme.factorForHeight(Screen.height) }   // P1-040: this output's sizes
+    readonly property ThemeSet theme: ThemeSet { scale: Theme.factorForSize(Screen.width, Screen.height) }   // P1-040: this output's sizes
 
     // Live: pressing a pill here rewrites the policy file, and the ROOT driver
     // re-reads it on its next poll. So the press lands within one driver tick

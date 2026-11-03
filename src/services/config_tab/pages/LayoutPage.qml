@@ -13,7 +13,7 @@ import "../../../components/config"
 // reflowed live via Metrics.
 CfgScroll {
     id: root
-    readonly property ThemeSet theme: ThemeSet { scale: Theme.factorForHeight(Screen.height) }   // P1-040: this output's sizes
+    readonly property ThemeSet theme: ThemeSet { scale: Theme.factorForSize(Screen.width, Screen.height) }   // P1-040: this output's sizes
 
 
     lifecycle: "live"
@@ -41,7 +41,13 @@ CfgScroll {
 
         CfgRow {
             label:       "Factor"
-            description: "Only used in Manual mode"
+            description: {
+                const s = Metrics.referenceScreen
+                const cap = s ? OutputScale.maxFor(s.width, s.height) : 0
+                return (cap > 0 && SettingsService.scaleManual > cap + 0.001)
+                    ? "Held to " + cap.toFixed(2) + "× on " + s.name + ": larger would not fit the dashboard and settings"
+                    : "Only used in Manual mode" + (cap > 0 ? " · up to " + cap.toFixed(2) + "× fits " + s.name : "")
+            }
             visible:     SettingsService.scaleMode === "manual"
             CfgSlider {
                 value:  SettingsService.scaleManual

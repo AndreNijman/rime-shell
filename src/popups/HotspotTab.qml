@@ -19,7 +19,7 @@ Item {
     // Set by NetworkPane: the panel has finished opening. Refreshes wait for it
     // (UI/UX Phase 22 — no process starts, no list rebuilt, under the pour).
     property bool settled: false
-    readonly property ThemeSet theme: ThemeSet { scale: Theme.factorForHeight(Screen.height) }   // P1-040: this output's sizes
+    readonly property ThemeSet theme: ThemeSet { scale: Theme.factorForSize(Screen.width, Screen.height) }   // P1-040: this output's sizes
 
 
     property string _ssid:      "RimeShell"

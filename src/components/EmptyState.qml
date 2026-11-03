@@ -28,7 +28,7 @@ import "../"
 // ─────────────────────────────────────────────────────────────────────────────
 Column {
     id: root
-    readonly property ThemeSet theme: ThemeSet { scale: Theme.factorForHeight(Screen.height) }
+    readonly property ThemeSet theme: ThemeSet { scale: Theme.factorForSize(Screen.width, Screen.height) }
 
     property string glyph:   ""
     property string title:   ""

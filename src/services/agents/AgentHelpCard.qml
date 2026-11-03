@@ -14,7 +14,7 @@ import "../../components/controls"
 
 Rectangle {
     id: card
-    readonly property ThemeSet theme: ThemeSet { scale: Theme.factorForHeight(Screen.height) }   // P1-040: this output's sizes
+    readonly property ThemeSet theme: ThemeSet { scale: Theme.factorForSize(Screen.width, Screen.height) }   // P1-040: this output's sizes
 
     // Fired after a dismissal from the keyboard. The card's own two buttons go
     // with it — `visible` collapses the instant AgentHelp.showOnboarding does —
