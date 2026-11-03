@@ -2,26 +2,36 @@ pragma Singleton
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import Quickshell.Services.UPower
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PowerProfileService — Rime Shell front-end for rimed, the Rime OS power daemon
-// (D-Bus org.rimeos.Rimed1.Power). Set goes through the `rime` CLI, which calls
-// SetTier over D-Bus; rimed applies the governor/EPP/platform_profile for the
-// tier and authorizes the call via polkit — passwordless for the active local
-// user. The RyzenAdj reapply loop this comment used to mention went with the
-// tiers that drove it.
+// PowerProfileService — Rime Shell front-end for Rime's power tiers.
 //
-// The three tier IDs are exactly rimed's (performance … power-saver). The current
-// tier is read from the D-Bus `Tier` property via busctl, so rimed's AC↔battery
-// auto-switching (it changes tier on plug/unplug) is reflected in the UI
-// regardless of which surface set it. If rimed is not running, reads fail
-// silently and the last/optimistic value stands.
+// TWO BACKENDS, chosen by who owns org.freedesktop.UPower.PowerProfiles:
 //
-// Singleton + refcounted. The read used to poll every 4s for the entire session
-// — one `busctl` fork every 4 seconds forever — to keep a tier label fresh on a
-// dashboard page that is almost never open. It now polls only while something
-// displays it, and re-reads immediately on acquiring the first ref, so opening
-// the page always shows the true current tier.
+//   "ppd"    rimed serves the power-profiles-daemon API (rime-os
+//            docs/nixos/desktops.md §7: power-profiles-daemon is not run, rimed
+//            owns its names and maps them 1:1 onto its tiers). The Shell then
+//            reads and writes through Quickshell's own PowerProfiles object,
+//            which follows PropertiesChanged: event-driven, no process, no
+//            timer. GNOME's power menu, KDE's battery applet and COSMIC's
+//            applet talk to the same object, so a change made in any of them,
+//            in `rime tier`, or by an AC change shows here at once.
+//   "rimed"  the name has no owner: a machine on a rimed that predates the API
+//            (bootc today). The old path stays: `rime tier <id>` sets (rimed
+//            SetTier over D-Bus, polkit-authorized), and the Tier property is
+//            re-read with busctl every 4 s while something displays it.
+//
+// The owner is asked once each time the first consumer arrives (refCount 0 → 1),
+// with one `busctl NameHasOwner` call. That is the only process the "ppd" path
+// ever starts: the polling mutant in tests/run-power-profile-service-test.sh
+// counts the busctl calls and fails on a second one.
+//
+// The three tier IDs are exactly rimed's AND power-profiles-daemon's
+// (performance, balanced, power-saver). Rime has no other tier: `ultra-max` and
+// `ultra` were removed from rimed (rimed-core/src/tier.rs; tests/tier_plan.rs
+// asserts neither parses) and must not come back here. `check-tier-parity` in
+// rime-os fails CI if this list and rimed's `Tier` disagree, in either direction.
 // ─────────────────────────────────────────────────────────────────────────────
 
 Singleton {
@@ -32,17 +42,6 @@ Singleton {
     property int interval: 4000
 
     // High→low, matching rimed's tier ladder and the historical picker order.
-    //
-    // `ultra-max` and `ultra` are NOT here and must not come back. rimed removed
-    // both in the universal-hardware pass — `rimed-core/src/tier.rs` says so, and
-    // `rimed-core/tests/tier_plan.rs` asserts that neither string parses into a
-    // Tier. This list went on offering them anyway, so two buttons sat on the
-    // System page that could only ever fail: `rime tier ultra` exits non-zero and
-    // the optimistic label snapped back on the next poll. Nobody noticed for a
-    // release; Andre found them by looking at the page.
-    //
-    // `check-tier-parity` in rime-os now fails CI if this list and rimed's
-    // `Tier` disagree, in either direction.
     readonly property var profiles: [
         {
             "id": "performance",
@@ -58,21 +57,96 @@ Singleton {
         }
     ]
 
-    property string current: "balanced"
+    // "" until the first owner check answers, then "ppd" or "rimed".
+    property string backend: ""
+    readonly property bool usesPowerProfiles: root.backend === "ppd"
 
+    // The rimed fallback's last read (or optimistic) value.
+    property string _rimedTier: "balanced"
+
+    // The effective tier. Under "ppd" a hold (Gaming Mode holds performance)
+    // shows as the held tier, which is what the machine is running.
+    readonly property string current: root.usesPowerProfiles ? root._idOf(PowerProfiles.profile) : root._rimedTier
+
+    readonly property bool hasPerformance: root.usesPowerProfiles ? PowerProfiles.hasPerformanceProfile : true
+    // "" or the reason performance is capped (lap detected, temperature).
+    readonly property string degradation: root.usesPowerProfiles
+        && PowerProfiles.degradationReason !== PerformanceDegradationReason.None
+        ? PerformanceDegradationReason.toString(PowerProfiles.degradationReason) : ""
+    // [{profile, applicationId, reason}] — who is holding a tier, e.g. Gaming Mode.
+    readonly property var holds: {
+        if (!root.usesPowerProfiles)
+            return []
+        const out = []
+        for (const h of PowerProfiles.holds)
+            out.push({ "profile": root._idOf(h.profile), "applicationId": h.applicationId, "reason": h.reason })
+        return out
+    }
+
+    function _idOf(e) {
+        switch (e) {
+            case PowerProfile.Performance: return "performance"
+            case PowerProfile.PowerSaver:  return "power-saver"
+            default:                       return "balanced"
+        }
+    }
+    function _enumOf(id) {
+        switch (id) {
+            case "performance": return PowerProfile.Performance
+            case "power-saver": return PowerProfile.PowerSaver
+            default:            return PowerProfile.Balanced
+        }
+    }
+
+    function setProfile(id) {
+        if (root.usesPowerProfiles) {
+            // Writes ActiveProfile; rimed answers with PropertiesChanged.
+            PowerProfiles.profile = root._enumOf(id)
+            return
+        }
+        root._rimedTier = id                        // optimistic; the daemon confirms
+        root.setProc.command = ["rime", "tier", id]
+        root.setProc.running = false
+        root.setProc.running = true
+    }
+
+    // ── which backend ───────────────────────────────────────────────────────
+    readonly property Process ownerProc: Process {
+        command: ["busctl", "--system", "call", "org.freedesktop.DBus", "/org/freedesktop/DBus",
+                  "org.freedesktop.DBus", "NameHasOwner", "s", "org.freedesktop.UPower.PowerProfiles"]
+        running: false
+        property bool owned: false
+        stdout: SplitParser {
+            onRead: function (line) {
+                if (/^b\s+true/.test(line.trim()))
+                    root.ownerProc.owned = true
+            }
+        }
+        onExited: {
+            root.backend = root.ownerProc.owned ? "ppd" : "rimed"
+            if (root.backend === "rimed" && root.refCount > 0)
+                root._refresh()
+        }
+    }
+    function _checkOwner() {
+        root.ownerProc.owned = false
+        root.ownerProc.running = false
+        root.ownerProc.running = true
+    }
+    property int _lastRefs: 0
+    onRefCountChanged: {
+        if (root._lastRefs === 0 && root.refCount > 0)
+            root._checkOwner()
+        root._lastRefs = root.refCount
+    }
+
+    // ── the rimed fallback ──────────────────────────────────────────────────
     // set: `rime tier <id>` → rimed SetTier (D-Bus, polkit-authorized). Refresh
     // from the daemon once the call returns so the UI settles on the real value.
     readonly property Process setProc: Process {
         command: []
         running: false
         onExited: root._refresh()
-    }
-
-    function setProfile(id) {
-        root.current = id                       // optimistic; the daemon confirms
-        root.setProc.command = ["rime", "tier", id]
-        root.setProc.running = false
-        root.setProc.running = true
     }
 
     // read: busctl get-property prints `s "balanced"`; pull the quoted value.
@@ -83,7 +157,7 @@ Singleton {
             onRead: function (line) {
                 const m = line.match(/"([^"]+)"/)
                 if (m && m[1] !== "")
-                    root.current = m[1]
+                    root._rimedTier = m[1]
             }
         }
     }
@@ -95,9 +169,8 @@ Singleton {
 
     readonly property Timer poll: Timer {
         interval: root.interval
-        running: root.refCount > 0
+        running: root.refCount > 0 && root.backend === "rimed"
         repeat: true
-        triggeredOnStart: true
         onTriggered: root._refresh()
     }
 }
