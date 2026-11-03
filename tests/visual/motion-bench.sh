@@ -38,7 +38,9 @@
 # ─────────────────────────────────────────────────────────────────────────────
 set -uo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-root="$(cd "$here/../.." && pwd)"
+# BENCH_ROOT: the tree whose shell is measured (this script stays the same
+# for an A/B of two trees).
+root="$(cd "${BENCH_ROOT:-$here/../..}" && pwd)"
 . "$root/tests/lib/headless.sh"
 headless_require quickshell labwc python3 taskset
 
@@ -80,7 +82,10 @@ headless_rime_palette dark
 log="$out/shell.log"
 # Appending, so the bench's own markers (mark) interleave with the shell's lines.
 : > "$log"
-env RIME_PACING_LOG=1 taskset -c "$cpus" quickshell -p "$root/shell.qml" >> "$log" 2>&1 & qs=$!
+# No release page: the shell would open the booted release's notes in a
+# browser on this compositor 8 s in, in the middle of the measurement.
+env RIME_PACING_LOG=1 RIME_RELEASE_JSON=/nonexistent RIME_RELEASE_OPENER=/bin/false \
+    taskset -c "$cpus" quickshell -p "$root/shell.qml" >> "$log" 2>&1 & qs=$!
 for _ in $(seq 1 160); do grep -q "Configuration Loaded" "$log" && break; sleep 0.25; done
 grep -q "Configuration Loaded" "$log" || { echo "FAIL: the shell did not load"; tail -20 "$log"; exit 1; }
 sleep 5
@@ -104,6 +109,19 @@ except Exception:
     print("0 0")
 PY
 }
+# Per thread "<tid> <cpu ns> <context switches>", to diff over threads alive
+# at both ends (a thread that exits in between would subtract its count).
+threads() {
+    for t in /proc/"$1"/task/*; do
+        printf '%s %s %s\n' "${t##*/}" "$(cut -d' ' -f1 "$t/schedstat" 2>/dev/null)" \
+            "$(awk '/ctxt_switches/ { s += $2 } END { print s }' "$t/status" 2>/dev/null)"
+    done
+}
+tdiff() {  # tdiff BEFORE AFTER -> "<cpu ms> <context switches>"
+    awk 'NR == FNR { c[$1] = $2; s[$1] = $3; next }
+         ($1 in c) { dc += $2 - c[$1]; ds += $3 - s[$1] }
+         END { printf "%d %d\n", dc / 1000000, ds }' "$1" "$2"
+}
 rss() { awk '/^VmRSS/ { print $2 }' "/proc/$1/status" 2>/dev/null; }
 
 # name | open | close
@@ -112,6 +130,10 @@ all=(
     "network|wifi-toggle toggle|wifi-toggle toggle"
     "notifications|notification-toggle toggle|notification-toggle toggle"
     "clipboard|clipboard-toggle toggle|clipboard-toggle toggle"
+    "quick|quick-toggle toggle|quick-toggle toggle"
+    "power|PowerMenu-toggle toggle|PowerMenu-toggle toggle"
+    "wallpaper|wallpaper-toggle toggle|wallpaper-toggle toggle"
+    "nexus|nexus open appearance|nexus close"
 )
 surfaces=()
 for e in "${all[@]}"; do
@@ -130,11 +152,12 @@ sleep 3
 rss0="$(rss "$qs")"
 
 mark "idle-start"
-read -r q0 s0 < <(sample "$qs"); read -r k0 _ < <(sample "$comp_pid")
+threads "$qs" > "$out/.t0"; read -r k0 _ < <(sample "$comp_pid")
 sleep "$idle"
-read -r q1 s1 < <(sample "$qs"); read -r k1 _ < <(sample "$comp_pid")
+threads "$qs" > "$out/.t1"; read -r k1 _ < <(sample "$comp_pid")
 mark "idle-end"
-printf 'idle\t%s\t%s\t%s\t%s\n' "$idle" "$((q1 - q0))" "$((s1 - s0))" "$((k1 - k0))" > "$out/idle.tsv"
+read -r qd sd < <(tdiff "$out/.t0" "$out/.t1"); rm -f "$out/.t0" "$out/.t1"
+printf 'idle\t%s\t%s\t%s\t%s\n' "$idle" "$qd" "$sd" "$((k1 - k0))" > "$out/idle.tsv"
 
 : > "$out/cycles.tsv"
 for e in "${surfaces[@]}"; do
