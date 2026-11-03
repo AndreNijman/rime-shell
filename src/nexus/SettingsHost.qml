@@ -2,6 +2,7 @@ import QtQuick
 import "../"
 import "../components"
 import "../components/controls"
+import "../components/config"
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SettingsHost — the settings app's body: the navigation, the page header and
@@ -22,6 +23,13 @@ import "../components/controls"
 //         onPageSelected: id => NexusState.page = id
 //         onCloseRequested: NexusState.close()
 //     }
+//
+// It also hosts the ONE apply bar (CfgApplyBar). A page that holds a draft
+// declares it as a `commit: CfgCommit { … }`; the bar floats over the bottom
+// of the page area while the current page's commit has something to show, and
+// the page is given the bar's height as bottom padding. A window that hosts
+// this Item — Nexus, or a standalone settings app built from the same pages —
+// gets the bar, its keys (Ctrl+Enter, Ctrl+S) and the padding with it.
 // ─────────────────────────────────────────────────────────────────────────────
 Item {
     id: host
@@ -43,6 +51,10 @@ Item {
         const t = Math.max(0, Math.min(1, (host.reveal - a) / (b - a)))
         return t * t * (3 - 2 * t)
     }
+
+    // The apply bar, for a window that wants to know whether a draft is
+    // showing (and for the suites, which measure it).
+    readonly property alias applyBar: applyBar
 
     signal pageSelected(string id)
     signal closeRequested()
@@ -173,6 +185,7 @@ Item {
             opacity: host._part(0.35, 1)
 
             Repeater {
+                id: pagesRep
                 model: PageRegistry.pages
 
                 delegate: LazyPage {
@@ -196,11 +209,62 @@ Item {
                     // Pages that consume refcounted telemetry need to know
                     // whether a user can actually see them; without this a
                     // poller started here would run until logout.
-                    onLoaded: if (modelData.needsScreen && item)
-                        item.onScreen = Qt.binding(() => host.live
-                                                         && host.page === modelData.id
-                                                         && !LockState.locked)
+                    onLoaded: {
+                        const p = item
+                        if (!p) return
+                        if (modelData.needsScreen)
+                            p.onScreen = Qt.binding(() => host.live
+                                                          && host.page === modelData.id
+                                                          && !LockState.locked)
+                        // Room under the last control while the apply bar
+                        // shows for this page's draft, so the bar never sits
+                        // on it.
+                        if (p.bottomInset !== undefined)
+                            p.bottomInset = Qt.binding(() => p.commit && p.commit.shown
+                                                             ? applyBar.reserve : 0)
+                    }
                 }
+            }
+        }
+
+        // ── The apply bar ───────────────────────────────────────────────
+        // One, for whichever page is current, over the bottom of the same
+        // area the pages fill. Clipped to that area, so it comes up from the
+        // page's own bottom edge rather than from the window's frame.
+        readonly property Item currentPage: {
+            pagesRep.count   // re-read once the Repeater has built its pages
+            const lp = pagesRep.itemAt(host._indexOf(host.page))
+            return lp && lp.item ? lp.item : null
+        }
+
+        Item {
+            anchors {
+                left: parent.left
+                right: parent.right
+                top: parent.top
+                bottom: parent.bottom
+                topMargin: header.height
+                leftMargin: theme.px(8)
+                rightMargin: theme.px(8)
+                bottomMargin: theme.px(8)
+            }
+            clip: true
+            opacity: host._part(0.35, 1)
+
+            CfgApplyBar {
+                id: applyBar
+                anchors {
+                    left: parent.left
+                    right: parent.right
+                    bottom: parent.bottom
+                    leftMargin: theme.px(8)
+                    rightMargin: theme.px(8)
+                }
+                height: implicitHeight
+                theme: host.theme
+                model: pane.currentPage && pane.currentPage.commit !== undefined
+                       ? pane.currentPage.commit : null
+                keysEnabled: host.live
             }
         }
     }
