@@ -48,6 +48,13 @@ CfgScroll {
         return "unknown tier: " + id
     }
 
+    // What the tier row shows right now: the selected tier and the reason
+    // line (empty when hidden). Rime Settings' IPC (`settings powerState`)
+    // returns it, so a test reads the page, not the service behind it.
+    function tierState() {
+        return JSON.stringify({ tier: tierControl.value, reason: tierReason.visible ? tierReason.status : "" })
+    }
+
     // ── rimed reads (busctl --system; one shot each) ─────────────────────────
     property bool autoSwitch: true
     property bool batterySupported: false
@@ -137,10 +144,22 @@ CfgScroll {
                 ? "The same setting as your desktop's own power menu: both talk to rimed."
                 : "Applied by rimed: CPU policy, energy preference and the firmware profile."
             CfgSegmented {
+                id: tierControl
                 options: PowerProfileService.profiles.map(p => ({ value: p.id, label: p.label }))
                 value: PowerProfileService.current
                 onSelected: function (v) { root.chooseTier(v) }
             }
+        }
+
+        // Why a press did not change the tier (rimed refused it, rimed not
+        // running). Without it the tier snapped back and said nothing.
+        CfgRow {
+            id: tierReason
+            visible: PowerProfileService.error !== ""
+            label: "Not changed"
+            hoverable: false
+            statusWarns: true
+            status: PowerProfileService.error
         }
 
         CfgRow {

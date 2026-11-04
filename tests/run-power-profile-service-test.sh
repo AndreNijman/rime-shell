@@ -13,9 +13,12 @@
 #    ppd       rimed owns org.freedesktop.UPower.PowerProfiles: the backend is
 #              "ppd"; a tier changed elsewhere (another desktop, `rime tier`)
 #              shows within 2 s with no read by the Shell (PropertiesChanged);
-#              a set writes ActiveProfile; a hold shows as the held tier; over
-#              the whole run the Shell started exactly ONE busctl (the owner
-#              check) and read rimed's Tier zero times
+#              a set writes ActiveProfile (one `busctl set-property` per press);
+#              a hold shows as the held tier; a write rimed refuses shows the
+#              pick at once, then the reason (`error`) and the tier in force
+#              again, as soon as the refusal comes back; over the whole run the
+#              Shell read with exactly ONE busctl (the owner check) and read
+#              rimed's Tier zero times
 #    fallback  the name has no owner (an older rimed): backend "rimed", the
 #              tier read from org.rimeos.Rimed1 Power.Tier, a set runs
 #              `rime tier <id>`
@@ -30,7 +33,9 @@
 #
 #  Mutants (tests/mutate-settings-app.sh): fallback removed; polling put back;
 #  owner check by name only (NameHasOwner); no queue (a set before the check
-#  goes to `rime tier`); no kick (a queued set with no consumer never asks).
+#  goes to `rime tier`); no kick (a queued set with no consumer never asks);
+#  Quickshell writes (the old path: no reason, the refused pick stays); the
+#  refused pick kept; the refusal's reason dropped.
 #  Skips (status 0) without quickshell, dbus-daemon, busctl or python3-gi.
 # ─────────────────────────────────────────────────────────────────────────────
 set -uo pipefail
@@ -124,11 +129,35 @@ case "$(ipc holds)" in *org.rimeos.GameMode*) ok "the hold is listed" ;; *) bad 
 wait "$holder" 2>/dev/null
 if wait_for current power-saver 3; then ok "the hold's end returns to the chosen tier"; else bad "after the hold: current is '$(ipc current)'"; fi
 
+# A write rimed refuses (polkit said no). The refusal comes back after 1.5 s,
+# so the pick must show at once, then give way to the tier in force, with why.
+fake_rimed_call() { "$real_busctl" --address="$DBUS_SYSTEM_BUS_ADDRESS" call org.rimeos.Rimed1 /org/rimeos/Rimed1 org.rimeos.Rimed1.Test "$@" >/dev/null; }
+fake_rimed_call RefuseSets su "not authorized for net.hadess.PowerProfiles.switch-profile" 1500
+ipc set performance >/dev/null
+[ "$(ipc current)" = performance ] && ok "refused: the pick shows at once (no wait for rimed)" \
+    || bad "refused: the pick did not show at once (current '$(ipc current)')"
+if wait_for current power-saver 4; then ok "refused: the label is back on the tier in force (power-saver)"; else bad "refused: the refused pick stayed (current '$(ipc current)')"; fi
+case "$(ipc error)" in
+    *"Not allowed"*) ok "refused: says why ('$(ipc error)')" ;;
+    *) bad "refused: no reason shown (error '$(ipc error)', detail '$(ipc errorDetail)')" ;;
+esac
+grep -q "ActiveProfile performance refused" "$FAKE_RIMED_LOG" && ok "refused: rimed refused the write" \
+    || bad "refused: the write never reached rimed's refusal$(sed 's/^/ | /' "$FAKE_RIMED_LOG")"
+[ "$($B get-property org.rimeos.Rimed1 /org/rimeos/Rimed1 org.rimeos.Rimed1.Power Tier)" = 's "power-saver"' ] \
+    && ok "refused: rimed's Tier did not move" || bad "refused: rimed's Tier moved"
+fake_rimed_call RefuseSets su "" 0
+ipc set balanced >/dev/null
+if wait_for current balanced 3; then ok "after a refusal the next set lands (balanced)"; else bad "after a refusal: current is '$(ipc current)'"; fi
+[ -z "$(ipc error)" ] && ok "the next press cleared the reason" || bad "the reason stayed: '$(ipc error)'"
+
 # Polling: give a timer 9 s to show itself.
 sleep 9
-n="$(count '^busctl ' "$CALLS")"
-[ "$n" = 1 ] && ok "one busctl in the whole run (the owner check): no polling" \
-    || bad "the Shell started $n busctl calls (expected 1):$(sed 's/^/ | /' "$CALLS")"
+n="$(grep '^busctl ' "$CALLS" | grep -vc ' set-property ' || true)"
+[ "$n" = 1 ] && ok "one busctl read in the whole run (the owner check): no polling" \
+    || bad "the Shell started $n busctl calls that were not writes (expected 1):$(sed 's/^/ | /' "$CALLS")"
+w="$(grep -c '^busctl --system set-property org.freedesktop.UPower.PowerProfiles ' "$CALLS" || true)"
+[ "$w" = 3 ] && ok "one busctl write per press (3 presses)" \
+    || bad "$w busctl writes for 3 presses:$(sed 's/^/ | /' "$CALLS")"
 stop_shell
 fake_rimed_stop
 

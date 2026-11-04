@@ -1901,7 +1901,8 @@ jobs:
 
       # The Shell's power control against a fake rimed on a private bus:
       # follows PropertiesChanged on the power-profiles API, sets through
-      # ActiveProfile, falls back to Rimed1 Tier when the name has no owner.
+      # ActiveProfile with busctl (a refusal shows its reason and the tier in
+      # force again), falls back to Rimed1 Tier when the name has no owner.
       # SKIPS without quickshell.
       - name: The power control follows rimed's power-profiles API
         run: ./tests/run-power-profile-service-test.sh

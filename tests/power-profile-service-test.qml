@@ -23,5 +23,7 @@ ShellRoot {
         function current(): string { return PowerProfileService.current }
         function holds(): string { return JSON.stringify(PowerProfileService.holds) }
         function set(id: string): string { PowerProfileService.setProfile(id); return "ok" }
+        function error(): string { return PowerProfileService.error }
+        function errorDetail(): string { return PowerProfileService.errorDetail }
     }
 }

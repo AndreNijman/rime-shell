@@ -13,7 +13,8 @@
 #      .Updates   State, Available, Running, Message (s)    Check(), Apply()
 #      .Power     Tier, Tiers, OnAcPower, AutoSwitch        SetTier(s), SetAutoSwitch(b), TierChanged(s)
 #      .Battery   ChargeStart, ChargeEnd (y), Supported (b) SetChargeThresholds(yy)
-#      .Test      (this fake only) Change(s iface, s prop, v value), Calls() -> as
+#      .Test      (this fake only) Change(s iface, s prop, v value), Calls() -> as,
+#                 RefuseSets(s text, u delay_ms)
 #    org.freedesktop.UPower.PowerProfiles  /org/freedesktop/UPower/PowerProfiles
 #    net.hadess.PowerProfiles              /net/hadess/PowerProfiles
 #      ActiveProfile (rw), Profiles, PerformanceDegraded, PerformanceInhibited,
@@ -27,6 +28,13 @@
 #  `Test.Change` is how a suite changes state "from elsewhere" (the CLI, another
 #  desktop): the property moves and PropertiesChanged goes out, exactly as if
 #  rimed had done it, without any client method being involved.
+#
+#  `Test.RefuseSets(text, delay_ms)`: until called again with text "", every
+#  write of ActiveProfile is refused the way rimed refuses one polkit denies
+#  (org.freedesktop.DBus.Error.AccessDenied, `text`), `delay_ms` after it
+#  arrived, and nothing moves. GDBus answers a property write itself and a
+#  Python setter cannot hand it an error, so the refusal is sent by a message
+#  filter that takes the Set before GDBus sees it.
 #
 #  Options: --no-ppd (do not own the power-profiles names: the "older rimed"
 #  case), --no-rimed (own only the power-profiles names), --log FILE,
@@ -90,6 +98,9 @@ RIMED_XML = """
       <arg name="value" type="v" direction="in"/>
     </method>
     <method name="Calls"><arg name="calls" type="as" direction="out"/></method>
+    <method name="RefuseSets">
+      <arg name="text" type="s" direction="in"/><arg name="delay_ms" type="u" direction="in"/>
+    </method>
   </interface>
 </node>
 """
@@ -141,6 +152,7 @@ class Fake:
         self.holds = {}  # cookie -> (profile, reason, app_id, sender)
         self.next_cookie = 1
         self.conn = None
+        self.refuse = ("", 0)  # (text, delay_ms) for Test.RefuseSets
 
     # ── bookkeeping ─────────────────────────────────────────────────────────
     def note(self, line):
@@ -250,6 +262,8 @@ class Fake:
             else:
                 inv.return_dbus_error("org.freedesktop.DBus.Error.InvalidArgs", "no interface %s" % t_iface)
                 return
+        elif iface == "org.rimeos.Rimed1.Test" and method == "RefuseSets":
+            self.refuse = (args[0], int(args[1]))
         elif iface == "org.rimeos.Rimed1.Test" and method == "Calls":
             ret = GLib.Variant("(as)", (list(self.calls),))
         else:
@@ -302,6 +316,25 @@ class Fake:
             return True
         return False
 
+    # Runs on GDBus's worker thread for every message: a refused ActiveProfile
+    # write is answered here and never reaches ppd_set.
+    def refuse_filter(self, conn, msg, incoming):
+        text, delay = self.refuse
+        if (not incoming or not text or msg.get_message_type() != Gio.DBusMessageType.METHOD_CALL
+                or msg.get_interface() != "org.freedesktop.DBus.Properties" or msg.get_member() != "Set"):
+            return msg
+        body = msg.get_body().unpack()
+        if body[0] not in [n for n, _p in PPD] or body[1] != "ActiveProfile":
+            return msg
+        reply = Gio.DBusMessage.new_method_error_literal(msg, "org.freedesktop.DBus.Error.AccessDenied", text)
+
+        def answer():
+            self.note("Set %s.ActiveProfile %s refused" % (body[0], body[2]))
+            conn.send_message(reply, Gio.DBusSendMessageFlags.NONE)
+            return False
+        GLib.timeout_add(delay, answer)
+        return None
+
     # ── bus ─────────────────────────────────────────────────────────────────
     def run(self):
         addr = GLib.getenv("DBUS_SYSTEM_BUS_ADDRESS")
@@ -309,6 +342,7 @@ class Fake:
             sys.exit("fake-rimed: DBUS_SYSTEM_BUS_ADDRESS is not set; refusing to touch the real system bus")
         self.conn = Gio.DBusConnection.new_for_address_sync(
             addr, Gio.DBusConnectionFlags.AUTHENTICATION_CLIENT | Gio.DBusConnectionFlags.MESSAGE_BUS_CONNECTION, None, None)
+        self.conn.add_filter(self.refuse_filter)
         names = []
         if not self.args.no_rimed:
             node = Gio.DBusNodeInfo.new_for_xml(RIMED_XML)

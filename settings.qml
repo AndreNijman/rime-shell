@@ -104,5 +104,11 @@ ShellRoot {
                 return "power page not built"
             return item.chooseTier(tier)
         }
+
+        // Test hook: what the Power page's tier row shows (JSON: tier, reason).
+        function powerState(): string {
+            const item = loader.item ? loader.item.pageItem("power") : null
+            return item ? item.tierState() : "power page not built"
+        }
     }
 }
