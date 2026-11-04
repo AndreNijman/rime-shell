@@ -133,15 +133,26 @@ CfgScroll {
             }
         }
 
+        // What the running Hyprland loaded, not a choice: Lua is its only
+        // config manager. Shown only on Hyprland, where it is a fact.
         CfgRow {
-            label:     "Config provider"
-            hoverable: false
+            visible:     Compositor.isHyprland
+            label:       "Hyprland config"
+            description: ShellState.hyprConfig === "ok" || ShellState.hyprConfig === "unknown"
+                         ? "" : ShellState.hyprConfigFix
+            hoverable:   false
             Text {
                 // A value, not a command: CfgRow's readout treatment (UI/UX Phase 17).
-                text:        ShellState.configProvider
+                text: ({ "ok": "hyprland.lua, Rime modules loaded",
+                         "unknown": "checking…",
+                         "no-config": "no hyprland.lua",
+                         "not-lua": "not a Lua config",
+                         "modules-missing": "Rime modules not loaded" })[ShellState.hyprConfig]
+                      || ShellState.hyprConfig
                 font.family: Theme.fontMono
                 font.pixelSize: theme.typeMono
-                color:       Theme.textSecondary
+                color:       ShellState.hyprConfig === "ok" || ShellState.hyprConfig === "unknown"
+                             ? Theme.textSecondary : Theme.danger
             }
         }
     }

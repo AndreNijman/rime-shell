@@ -39,7 +39,7 @@ jobs:
       - name: Update pacman & install base tools
         run: |
           pacman -Syu --noconfirm
-          pacman -S --needed --noconfirm git base-devel python nodejs
+          pacman -S --needed --noconfirm git base-devel python nodejs luajit
 
       - name: Validate pacman dependencies exist in repos
         run: |
@@ -276,6 +276,17 @@ jobs:
           # option does"). It is a picture that opens a menu naming each layout
           # with what it does; the choice is saved and put back after a reload.
           ./tests/check-layout-menu.sh
+
+      - name: The shell talks to Hyprland in Lua only
+        run: |
+          # Hyprland's only config manager is Lua. The shell's old "conf"
+          # dialect was chosen by a probe that read "conf" until it answered,
+          # so against a Lua Hyprland its writes were silent no-ops. Runs the
+          # shipped functions: Lua string escaping (read back by luajit), a
+          # hostile shader file name, the eval-only writes, the config probe's
+          # five answers, the installers' refusal of a .conf-only home, and
+          # matugen's Lua colour module. Each rule is mutated and must fail.
+          ./tests/check-hypr-lua-only.sh
 
       - name: Every singleton a file uses is imported there
         run: |
@@ -1084,17 +1095,24 @@ jobs:
           grep -qE '"\$browser",\s*"(firefox|zen)"' <<<"$code" \
             && { echo "✗ the browser bind names a browser"; fail=1; }
 
-          # `hyprctl keyword` is refused by a Lua config ("keyword can't work
-          # with non-legacy parsers. Use eval."), so every live config write has
-          # to have a lua branch. setGaps was the one that did not.
-          if grep -n 'hyprctl keyword' src/services/compositor/HyprlandBackend.qml \
-             | grep -v '_lua' | grep -qv 'root._lua'; then
-            grep -q '_lua' src/services/compositor/HyprlandBackend.qml \
-              || { echo "✗ a live keyword write has no Lua branch"; fail=1; }
+          # Hyprland's only config manager is Lua: the keyword request is
+          # refused ("keyword can't work with non-legacy parsers. Use eval.")
+          # and there is no .conf dialect to fall back to. So NOTHING under
+          # src/ (QML, JS, src/scripts/) may call it, in either spelling: the
+          # shell string `hyprctl keyword` or an argv ["hyprctl", "keyword"].
+          # Prose that names the old request is reworded, not exempted, so the
+          # check stays one grep with no allow-list to rot.
+          if grep -rnE "hyprctl[\"', ]+keyword" src/; then
+            echo "✗ src/ still uses the hyprctl keyword request; use hyprctl eval"; fail=1
           fi
-          grep -q "hyprctl eval 'hl.config({ general = { gaps_in =" \
+          # The old dialect switch is gone, not defaulted: a probe that read
+          # "conf" until it answered is what made every write a silent no-op.
+          if grep -rnE 'configProvider|root\._lua\b' src/; then
+            echo "✗ src/ still branches on the removed .conf/Lua dialect switch"; fail=1
+          fi
+          grep -q 'gaps_in = ${i}, gaps_out = ${o}' \
             src/services/compositor/HyprlandBackend.qml \
-            || { echo "✗ setGaps has no hyprctl eval branch; the gaps slider is inert on Lua"; fail=1; }
+            || { echo "✗ setGaps does not write both gaps in one hyprctl eval"; fail=1; }
 
           [ "$fail" -eq 0 ] || exit 1
           echo "✓ the Hyprland keybind generator writes Lua and the live writes use eval"

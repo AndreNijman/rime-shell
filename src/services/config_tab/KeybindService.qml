@@ -1269,17 +1269,15 @@ QtObject {
         //
         // Appended at the END so it loads after the Rime defaults, which is what
         // makes claim()/disable() reach a bind that already exists.
-        // A machine still on hyprlang gets NOTHING out of this, and would get it
-        // silently: the module is written, no hyprland.lua exists to require it,
-        // and the Keybinds page looks like it worked. That is the exact shape of
-        // the regression ShellState documents, so it is said out loud instead.
-        // /usr/libexec/rime-hypr-migrate is what fixes it, and on Rime it has
-        // already run at login.
-        if (ShellState.configProvider !== "lua") {
-            console.warn("KeybindService: this session has no ~/.config/hypr/hyprland.lua, "
-                         + "so the generated keybinds are not loaded by anything. "
-                         + "Hyprland 0.55 deprecated hyprlang; run "
-                         + "/usr/libexec/rime-hypr-migrate to convert the config.")
+        // A home with no hyprland.lua gets NOTHING out of this, and would get
+        // it silently: the module is written, nothing requires it, and the
+        // Keybinds page looks like it worked. HyprlandBackend.checkHyprConfig() asks
+        // the running Hyprland and posts a notice naming rime-hypr-migrate;
+        // this is the same fact at the moment it matters, in the log.
+        if (ShellState.hyprConfig === "no-config" || ShellState.hyprConfig === "not-lua") {
+            console.warn("KeybindService: Hyprland is not running ~/.config/hypr/hyprland.lua ("
+                         + ShellState.hyprConfig + "), so the generated keybinds are not "
+                         + "loaded by anything. " + ShellState.hyprConfigFix)
         }
 
         _includeProc.command = ["bash", "-c", [

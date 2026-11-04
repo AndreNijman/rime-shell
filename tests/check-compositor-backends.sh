@@ -222,7 +222,7 @@ HYPRCTL_ALLOWED=(
     # own config — so a capability here would wrap a one-backend feature in a
     # one-backend capability and answer false everywhere it was asked.
     "src/services/config_tab/KeybindService.qml"
-    # `hyprctl dispatch exit` and `hyprctl dispatch dpms`. This file IS the
+    # `hyprctl dispatch 'hl.dsp.exit()'` and `hl.dsp.dpms`. This file IS the
     # compositor adapter for the helper scripts, in the same sense
     # src/services/compositor/ is for QML — PowerControl.sh and DpmsControl.sh
     # used to be listed here, each with its own private detection, and the
@@ -246,7 +246,7 @@ hyprctl_spawns_in() {
 # leak, which is exactly the kind of gap this check exists to close.
 #
 # Rooting the scan at the repo instead would be worse, not better: it would
-# newly match install.sh's `log_info "hyprctl dispatch exit"` and
+# newly match install.sh's `log_info "hyprctl dispatch 'hl.dsp.exit()'"` and
 # dots-extra/install-arch.sh's `["hyprctl", "binds", "-j"]`. Those are
 # installers for a Hyprland desktop, not shell code that should be asking an
 # adapter, and failing on them would make this check something to work around.

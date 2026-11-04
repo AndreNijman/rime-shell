@@ -41,7 +41,7 @@
 # itself dies, the guard goes with it and cannot reach a compositor to revert
 # through anyway. What survives that is the persisted layout on disk, and the
 # engine persists on every apply — measured, not assumed: one apply with no Keep
-# writes ~/.config/kanshi/config and ~/.config/hypr/rime-display.conf with the
+# writes ~/.config/kanshi/config and ~/.config/hypr/rime/monitors.lua with the
 # layout nobody confirmed, and kanshi reapplies its profile at the next login.
 #
 # That is now closed by one flag in rime-display-apply, which lives in rime-os:

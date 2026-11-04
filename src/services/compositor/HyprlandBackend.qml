@@ -17,12 +17,14 @@ import "../../shapes/fluid/geometry.js" as Geo
 // scattered through them. Resolving that singleton is what constructs it, and
 // constructing it off Hyprland logs.
 //
-// ── Two dialects ─────────────────────────────────────────────────────────────
-// Hyprland can be configured in its own .conf format or, with the Lua plugin, in
-// Lua. Dispatch syntax differs between them and ShellState.configProvider says
-// which one this machine uses. Every dispatch in this file goes through
-// _dispatch()/_keyword() so the branch exists once rather than at nine call
-// sites, which is how the Lua path drifted last time.
+// ── One dialect: Lua ─────────────────────────────────────────────────────────
+// Hyprland 0.55+ reads hyprland.lua and nothing else: the old .conf parser is
+// gone, the old keyword request is refused ("keyword can't work with
+// non-legacy parsers. Use eval."), and a dispatch takes one Lua expression. So every
+// write in this file is `hyprctl eval` and every dispatch is an `hl.dsp.*`
+// expression; there is no second path to drift. A home that still has only a
+// hyprland.conf is not run "in compatibility": checkHyprConfig() below
+// says so loudly and names rime-hypr-migrate.
 //
 // ── What costs something ─────────────────────────────────────────────────────
 // Workspaces and the focused monitor are pushed by the Quickshell.Hyprland
@@ -122,9 +124,6 @@ QtObject {
     readonly property bool windowsPolled: true
     readonly property bool titlePolled:   true
 
-    // ── Dialect ───────────────────────────────────────────────────────────────
-    readonly property bool _lua: ShellState.configProvider === "lua"
-
     // ── One Process per concern, deliberately not one shared Process ──────────
     // `running = false; running = true` on a Process TERMINATES whatever it is
     // currently running. Consolidating the four commands below onto one shared
@@ -141,7 +140,7 @@ QtObject {
     // reset`, Hyprland stays in RimeShell_clean and EVERY KEY falls through to
     // the shell until Hyprland is restarted. A wallpaper apply landing while
     // focus mode is mid-write is the mundane version: gaps half-applied.
-    property Process _keywordProc: Process { command: []; running: false }
+    property Process _accentProc: Process { command: []; running: false }
     property Process _gapsWriteProc: Process {
         command: []; running: false
         // New gaps move the band between a window and the frame: keep the
@@ -152,7 +151,7 @@ QtObject {
     property Process _shaderApplyProc: Process {
         command: []
         running: false
-        // The apply is a keyword write plus a damage cycle; re-read afterwards
+        // The apply is an eval write plus a damage cycle; re-read afterwards
         // so the tile reflects what Hyprland actually ended up with rather than
         // what was asked for.
         onRunningChanged: if (!running) root.refreshScreenShader()
@@ -164,18 +163,22 @@ QtObject {
         proc.running = true
     }
 
-    // A dispatcher call. `conf` takes the verb and its arguments positionally;
-    // `lua` takes one expression string.
-    function _dispatch(confArgs, luaExpr) {
-        if (root._lua) Hyprland.dispatch(luaExpr)
-        else           Hyprland.dispatch(confArgs)
-    }
-
-    // A config keyword write. hyprctl rather than the dispatch socket because
-    // `keyword` is not a dispatcher.
-    function _keyword(path, value, luaExpr) {
-        if (root._lua) root._start(root._keywordProc, ["hyprctl", "eval", luaExpr])
-        else           root._start(root._keywordProc, ["hyprctl", "keyword", path, value])
+    // A Lua string literal for a value that came from outside the shell (a
+    // file name, a workspace name): backslash, quote and every control byte
+    // escaped, the same rule as rime-os rime-display-apply / rime-input-apply
+    // lua_str, so the value is data inside the expression and never code.
+    function _luaStr(value) {
+        const v = String(value)
+        let out = ""
+        for (let i = 0; i < v.length; i++) {
+            const ch = v.charAt(i)
+            const c = v.charCodeAt(i)
+            if (ch === "\\")      out += "\\\\"
+            else if (ch === '"')   out += '\\"'
+            else if (c < 0x20 || c === 0x7f) out += "\\" + ("00" + c).slice(-3)
+            else                   out += ch
+        }
+        return '"' + out + '"'
     }
 
     // ── Workspaces ────────────────────────────────────────────────────────────
@@ -335,6 +338,10 @@ QtObject {
                 root._pushLayerRules()
                 root.syncWindowCorners()
                 root._applyPreferredLayout()
+                root._pushAccent()
+                // A reload is also the moment a broken or half-migrated
+                // config shows itself: look again.
+                root.checkHyprConfig()
             }
         }
     }
@@ -342,10 +349,9 @@ QtObject {
     Component.onCompleted: {
         root._refreshTitle()
         root._refreshWindows()
-        // The provider may already be known (config_Provider.json read before
-        // this backend was built), in which case on_LuaChanged never fires.
-        if (root._lua) root._pushLayerRules()
+        root._pushLayerRules()
         root.syncWindowCorners()
+        root._applyPreferredLayout()
 
         // One one-shot probe at startup, `hyprctl getoption`. It used to run
         // from QuickSettings.Component.onCompleted instead, so the fork
@@ -357,6 +363,66 @@ QtObject {
         root.refreshScreenShader()
     }
 
+    // ── Is Hyprland running Rime's Lua config? ────────────────────────────────
+    // ShellState holds the answer and raises the notice (ShellState.hyprConfig);
+    // the probe lives here because only this adapter spawns hyprctl.
+    //
+    // `hyprctl eval` replies exactly "ok" when the chunk ran, the error text
+    // when it raised, and "eval is only supported with the lua config manager"
+    // otherwise (Hyprland src/ipc/s1/Commands.cpp evalRequest). rime.keybindings
+    // is the module the shell's own shell-keybinds module builds on, so its
+    // presence in package.loaded is the proof Rime's tree loaded.
+    property int _hyprConfigRetries: 0
+    function checkHyprConfig() {
+        root._hyprConfigProbe.running = false
+        root._hyprConfigProbe.running = true
+    }
+    property Process _hyprConfigProbe: Process {
+        running: false
+        command: ["bash", "-c",
+            "f=\"$HOME/.config/hypr/hyprland.lua\"; "
+            + "[ -f \"$f\" ] || { echo no-config; exit 0; }; "
+            + "r=\"$(hyprctl eval 'if package.loaded[\"rime.keybindings\"] == nil then "
+            + "error(\"rime-modules-missing\", 0) end' 2>&1)\"; "
+            + "case \"$r\" in "
+            + "ok) echo ok ;; "
+            + "*rime-modules-missing*) echo modules-missing ;; "
+            + "*'only supported with the lua'*) printf 'not-lua %s\\n' \"$r\" ;; "
+            + "*) printf 'unknown %s\\n' \"$r\" ;; "
+            + "esac"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const line = this.text.trim()
+                const sp = line.indexOf(" ")
+                const state = sp < 0 ? line : line.slice(0, sp)
+                const detail = sp < 0 ? "" : line.slice(sp + 1)
+                if (state === "unknown" || state === "") {
+                    // hyprctl could not reach the instance (no signature in
+                    // this environment yet): not a config verdict. Ask again.
+                    console.warn("Rime Shell: could not ask Hyprland about its config: " + detail)
+                    ShellState.reportHyprConfig("unknown", detail)
+                    if (root._hyprConfigRetries++ < 12) root._hyprConfigRetry.restart()
+                    return
+                }
+                root._hyprConfigRetries = 0
+                ShellState.reportHyprConfig(state, detail)
+            }
+        }
+    }
+    property Timer _hyprConfigRetry: Timer {
+        interval: 5000
+        onTriggered: root.checkHyprConfig()
+    }
+    // Started a few seconds in rather than at construction: the notification
+    // server is this shell, and a notice posted before it is listening is lost.
+    // rime-shell-firstrun also replaces a stock config and reloads Hyprland at
+    // login, so it is asked again on every configreloaded.
+    property Timer _hyprConfigFirst: Timer {
+        interval: 3000
+        running: true
+        onTriggered: root.checkHyprConfig()
+    }
+
     // ── Motion (UI/UX roadmap v3 Phase 21) ────────────────────────────────────
     // The shell's speed and Reduce Motion, applied to Hyprland's animations. The
     // numbers are Hyprland's own (hyprMotion.js reads them back and scales
@@ -365,8 +431,7 @@ QtObject {
     // A shell restart finds its own previous push in Hyprland and must not
     // scale it again: what was pushed, and from what base, is kept per Hyprland
     // instance in $XDG_RUNTIME_DIR, and trusted only while the live table is
-    // still exactly that push. Lua configs only — `keyword` cannot write
-    // animations there, and the hyprlang path is the pre-0.55 config.
+    // still exactly that push.
     property real _mScale:   1
     property bool _mReduced: false
     property bool _mWanted:  false
@@ -377,17 +442,8 @@ QtObject {
         root._mScale = scale
         root._mReduced = reduced
         root._mWanted = true
-        if (!root._lua) return          // kept: the provider probe answers later
         if (root._mBase === null) root._motionReread()
         else                      root._motionPush()
-    }
-    // configProvider is probed asynchronously and reads "conf" until it
-    // answers, so the first request can arrive before `_lua` is true.
-    on_LuaChanged: {
-        if (root._lua && root._mWanted) root._motionReread()
-        if (root._lua) root._pushLayerRules()
-        root.syncWindowCorners()
-        root._applyPreferredLayout()
     }
 
     // ── Window corners follow the frame ───────────────────────────────────────
@@ -429,9 +485,8 @@ QtObject {
         const r = Geo.windowRounding(t.cornerRadius, t.borderWidth, nums[0], nums[1])
         if (root._pacingLog)
             console.info("Rime window corners: gaps_out=" + nums[0] + " border=" + nums[1] + " -> rounding " + r)
-        root._start(root._cornersWriteProc, root._lua
-            ? ["hyprctl", "eval", "hl.config({ decoration = { rounding = " + r + " } })"]
-            : ["hyprctl", "keyword", "decoration:rounding", String(r)])
+        root._start(root._cornersWriteProc,
+            ["hyprctl", "eval", "hl.config({ decoration = { rounding = " + r + " } })"])
     }
     property Process _cornersReadProc: Process {
         stdout: StdioCollector { onStreamFinished: root._cornersRead(String(this.text)) }
@@ -471,13 +526,12 @@ QtObject {
     // config reload (which drops runtime rules), so it holds on any Hyprland
     // the shell runs under, whatever that config is. Named, so a user can find
     // it (`require` cannot reach it, but `hyprctl eval` of a rule with the same
-    // name and no_anim = false turns it off). Lua configs only: a hyprlang
-    // `keyword layerrule` is the pre-0.55 path this shell no longer ships.
+    // name and no_anim = false turns it off).
     readonly property string _layerRulesLua:
         'hl.layer_rule({ name = "rime-shell-self-animated", match = { namespace = "^quickshell$" }, no_anim = true })'
     function _pushLayerRules() {
-        if (root._pacingLog) console.info("Rime layer rules: push, lua=" + root._lua)
-        if (root._lua) root._start(root._layerRulesProc, ["hyprctl", "eval", root._layerRulesLua])
+        if (root._pacingLog) console.info("Rime layer rules: push")
+        root._start(root._layerRulesProc, ["hyprctl", "eval", root._layerRulesLua])
     }
     property Process _layerRulesProc: Process {
         stdout: StdioCollector { onStreamFinished: if (root._pacingLog) console.info("Rime layer rules: " + String(this.text).trim()) }
@@ -486,7 +540,7 @@ QtObject {
 
     function _motionReread() {
         root._mBase = null
-        if (root._mWanted && root._lua) root._start(root._motionReadProc, ["bash", "-c",
+        if (root._mWanted) root._start(root._motionReadProc, ["bash", "-c",
             'hyprctl -j animations; printf "\\n\\x1e\\n"; cat "${XDG_RUNTIME_DIR:-/tmp}/rime-shell/hypr-motion.json" 2>/dev/null'])
     }
 
@@ -617,7 +671,7 @@ QtObject {
         onTriggered: root._refreshLayout()
     }
 
-    // Its own Process, not _keywordProc: the kept layout is put back at start
+    // Its own Process, not _accentProc: the kept layout is put back at start
     // and after a reload, the same moments the accent border is written, and a
     // shared Process kills whichever write started first (see above).
     property Process _layoutWriteProc: Process {
@@ -628,10 +682,8 @@ QtObject {
 
     function setLayout(name) {
         if (root.layouts.indexOf(name) < 0) return
-        if (root._lua) root._start(root._layoutWriteProc,
-            ["hyprctl", "eval", `hl.config({ general = { layout = "${name}" } })`])
-        else           root._start(root._layoutWriteProc,
-            ["hyprctl", "keyword", "general:layout", name])
+        root._start(root._layoutWriteProc,
+            ["hyprctl", "eval", `hl.config({ general = { layout = ${root._luaStr(name)} } })`])
         // Optimistic, so the indicator changes under the cursor rather than on
         // the next poll.
         root.layoutName = name
@@ -641,7 +693,7 @@ QtObject {
     // by the facade). "" = never chosen, and the config's own layout stands.
     // A reload puts the config's back and so does a login, so it is re-applied
     // then (configreloaded), when it arrives (the settings file is read after
-    // this backend is built), and when the config dialect becomes known.
+    // this backend is built), and at start.
     property string preferredLayout: ""
     // A choice from the menu has already been written (the facade writes,
     // then keeps it): only a kept layout arriving from the file is news.
@@ -656,17 +708,15 @@ QtObject {
 
     // ── Actions ───────────────────────────────────────────────────────────────
     function focusWorkspace(ref) {
-        root._dispatch("workspace " + ref, `hl.dsp.focus({ workspace = "${ref}" })`)
+        Hyprland.dispatch(`hl.dsp.focus({ workspace = ${root._luaStr(ref)} })`)
     }
 
     function toggleSpecialWorkspace(name) {
-        root._dispatch("togglespecialworkspace " + name,
-                       `hl.dsp.workspace.toggle_special("${name}")`)
+        Hyprland.dispatch(`hl.dsp.workspace.toggle_special(${root._luaStr(name)})`)
     }
 
     function focusWindow(handle) {
-        root._dispatch("focuswindow address:" + handle,
-                       `hl.dsp.focus({ window = "address:${handle}" })`)
+        Hyprland.dispatch(`hl.dsp.focus({ window = ${root._luaStr("address:" + handle)} })`)
     }
 
     // Both Lua forms were names Hyprland 0.56.2 does not have — `hl.dsp.close`
@@ -676,37 +726,45 @@ QtObject {
     // forms below are the ones it takes). `follow = false` keeps the view where
     // it is, as `movetoworkspacesilent` does.
     function closeWindow(handle) {
-        root._dispatch("closewindow address:" + handle,
-                       `hl.dsp.window.close({ window = "address:${handle}" })`)
+        Hyprland.dispatch(`hl.dsp.window.close({ window = ${root._luaStr("address:" + handle)} })`)
     }
 
     function moveWindowToWorkspace(handle, ws) {
-        root._dispatch(`movetoworkspacesilent ${ws},address:${handle}`,
-                       `hl.dsp.window.move({ workspace = "${ws}", follow = false, window = "address:${handle}" })`)
+        Hyprland.dispatch(`hl.dsp.window.move({ workspace = ${root._luaStr(ws)}, follow = false, window = ${root._luaStr("address:" + handle)} })`)
     }
 
     function toggleOverview() { /* unreachable: capabilities.overview is false */ }
 
+    // The accent is a runtime value: a config reload puts the config's own
+    // border back (colors.lua, written by matugen, when it exists), so the
+    // last one asked for is kept and pushed again on configreloaded.
+    property string _accentHex: ""
     function setAccentBorder(hex) {
-        root._keyword("general:col.active_border", `rgb(${hex})`,
-                      `hl.config({ general = { ["col.active_border"] = { colors = { "rgb(${hex})" } } } })`)
+        const h = String(hex).replace(/^#/, "")
+        if (!/^[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/.test(h)) {
+            console.warn("Rime accent border: not a colour, ignored: " + hex)
+            return
+        }
+        root._accentHex = h
+        root._pushAccent()
+    }
+    function _pushAccent() {
+        if (root._accentHex === "") return
+        root._start(root._accentProc, ["hyprctl", "eval",
+            `hl.config({ general = { col = { active_border = { colors = { "rgb(${root._accentHex})" } } } } })`])
     }
 
     function setGaps(inner, outer) {
-        // Both in one shell so the two writes cannot be seen half-applied — and
-        // under Lua both in ONE hl.config, which is stronger: it is a single
-        // call rather than two that happen to be chained.
-        //
-        // `hyprctl keyword` does not work against a Lua config at all. It
-        // answers "keyword can't work with non-legacy parsers. Use eval." and
-        // changes nothing, so the gaps slider moved and the desktop ignored it.
-        // Every other keyword write in this file was already split; this one was
-        // missed because it bypasses _keyword() to get both values into one
-        // shell.
-        root._start(root._gapsWriteProc, ["bash", "-c", root._lua
-                    ? `hyprctl eval 'hl.config({ general = { gaps_in = ${inner}, gaps_out = ${outer} } })'`
-                    : `hyprctl keyword general:gaps_in ${inner} && ` +
-                      `hyprctl keyword general:gaps_out ${outer}`])
+        // Both gaps in ONE hl.config, so the two cannot be seen half-applied:
+        // a single call rather than two that happen to be chained. Numbers
+        // only: anything else would be spliced into the expression as code.
+        const i = Math.round(Number(inner)), o = Math.round(Number(outer))
+        if (!isFinite(i) || !isFinite(o)) {
+            console.warn("Rime gaps: not numbers, ignored: " + inner + ", " + outer)
+            return
+        }
+        root._start(root._gapsWriteProc, ["hyprctl", "eval",
+            `hl.config({ general = { gaps_in = ${i}, gaps_out = ${o} } })`])
     }
 
     // Both gaps in one call. This used to be two chained Processes in
@@ -833,24 +891,18 @@ QtObject {
         // Carried over verbatim from QuickSettings, where it was written and
         // proven on hardware. It is not obvious and it is not decorative; do
         // not "simplify" it into a single dispatch.
-        const damage = root._lua
-            ? ` && hyprctl dispatch 'hl.dsp.dpms({ action = "disable" })'`
-              + ` && hyprctl dispatch 'hl.dsp.dpms({ action = "enable" })'`
-            : ` && hyprctl dispatch dpms off && hyprctl dispatch dpms on`
+        const damage = ` && hyprctl dispatch 'hl.dsp.dpms({ action = "disable" })'`
+                     + ` && hyprctl dispatch 'hl.dsp.dpms({ action = "enable" })'`
 
-        // The path goes in as a positional argument, never spliced into the
-        // script: it comes off the user's disk and may contain anything a
-        // filename may contain.
-        const write = off
-            ? (root._lua
-                ? `hyprctl eval "hl.config({ decoration = { screen_shader = '' } })"`
-                : `hyprctl keyword decoration:screen_shader '[[EMPTY]]'`)
-            : (root._lua
-                ? `hyprctl eval "hl.config({ decoration = { screen_shader = '$1' } })"`
-                : `hyprctl keyword decoration:screen_shader "$1"`)
+        // The path comes off the user's disk and may contain anything a file
+        // name may contain. It is escaped as a Lua string here (_luaStr) and
+        // the whole expression goes to bash as a positional argument, so it is
+        // neither shell nor Lua code. It used to sit inside '$1' in the Lua
+        // source: a name with a ' in it ended the string.
+        const expr = `hl.config({ decoration = { screen_shader = ${root._luaStr(off ? "" : path)} } })`
 
         root._start(root._shaderApplyProc,
-                    ["bash", "-c", write + damage, "--", String(path)])
+                    ["bash", "-c", `hyprctl eval "$1"` + damage, "--", expr])
 
         // Optimistic, so the tile changes under the cursor rather than after
         // the re-read lands. _shaderApplyProc corrects it either way.
@@ -882,8 +934,7 @@ QtObject {
     // capturing a keybind.
     function setKeyboardInterception(on) {
         const target = on ? "RimeShell_clean" : "reset"
-        root._start(root._submapProc, root._lua
-            ? ["hyprctl", "dispatch", `hl.dsp.submap('${target}')`]
-            : ["hyprctl", "dispatch", "submap", target])
+        root._start(root._submapProc,
+            ["hyprctl", "dispatch", `hl.dsp.submap("${target}")`])
     }
 }

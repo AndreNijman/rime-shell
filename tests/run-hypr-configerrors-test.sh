@@ -451,7 +451,7 @@ rm -f "$user"
 hc reload >/dev/null
 rm -f "$home/.config/hypr/apex"
 
-hc dispatch exit >/dev/null 2>&1
+hc dispatch 'hl.dsp.exit()' >/dev/null 2>&1
 sleep 1
 hypr_pid=""
 

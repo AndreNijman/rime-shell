@@ -1,7 +1,7 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────────────────────
 #  Rime Shell — Arch Linux Installer
-#  Invoked by install.sh:  $1=HYPRLAND_CONF  $2=BACKUP_DIR  $3=CONFIG_TYPE
+#  Invoked by install.sh:  $1=HYPRLAND_CONF (a hyprland.lua)  $2=BACKUP_DIR
 # ─────────────────────────────────────────────────────────────────────────────
 
 set -eo pipefail
@@ -9,7 +9,17 @@ set -eo pipefail
 # ── Arguments (validated up-front) ───────────────────────────────────────────
 HYPRLAND_CONF="${1:?Missing arg: HYPRLAND_CONF path}"
 BACKUP_DIR="${2:?Missing arg: BACKUP_DIR}"
-CONFIG_TYPE="${3:?Missing arg: CONFIG_TYPE (conf|lua)}"
+# Hyprland reads hyprland.lua only. A third argument "conf" is what an older
+# install.sh passed for a hyprland.conf; refuse it rather than append exec-once
+# lines to a file Hyprland never reads.
+case "$HYPRLAND_CONF:${3:-lua}" in
+    *.lua:lua) ;;
+    *)
+        echo "Rime Shell needs ~/.config/hypr/hyprland.lua; got '$HYPRLAND_CONF' (${3:-lua})." >&2
+        echo "Hyprland no longer reads .conf files. On Rime OS run /usr/libexec/rime-hypr-migrate." >&2
+        exit 1
+        ;;
+esac
 REPO_DIR="$HOME/.local/src/rime-shell"
 
 # ── Colors ────────────────────────────────────────────────────────────────────
@@ -361,19 +371,6 @@ step 5 "Hyprland Config"
 # Marker used to detect whether the block was already appended
 _MARKER="quickshell.*rime-shell"
 
-_append_conf() {
-    cat << 'EOF' >> "$1"
-
-# Rime Shell Autostarts
-exec-once = awww-daemon
-exec-once = hypridle -c $HOME/.config/hypr/hypridle.conf
-exec-once = quickshell -c $HOME/.local/src/rime-shell/.
-exec-once = systemctl --user start hyprpolkitagent
-exec-once = wl-paste --type text --watch cliphist store
-exec-once = wl-paste --type image --watch cliphist store
-EOF
-}
-
 _append_lua() {
     cat << 'EOF' >> "$1"
 
@@ -394,9 +391,6 @@ EOF
 # the dynamic loader reports a missing object on every session start.
 if grep -q 'librime-quickshell-argc.so' "$HYPRLAND_CONF" 2>/dev/null; then
     sed -i \
-        's|env LD_PRELOAD=$HOME/.local/lib/rime-shell/librime-quickshell-argc.so quickshell|quickshell|' \
-        "$HYPRLAND_CONF"
-    sed -i \
         's|"env LD_PRELOAD=" \.\. os.getenv("HOME") \.\. "/.local/lib/rime-shell/librime-quickshell-argc.so quickshell -c " \.\. os.getenv("HOME")|"quickshell -c " .. os.getenv("HOME")|' \
         "$HYPRLAND_CONF"
     rm -f "$HOME/.local/lib/rime-shell/librime-quickshell-argc.so"
@@ -405,22 +399,11 @@ fi
 if grep -q "$_MARKER" "$HYPRLAND_CONF" 2>/dev/null; then
     log_warn "Autostart block already present — skipping."
 else
-    case "$CONFIG_TYPE" in
-        conf)
-            _append_conf "$HYPRLAND_CONF"
-            log_ok "Autostart block appended to hyprland.conf"
-            ;;
-        lua)
-            # Extra safety backup before touching a Lua config
-            cp "$HYPRLAND_CONF" "${HYPRLAND_CONF}.pre-rime-shell"
-            log_info "Safety backup: ${HYPRLAND_CONF}.pre-rime-shell"
-            _append_lua "$HYPRLAND_CONF"
-            log_ok "Autostart block appended to hyprland.lua"
-            ;;
-        *)
-            log_warn "Unknown config type '$CONFIG_TYPE' — skipping Hyprland config update."
-            ;;
-    esac
+    # Extra safety backup before touching a Lua config
+    cp "$HYPRLAND_CONF" "${HYPRLAND_CONF}.pre-rime-shell"
+    log_info "Safety backup: ${HYPRLAND_CONF}.pre-rime-shell"
+    _append_lua "$HYPRLAND_CONF"
+    log_ok "Autostart block appended to hyprland.lua"
 fi
 
 
@@ -448,31 +431,15 @@ else
     log_warn "could not write $HOME/.config/hypr/hypridle.conf"
 fi
 
-# Merge rather than truncate: config_Provider.json also carries the "compositor"
-# override written by the Config → Misc page, and a plain `>` redirect dropped it
-# on every re-run.
-CONFIG_TYPE="$CONFIG_TYPE" USER_DATA="$USER_DATA" python3 - <<'PYEOF'
-import json, os
-path = os.path.join(os.environ["USER_DATA"], "config_Provider.json")
-data = {}
-try:
-    with open(path) as f:
-        loaded = json.load(f)
-    if isinstance(loaded, dict):
-        data = loaded
-except Exception:
-    pass
-data["configProvider"] = os.environ["CONFIG_TYPE"]
-with open(path, "w") as f:
-    json.dump(data, f, indent=2)
-PYEOF
+# config_Provider.json is no longer written here: its old "configProvider" key
+# chose between a .conf and a Lua dialect, and Hyprland has only Lua now. The
+# file's "compositor" override is the Config → Misc page's, not the installer's.
 
 # Never clobber existing keybinds: re-running the installer to pick up an update
 # used to wipe every custom shortcut.
 [ -f "$USER_DATA/keybinds.json" ] || printf '{}\n' > "$USER_DATA/keybinds.json"
 
 log_ok "Config dirs created"
-log_ok "config_Provider.json  →  $CONFIG_TYPE"
 
 log_info "Initializing cache directories..."
 mkdir -p "$HOME/.cache/rime-shell"
