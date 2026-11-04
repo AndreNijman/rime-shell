@@ -296,6 +296,13 @@ jobs:
           # restart that kills it. The file ShellState and HyprlandBackend load.
           node tests/hypr-config-test.js
 
+      - name: Saved keybinds cannot write code into the keybind files
+        run: |
+          # A combo from the saved keybinds JSON is a key name or it is ignored,
+          # and every Lua literal escapes control characters (a newline in one
+          # failed the whole module; in a comment it started a line of Lua).
+          node tests/keybind-text-test.js
+
       - name: Every singleton a file uses is imported there
         run: |
           # IpcManager called WindowSwitcherService without importing
@@ -2972,6 +2979,8 @@ jobs:
             "src/state/ShellState.qml"
             "src/state/hyprConfig.js"
             "tests/hypr-config-test.js"
+            "src/services/config_tab/keybindText.js"
+            "tests/keybind-text-test.js"
             "src/state/Popups.qml"
             "src/windows/TopBar.qml"
             "src/popups/Dashboard.qml"

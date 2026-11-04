@@ -4,6 +4,7 @@ import Quickshell
 import Quickshell.Io
 import "../"
 import "../../"
+import "keybindText.js" as KeybindText
 
 QtObject {
     id: root
@@ -423,9 +424,18 @@ QtObject {
                     var sk = Object.keys(saved)
                     for (var j = 0; j < sk.length; j++) {
                         var s = sk[j]
-                        if (!merged[s]) continue
-                        if (saved[s].mods !== undefined) merged[s].mods = saved[s].mods
-                        if (saved[s].key  !== undefined) merged[s].key  = saved[s].key
+                        if (!merged[s] || !saved[s]) continue
+                        var sm = saved[s].mods !== undefined ? saved[s].mods : merged[s].mods
+                        var sk2 = saved[s].key !== undefined ? saved[s].key : merged[s].key
+                        // A combo that is not a combo keeps the default: it is
+                        // written into Lua and KDL (keybindText.js says why).
+                        if (!KeybindText.comboOk(sm, sk2)) {
+                            console.warn("KeybindService: ignoring the saved combo for " + s
+                                         + ": not a key name")
+                            continue
+                        }
+                        merged[s].mods = sm
+                        merged[s].key  = sk2
                     }
                 } catch(e) {}
                 root.keybinds = merged
@@ -542,6 +552,10 @@ QtObject {
             if (!old) continue   // unknown action: nothing to merge into
             // An empty key is an unbind. Anything else for the switcher must be
             // a combo it can release on, whoever staged it.
+            if (!KeybindText.comboOk(pending[ks[i]].mods || "", pending[ks[i]].key || "")) {
+                root.lastError = "That is not a key the keybind files can hold."
+                return
+            }
             if (old.type === "switcher" && (pending[ks[i]].key || "") !== "") {
                 var why = root._switcherProblem(pending[ks[i]].mods, pending[ks[i]].key)
                 if (why !== "") { root.lastError = why; return }
@@ -584,7 +598,7 @@ QtObject {
         if (!old) return
         var m = newMods.toUpperCase().trim()
         var k = newKey.toUpperCase().trim()
-        if (k === "") return
+        if (k === "" || !KeybindText.comboOk(m, k)) return
         if (root.conflictingAction(action, m, k) !== "") return
         var copy     = Object.assign({}, root.keybinds)
         copy[action] = Object.assign({}, old, { mods: m, key: k })
@@ -781,9 +795,8 @@ QtObject {
         return "{ " + o + "description = " + root._luaStr(b.desc) + " }"
     }
 
-    function _luaStr(s) {
-        return '"' + String(s).replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"'
-    }
+    // Every user-supplied combo goes through these (keybindText.js says why).
+    function _luaStr(s) { return KeybindText.str(s) }
 
     // Returns the Lua dispatcher expression for a dispatch entry, or "" when
     // there is no equivalent — reported in the file rather than guessed at.
@@ -978,7 +991,7 @@ QtObject {
                     for (var bi = 0; bi < sb.length; bi++) {
                         var b = sb[bi]
                         if (bi > 0 && !b.release && taken[root._combo(b.mods, b.key)]) {
-                            lines.push("-- " + b.verb + " on " + b.mods + " + " + b.key
+                            lines.push("-- " + KeybindText.comment(b.verb + " on " + b.mods + " + " + b.key)
                                        + " is another action's; not bound here")
                             continue
                         }
