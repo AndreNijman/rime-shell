@@ -24,7 +24,7 @@
 #   5. WAY OUT   — monocle's description names Alt+Tab. SUPER+arrow moves
 #                  nothing in monocle (measured, nested Hyprland 0.56.2), so
 #                  without it the layout reads as every other window lost.
-#   6. OWN WRITE — setLayout has its own Process, not the shared _keywordProc:
+#   6. OWN WRITE — setLayout has its own Process, not the accent border's _accentProc:
 #                  the kept layout is put back at the moments the accent border
 #                  is written, and a shared Process kills the earlier write.
 #
@@ -94,7 +94,7 @@ verdict("WAYOUT", bool(mono) and "Alt+Tab" in mono.group(1),
 
 sl = re.search(r'function setLayout\s*\([^)]*\)\s*\{(.*?)\n    \}', hypr, re.S)
 body = sl.group(1) if sl else ""
-verdict("OWNWRITE", bool(sl) and "_layoutWriteProc" in body and "_keyword" not in body
+verdict("OWNWRITE", bool(sl) and "_layoutWriteProc" in body and "_accentProc" not in body
         and re.search(r'property Process _layoutWriteProc', hypr) is not None,
         "setLayout body uses: " + ", ".join(sorted(set(re.findall(r'_\w+Proc|_keyword\b', body)))))
 PY
@@ -107,7 +107,7 @@ label() {
         KEPT)      echo "a chosen layout is a saved setting whose choices match the backend" ;;
         REAPPLIED) echo "the kept layout is handed to the backend and put back after a reload" ;;
         WAYOUT)    echo "monocle's description names Alt+Tab, its only way to the other windows" ;;
-        OWNWRITE)  echo "the layout write has its own Process, not the shared keyword one" ;;
+        OWNWRITE)  echo "the layout write has its own Process, not the accent border's" ;;
     esac
 }
 
@@ -150,9 +150,9 @@ mutant "a reload that forgets it" src/services/compositor/HyprlandBackend.qml \
                 root._applyPreferredLayout()' 'root.syncWindowCorners()' REAPPLIED
 mutant "monocle without its way out" src/modules/Left/layouts.js \
     'Alt+Tab switches between them' 'nothing else shows' WAYOUT
-mutant "the layout on the shared keyword Process" src/services/compositor/HyprlandBackend.qml \
+mutant "the layout on the accent border's Process" src/services/compositor/HyprlandBackend.qml \
     'root._start(root._layoutWriteProc,
-            ["hyprctl", "eval"' 'root._start(root._keywordProc,
+            ["hyprctl", "eval"' 'root._start(root._accentProc,
             ["hyprctl", "eval"' OWNWRITE
 
 echo

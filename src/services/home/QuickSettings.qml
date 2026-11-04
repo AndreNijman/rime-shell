@@ -512,7 +512,7 @@ StatCard {
     // focusMode from restoreGaps.onRunningChanged — i.e. only once the restore
     // subprocess had exited — and that sequencing is what made this impossible.
     // Flipping immediately let a second toggle inside the window take the READ
-    // branch while `hyprctl keyword general:gaps_in 5 && …` was still running:
+    // branch while the restore write (gaps_in 5, gaps_out 10) was still running:
     // if the read won, the saved gaps were overwritten with the shrunken 0/6 and
     // the user's real gaps were gone for the rest of the session. A fast
     // double-press of SUPER+B is enough.

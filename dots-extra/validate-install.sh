@@ -139,28 +139,20 @@ fi
 echo ""
 echo "# CONFIGURATION FILES"
 
-if [[ -f "$HOME/.config/hypr/hyprland.conf" ]]; then
-    log_installed "Hyprland config"
-    
-    if grep -q "quickshell.*-c.*rime-shell" "$HOME/.config/hypr/hyprland.conf"; then
-        log_installed "Rime Shell exec-once in hyprland.conf"
-    else
-        log_missing "Rime Shell exec-once in hyprland.conf"
-    fi
-else
-    log_missing "Hyprland config"
-fi
-
+# Hyprland reads hyprland.lua only; a hyprland.conf on its own is a config
+# nothing loads, and is reported as the problem it is.
 if [[ -f "$HOME/.config/hypr/hyprland.lua" ]]; then
-    log_installed "Hyprland Lua config"
-    
+    log_installed "Hyprland config (hyprland.lua)"
+
     if grep -q "quickshell.*rime-shell" "$HOME/.config/hypr/hyprland.lua"; then
-        log_installed "Rime Shell exec-once in hyprland.lua"
+        log_installed "Rime Shell autostart in hyprland.lua"
     else
-        log_optional "Rime Shell exec-once in hyprland.lua (optional)"
+        log_missing "Rime Shell autostart in hyprland.lua"
     fi
+elif [[ -f "$HOME/.config/hypr/hyprland.conf" ]]; then
+    log_missing "Hyprland config: only hyprland.conf, which Hyprland no longer reads (on Rime OS run /usr/libexec/rime-hypr-migrate)"
 else
-    log_optional "Hyprland Lua config (optional)"
+    log_missing "Hyprland config (hyprland.lua)"
 fi
 
 if [[ -d "$HOME/.local/src/rime-shell" ]]; then

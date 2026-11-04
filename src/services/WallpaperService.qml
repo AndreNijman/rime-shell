@@ -411,8 +411,8 @@ QtObject {
     // colour in config.kdl and themerc-override, which are files with other
     // writers — matugen generates the labwc one — so a live override there would
     // be a second writer racing the generator. CompositorService reports that as
-    // `can.accentBorder` and refuses silently; the two-dialect Hyprland split
-    // this used to carry lives in HyprlandBackend now.
+    // `can.accentBorder` and refuses silently. On Hyprland it is one
+    // `hyprctl eval` (HyprlandBackend), re-pushed after every config reload.
     function updateBorders() {
         CompositorService.setAccentBorder(String(Theme.active).replace('#', ''))
     }

@@ -62,7 +62,7 @@ QtObject {
         windowPreview:        false,
         overview:             true,
         // Border colour and gaps are config.kdl, reloaded from disk — there is
-        // no live keyword equivalent of `hyprctl keyword`.
+        // no live equivalent of `hyprctl eval`.
         accentBorder:         false,
         gaps:                 false,
         tilingLayout:         false,

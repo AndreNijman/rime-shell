@@ -158,9 +158,9 @@ mutant "the window list held for the whole session" src/popups/Overview.qml \
 mutant "tiles modelled on the records themselves" src/modules/Overview/OverviewGrid.qml \
     'model: ScriptModel { values: cellItem.handles }' 'model: cellItem.handles' KEYED
 mutant "the nil close name back" src/services/compositor/HyprlandBackend.qml \
-    '`hl.dsp.window.close({ window = "address:${handle}" })`' '`hl.dsp.close({ window = "address:${handle}" })`' DISPATCH
+    '`hl.dsp.window.close({ window = ${root._luaStr("address:" + handle)} })`' '`hl.dsp.close({ window = ${root._luaStr("address:" + handle)} })`' DISPATCH
 mutant "a move that follows the window" src/services/compositor/HyprlandBackend.qml \
-    'follow = false, window = "address:${handle}"' 'window = "address:${handle}"' DISPATCH
+    'follow = false, window = ${root._luaStr("address:" + handle)}' 'window = ${root._luaStr("address:" + handle)}' DISPATCH
 mutant "a close that leaves focus where it was" src/popups/Overview.qml \
     $'            focusGrabTimer.stop()\n            content.forceActiveFocus()' '            focusGrabTimer.stop()' RESET
 

@@ -18,13 +18,16 @@
 input_path = '@SRCDIR@/src/config/rime-shell-colors.json.example'
 output_path = '@HOME@/.cache/rime-shell/colors.json'
 
-# -- Hyprland window-border colours -> ~/.config/hypr/rime-shell-colors.conf --
-# Sourced by ~/.config/hypr/hyprland.conf for $primary/$surface/$surface_bright/etc.
-# (Was the RELATIVE 'colors.conf' -> written next to matugen's CWD; the real
-#  target never updated. THIS was the window-border-colour bug.)
+# -- Hyprland window border -> ~/.config/hypr/rime/colors.lua -----------------
+# A Lua module, because Hyprland reads Lua and nothing else: rime-os
+# appearance.lua requires it when it exists, so the accent is the border from
+# the first frame of a login and survives `hyprctl reload`. The shell also
+# pushes it live with `hyprctl eval` (HyprlandBackend.setAccentBorder).
+# This used to write ~/.config/hypr/rime-shell-colors.conf, a hyprlang file
+# that no Rime config ever sourced: an orphan.
 [templates.hyprland_colors]
-input_path = '@SRCDIR@/src/config/colors.conf.template'
-output_path = '@HOME@/.config/hypr/rime-shell-colors.conf'
+input_path = '@SRCDIR@/src/config/hypr-colors.lua.template'
+output_path = '@HOME@/.config/hypr/rime/colors.lua'
 
 # -- hyprlock colours -> ~/.config/hypr/rime-shell-hyprlock-colors.conf -------
 # hyprlock.conf sources exactly this file, so the lock screen follows the same
