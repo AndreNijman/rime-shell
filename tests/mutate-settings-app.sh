@@ -27,9 +27,15 @@
 #                  (backend "" → the `rime tier` path) → "went to the rime CLI"
 #    no-kick       a queued set does not start the owner check itself → with
 #                  no consumer the backend stays "" ("no consumer: backend is")
-#    no-list-wait  a queued performance set is written before Quickshell has
-#                  read the daemon's Profiles list → refused ("not present for
-#                  this device"), "the set did not write ActiveProfile"
+#    quickshell-write  the power-profiles set goes through Quickshell's own
+#                  PowerProfiles.profile write again (it shows the pick and only
+#                  logs a refusal) → "the refused pick stayed", "no reason shown"
+#    keep-pick     a refused write leaves the pick on the label
+#                  → "refused: the refused pick stayed"
+#    no-reason     a refused write shows no reason → "refused: no reason shown"
+#  (no-list-wait is gone with the code it broke: the Shell no longer writes
+#  through Quickshell, so there is no Profiles list to wait for; busctl hands
+#  any pick to rimed and rimed decides.)
 #
 #  A mutant whose sed changed nothing is reported NOT APPLIED and fails the run,
 #  as does a suite that printed no RESULT line (a crash is not a catch).
@@ -85,8 +91,12 @@ mutant no-queue run-power-profile-service-test.sh "the early set went to the rim
     src/services/system/PowerProfileService.qml 's/if \(root\.backend === ""\) \{/if (false) {/'
 mutant no-kick run-power-profile-service-test.sh "no consumer: backend is" \
     src/services/system/PowerProfileService.qml 's/^( *)root\._checkOwner\(\) *\/\/ with no consumer.*$/\1\/\/ no kick/'
-mutant no-list-wait run-power-profile-service-test.sh "no consumer: the set did not write ActiveProfile" \
-    src/services/system/PowerProfileService.qml 's/if \(!force \&\& root\.usesPowerProfiles/if (false \&\& root.usesPowerProfiles/'
+mutant quickshell-write run-power-profile-service-test.sh "refused: the refused pick stayed|refused: no reason shown" \
+    src/services/system/PowerProfileService.qml 's/^( *)root\._ppdWrite\(id\)$/\1PowerProfiles.profile = (id === "performance" ? PowerProfile.Performance : id === "power-saver" ? PowerProfile.PowerSaver : PowerProfile.Balanced)/'
+mutant keep-pick run-power-profile-service-test.sh "refused: the refused pick stayed" \
+    src/services/system/PowerProfileService.qml '/\/\/ back on the profile in force$/d'
+mutant no-reason run-power-profile-service-test.sh "refused: no reason shown" \
+    src/services/system/PowerProfileService.qml '/ppdErr\.text/,/back on the profile in force/ s/root\.error = root\.explain\(text\)/root.error = ""/'
 
 echo "mutate-settings-app: caught=$caught survived=$survived broken=$broken (logs: $logs)"
 [ "$survived" -eq 0 ] && [ "$broken" -eq 0 ]

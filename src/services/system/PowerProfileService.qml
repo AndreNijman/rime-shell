@@ -13,12 +13,13 @@ import Quickshell.Services.UPower
 //            its tiers (rime-os docs/nixos/desktops.md §7). That is every Rime
 //            system with a current rimed: NixOS ships no power-profiles-daemon,
 //            and since rime-os #139 the bootc image masks it and rimed owns its
-//            names there too. The Shell then reads and writes through
-//            Quickshell's own PowerProfiles object, which follows
-//            PropertiesChanged: event-driven, no process, no timer. GNOME's
-//            power menu, KDE's battery applet and COSMIC's applet talk to the
-//            same object, so a change made in any of them, in `rime tier`, or
-//            by an AC change shows here at once.
+//            names there too. The Shell reads through Quickshell's own
+//            PowerProfiles object, which follows PropertiesChanged: event-driven,
+//            no process, no timer. GNOME's power menu, KDE's battery applet and
+//            COSMIC's applet talk to the same object, so a change made in any of
+//            them, in `rime tier`, or by an AC change shows here at once. It
+//            writes with ONE `busctl set-property … ActiveProfile` per press (see
+//            WHY A CHANGE DID NOT HAPPEN).
 //   "rimed"  the name is not rimed's: nobody owns it (a rimed that predates the
 //            API, or one started with RIMED_POWER_PROFILES=0), or another
 //            daemon does (a system that runs power-profiles-daemon on purpose;
@@ -32,21 +33,28 @@ import Quickshell.Services.UPower
 // (Properties.Get org.rimeos.Rimed1.Power Tier at /org/rimeos/Rimed1). Only a
 // connection that is rimed answers it: power-profiles-daemon has no such object
 // and nobody answers an unowned name. So "ppd" means "the power-profiles name
-// is rimed's", not merely "the name has an owner". That call is the only
-// process the "ppd" path ever starts: the polling mutant in
-// tests/run-power-profile-service-test.sh counts the busctl calls and fails on
+// is rimed's", not merely "the name has an owner". That call is the only READ
+// the "ppd" path ever starts (a press starts one write): the polling mutant in
+// tests/run-power-profile-service-test.sh counts the busctl reads and fails on
 // a second one.
 //
 // WHY A CHANGE DID NOT HAPPEN (`error`, `errorDetail`). On the "rimed" path a
 // refused `rime tier` is put into words (explain()) and shown for 8 s by the
 // Dashboard's power panel; it used to be thrown away, so the optimistic label
-// snapped back and the switch looked like it did nothing. On the "ppd" path
-// Quickshell writes ActiveProfile itself and only logs a refusal (its
-// pushPropertyUpdate keeps the optimistic value and warns in Quickshell's log),
-// so `error` stays "" there: rimed allows that write to the active local user
-// without a prompt, which is who runs the Shell, and a rimed that is down has
-// no owner on the name, which puts the next consumer on the "rimed" path, where
-// "not running" is said.
+// snapped back and the switch looked like it did nothing. The "ppd" path says
+// why too. It does not write through Quickshell's PowerProfiles: Quickshell
+// 0.3.2 sets its own value first and only logs a refused write
+// (DBusPropertyGroup::pushPropertyUpdate), so the label kept the refused pick
+// and nobody learnt why. Instead the press shows the pick at once (`_optimistic`,
+// no wait for the daemon) and runs one `busctl set-property` whose exit says
+// whether rimed took it: on success the PropertiesChanged rimed sent before its
+// reply has already moved PowerProfiles, and the pick gives way to it; on a
+// refusal the pick goes (the label is back on what PowerProfiles reads, which
+// Quickshell never changed) and the reply's text is put into words. Chosen
+// over a rimed "last refusal" property (a per-caller answer broadcast to every
+// client of a standard API, racing GNOME's and KDE's writes) and over a
+// Quickshell patch (bootc's Shell runs an unpatched Quickshell). One process
+// per press, none at rest; rimed's API is unchanged.
 //
 // The three tier IDs are exactly rimed's AND power-profiles-daemon's
 // (performance, balanced, power-saver). Rime has no other tier: `ultra-max` and
@@ -89,8 +97,10 @@ Singleton {
     property string _rimedTier: "balanced"
 
     // The effective tier. Under "ppd" a hold (Gaming Mode holds performance)
-    // shows as the held tier, which is what the machine is running.
-    readonly property string current: root.usesPowerProfiles ? root._idOf(PowerProfiles.profile) : root._rimedTier
+    // shows as the held tier, which is what the machine is running; a pick
+    // whose write is on its way shows at once (`_optimistic`).
+    readonly property string current: root.usesPowerProfiles
+        ? (root._optimistic !== "" ? root._optimistic : root._idOf(PowerProfiles.profile)) : root._rimedTier
 
     readonly property bool hasPerformance: root.usesPowerProfiles ? PowerProfiles.hasPerformanceProfile : true
     // "" or the reason performance is capped (lap detected, temperature).
@@ -120,48 +130,91 @@ Singleton {
             default:                       return "balanced"
         }
     }
-    function _enumOf(id) {
-        switch (id) {
-            case "performance": return PowerProfile.Performance
-            case "power-saver": return PowerProfile.PowerSaver
-            default:            return PowerProfile.Balanced
-        }
-    }
 
     // A set asked for before the owner check answered (the IPC hook can call
     // setProfile while no page holds the service): kept here, the latest one
     // wins, and applied on the backend the check finds. Sent straight away it
     // would take the `rime tier` path, which is the wrong writer when rimed
-    // owns the power-profiles name.
+    // owns the power-profiles name. (rimed itself says whether `performance`
+    // exists, so a queued performance no longer waits for Quickshell to read
+    // the Profiles list, which its own setProfile needed.)
     property string _pendingSet: ""
 
-    // Applies the queued set on the backend the owner check found. Quickshell's
-    // PowerProfiles reads the daemon's Profiles list on first use and until it
-    // has, refuses `performance` ("not present for this device"); a queued set
-    // is often that first use, so a queued performance waits for the list
-    // (hasPerformanceProfile), 2 s at most, then goes anyway (a device without
-    // a performance tier is refused as before).
-    function _flushPending(force) {
+    function _flushPending() {
         if (root._pendingSet === "" || root.backend === "")
             return
-        if (!force && root.usesPowerProfiles && root._pendingSet === "performance"
-                && !PowerProfiles.hasPerformanceProfile) {
-            if (!root._listWait.running)
-                root._listWait.start()
-            return
-        }
-        root._listWait.stop()
         const id = root._pendingSet
         root._pendingSet = ""
         root.setProfile(id)
     }
-    readonly property Timer _listWait: Timer {
-        interval: 2000
-        onTriggered: root._flushPending(true)
+
+    // ── the power-profiles write ────────────────────────────────────────────
+    // The pick on its way to rimed, shown as `current` until rimed's answer:
+    // "" when nothing is on its way.
+    property string _optimistic: ""
+    // A pick made while a write is still on its way: sent when that one
+    // answers (latest wins; a running write is never killed, its exit would
+    // read as a refusal).
+    property string _ppdNext: ""
+
+    function _ppdWrite(id) {
+        root._optimistic = id
+        if (root.ppdSetProc.running) {
+            root._ppdNext = id
+            return
+        }
+        root._ppdStart(id)
     }
-    readonly property Connections _profilesList: Connections {
+    function _ppdStart(id) {
+        root.ppdSetProc.target = id
+        root.ppdSetProc.command = ["busctl", "--system", "set-property", "org.freedesktop.UPower.PowerProfiles",
+                                   "/org/freedesktop/UPower/PowerProfiles", "org.freedesktop.UPower.PowerProfiles",
+                                   "ActiveProfile", "s", id]
+        root.ppdSetProc.running = true
+    }
+    readonly property Process ppdSetProc: Process {
+        property string target: ""
+        command: []
+        running: false
+        stderr: StdioCollector { id: ppdErr }
+        onExited: function (code, status) {
+            if (root._ppdNext !== "") {             // a later pick decides; this answer is old
+                const next = root._ppdNext
+                root._ppdNext = ""
+                root._ppdStart(next)
+                return
+            }
+            if (code === 0) {
+                root.error = ""
+                root.errorDetail = ""
+                // rimed sends PropertiesChanged before its reply, so PowerProfiles
+                // normally reads the pick already. If not (game mode keeps its own
+                // tier and only re-announces it), give the signal one moment.
+                if (root._idOf(PowerProfiles.profile) === root.ppdSetProc.target)
+                    root._optimistic = ""
+                else
+                    root._settle.restart()
+            } else {
+                const text = (ppdErr.text || "").trim()
+                root.errorDetail = text.split("\n")[0] || ("busctl exited " + code)
+                root.error = root.explain(text)
+                root._optimistic = ""               // back on the profile in force
+            }
+        }
+    }
+    // One-shot, only after an accepted write PowerProfiles has not shown yet.
+    readonly property Timer _settle: Timer {
+        interval: 1000
+        onTriggered: if (!root.ppdSetProc.running) root._optimistic = ""
+    }
+    readonly property Connections _profileFollow: Connections {
         target: root.usesPowerProfiles ? PowerProfiles : null
-        function onHasPerformanceProfileChanged() { root._flushPending(false) }
+        function onProfileChanged() {
+            if (!root.ppdSetProc.running) {
+                root._settle.stop()
+                root._optimistic = ""
+            }
+        }
     }
 
     function setProfile(id) {
@@ -173,8 +226,7 @@ Singleton {
             return
         }
         if (root.usesPowerProfiles) {
-            // Writes ActiveProfile; rimed answers with PropertiesChanged.
-            PowerProfiles.profile = root._enumOf(id)
+            root._ppdWrite(id)
             return
         }
         root.getProc.running = false                // a read already on its way holds the OLD tier
@@ -187,9 +239,11 @@ Singleton {
     // rime's refusal → a sentence. polkit allows the person signed in at this
     // computer (the active local session) and nobody else, without a prompt.
     function explain(detail) {
-        if (/not authori[sz]ed|AccessDenied/i.test(detail))
+        // busctl prints an AccessDenied reply as "Access denied" (sd-bus hides
+        // the daemon's text for it); `rime tier` passes rimed's own words.
+        if (/not authori[sz]ed|AccessDenied|Access denied/i.test(detail))
             return "Not allowed: only the person signed in at this computer can change the power profile."
-        if (/rimed not running|cannot reach rimed|ServiceUnknown|NameHasNoOwner/i.test(detail))
+        if (/rimed not running|cannot reach rimed|ServiceUnknown|NameHasNoOwner|not provided by any \.service files/i.test(detail))
             return "The power service is not running, so the profile was not changed."
         return "The power profile was not changed."
     }
@@ -224,7 +278,7 @@ Singleton {
                 root.ownerProc.owned = false
             root.backend = root.ownerProc.owned ? "ppd" : "rimed"
             if (root._pendingSet !== "") {
-                root._flushPending(false)           // the set's own exit reads the tier back
+                root._flushPending()                // the set's own exit reads the tier back
                 return
             }
             // The fallback's first read. Not while a set is in flight (see poll).
