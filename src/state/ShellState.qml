@@ -16,7 +16,7 @@ import "hyprConfig.js" as HyprConfig
 //                     and why neither is keyed on the compositor
 // Hotspot           — owned by QuickSettings (nmcli hotspot)
 // Airplane Mode     — owned by QuickSettings (rfkill)
-// Focus Mode        — owned by QuickSettings; TopBar reacts to hide + zero gaps
+// Focus Mode        — owned by FocusMode (state/FocusMode.qml); TopBar reacts to hide + zero gaps
 // DND               — read by NotificationService to suppress incoming notifications
 // VPN               — action state from VPNTab plus an idle-state system probe
 
