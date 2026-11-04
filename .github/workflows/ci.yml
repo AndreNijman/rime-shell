@@ -1940,6 +1940,12 @@ jobs:
       - name: The power control follows rimed's power-profiles API
         run: ./tests/run-power-profile-service-test.sh
 
+      # Focus Mode (SUPER+B) through the shipped focus-toggle IPC target with no
+      # dashboard ever built, and a press while the gaps settle queued rather
+      # than dropped. SKIPS without quickshell.
+      - name: Focus Mode works before the dashboard opens and queues a fast press
+        run: ./tests/run-focus-mode-test.sh
+
       # The surface and text roles (src/theme/roles.js) against every palette
       # the shell ships — six wallpapers, both matugen schemes — with the
       # fallback rule applied and the fallbacks that fire pinned.
