@@ -13,7 +13,11 @@
 //   /run/rime-live/status.json   written atomically by root (`sudo rime update`
 //                                and the engine behind it), schema 1
 //   /run/rime-update/state       key=value lines from the 6-hourly checker:
-//                                state=available|none, digest=sha256:…
+//                                state=available|none, digest=sha256:…,
+//                                release=<the release on offer>,
+//                                running=<the release this machine booted>
+//                                (the last two only from checkers that know
+//                                them; the NixOS one always has)
 //
 // Both are absent on most machines most of the time, and both are DISPLAY DATA.
 // The shell never runs anything named in them: the only commands this page can
@@ -118,10 +122,20 @@ function parseStatus(text) {
     }
 }
 
-// parseChecker(text) → { present, state: "available"|"none"|"", digest }
+// A Rime release ID (files/scripts/stamp-release's rule: YYYY.MM.DD, or
+// YYYY.MM.DD.N with N >= 2), or "". These go into a URL, so nothing looser.
+var RELEASE_ID = /^\d{4}\.\d{2}\.\d{2}(?:\.(?:[2-9]|[1-9]\d+))?$/
+
+function releaseId(v) {
+    return typeof v === "string" && RELEASE_ID.test(v) ? v : ""
+}
+
+// parseChecker(text) → { present, state: "available"|"none"|"", digest,
+//                        release, running }
 // key=value lines; anything else on a line is ignored, as are unknown keys.
+// release and running are "" unless they are release IDs.
 function parseChecker(text) {
-    var out = { present: false, state: "", digest: "" }
+    var out = { present: false, state: "", digest: "", release: "", running: "" }
     if (typeof text !== "string" || text.trim() === "") return out
     out.present = true
     var lines = text.split("\n")
@@ -133,6 +147,8 @@ function parseChecker(text) {
         var v = l.slice(eq + 1).trim()
         if (k === "state") out.state = oneOf(v, ["available", "none"])
         else if (k === "digest") out.digest = clean(v, 80)
+        else if (k === "release") out.release = releaseId(v)
+        else if (k === "running") out.running = releaseId(v)
     }
     return out
 }
@@ -273,6 +289,41 @@ function indicator(status, checker) {
     return INDICATOR_NONE
 }
 
+// whatsNew(status, checker, bootedId) → { url, release, from } or null
+// The "What's in this update" link: the release page on rimeos.com for the
+// release this update brings, with ?from= the release this machine runs, so
+// the page also lists every release in between. Offered only where the bar's
+// icon is about an update still to come:
+//   available                       the checker's release=
+//   restart, and a failure or an    the release `sudo rime update` installed
+//   undo that still applies at the  (status.json target.release), which runs
+//   next restart                    after the restart
+// Nothing (null) when the icon is not shown, or for a failure that left
+// nothing queued. A target that is not known (a checker without release=)
+// is the list of updates, never a guessed URL. `from`, in order: the image's
+// own release.json (bootedId), status.json's booted release, the checker's
+// running=; dropped when it is not a release ID or is the target itself.
+var UPDATES_URL = "https://rimeos.com/updates"
+
+function whatsNew(status, checker, bootedId) {
+    var s = status || { ok: false }
+    var c = checker || { state: "" }
+    var kind = indicator(s, c).kind
+    var target = ""
+    if (kind === "available") target = releaseId(c.release)
+    else if (kind === "restart" || ((kind === "failed" || kind === "rolled-back") && s.stagedForBoot))
+        target = s.target ? releaseId(s.target.release) : ""
+    else return null
+
+    var from = releaseId(bootedId)
+        || (s.ok && s.booted ? releaseId(s.booted.release) : "")
+        || releaseId(c.running)
+    if (target === "") return { url: UPDATES_URL, release: "", from: "" }
+    if (from === target) from = ""
+    return { url: UPDATES_URL + "/" + target + (from !== "" ? "?from=" + from : ""),
+             release: target, from: from }
+}
+
 // chip(componentState) → { text, tone }
 function chip(state) {
     switch (state) {
@@ -317,6 +368,9 @@ if (typeof module !== "undefined" && module.exports)
         parseChecker: parseChecker,
         hero: hero,
         indicator: indicator,
+        whatsNew: whatsNew,
+        releaseId: releaseId,
+        UPDATES_URL: UPDATES_URL,
         chip: chip,
         componentLine: componentLine,
         requirementLine: requirementLine,

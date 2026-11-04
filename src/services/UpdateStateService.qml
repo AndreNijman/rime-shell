@@ -11,7 +11,9 @@ import "liveupdate.js" as L
 // It reads the same two files as Settings → Updates, with the same overrides:
 //   RIME_UPDATE_STATE   /run/rime-update/state       the 6-hourly checker
 //   RIME_LIVE_STATUS    /run/rime-live/status.json   `sudo rime update`
-// and liveupdate.js's indicator() decides what they mean.
+// and liveupdate.js's indicator() decides what they mean; whatsNew() turns
+// them, with the image's release.json (RIME_RELEASE_JSON, read once), into
+// the "What's in this update" link.
 //
 // ── Cheap, because the bar is always mapped ─────────────────────────────────
 // No process, no CLI, no poll while the files are there. A FileView with
@@ -42,6 +44,22 @@ Singleton {
     readonly property var status: L.parseStatus(root._statusText)
     readonly property var checker: L.parseChecker(root._checkerText)
     readonly property var indicator: L.indicator(root.status, root.checker)
+    // "What's in this update" (the bar's update menu, Settings → Updates):
+    // { url, release, from } or null. liveupdate.js whatsNew().
+    readonly property var whatsNew: L.whatsNew(root.status, root.checker, root.bootedRelease)
+
+    // The release this machine booted, from the image's own release.json:
+    // read once (the image cannot change under a running session), no watch.
+    readonly property string releasePath: Quickshell.env("RIME_RELEASE_JSON") || "/usr/share/rime/release.json"
+    property string _releaseText: ""
+    readonly property string bootedRelease: {
+        try {
+            const r = JSON.parse(root._releaseText)
+            return L.releaseId(r && r.id)
+        } catch (e) {
+            return ""
+        }
+    }
     // Whether the absent-file timer is running (tests: it must stop once both
     // files are there).
     readonly property bool rearming: rearmTimer.running
@@ -63,6 +81,13 @@ Singleton {
         onFileChanged: reload()
         onLoaded: { root._checkerText = String(text()); root._checkerPresent = true }
         onLoadFailed: { root._checkerText = ""; root._checkerPresent = false }
+    }
+
+    FileView {
+        path: root.releasePath
+        printErrors: false
+        onLoaded: root._releaseText = String(text())
+        onLoadFailed: root._releaseText = ""
     }
 
     function _rearm(view) {

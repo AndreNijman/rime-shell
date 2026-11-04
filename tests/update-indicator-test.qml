@@ -25,6 +25,10 @@ ShellRoot {
     readonly property string statusPath: Quickshell.env("RIME_LIVE_STATUS") || ""
     readonly property string checkerPath: Quickshell.env("RIME_UPDATE_STATE") || ""
     readonly property bool wantReduced: (Quickshell.env("REDUCE_MOTION") || "false") === "true"
+    // The browser stand-in (RIME_RELEASE_OPENER) appends each URL it is handed here.
+    readonly property string openedPath: Quickshell.env("RIME_TEST_OPENED") || ""
+    // Where to save a picture of the open menu ("" = none).
+    readonly property string shotPath: Quickshell.env("RIME_TEST_SHOT") || ""
 
     property int passed: 0
     property int failed: 0
@@ -48,6 +52,36 @@ ShellRoot {
         return found.length === 1 ? found[0] : null
     }
     function btn(ic) { const b = root.collect(ic, "glyphItem", []); return b.length === 1 ? b[0] : null }
+    // The icon's menu (UpdateMenu, built by its Loader only while open), or null.
+    function menuOf(ic) {
+        const l = ic ? root.collect(ic, "sourceComponent", []) : []
+        return l.length === 1 && l[0].item ? l[0].item : null
+    }
+    // What the browser stand-in was handed, one URL per line.
+    property string opened: ""
+    Process {
+        id: readOpened
+        command: ["cat", root.openedPath]
+        stdout: StdioCollector { onStreamFinished: root.opened = String(this.text) }
+    }
+    function lastOpened() { const l = root.opened.trim().split("\n"); return l[l.length - 1] }
+    // Opens bar `bar`'s menu the way a click does, and waits for it.
+    function openMenu(bar, then) {
+        const ic = root.icon(bar)
+        ic.menuGrab = false
+        root.btn(ic).activated()
+        root.waitFor(bar.objectName + "'s menu opened", function () {
+            const m = root.menuOf(ic); return m !== null && m.visible
+        }, function () { then(root.menuOf(ic)) }, 30)
+    }
+    // Chooses `row` in an open menu and waits for the browser stand-in to be
+    // handed a URL (n lines in its log).
+    function waitOpened(n, then) {
+        root.waitFor("the browser was handed " + n + " URL(s)", function () {
+            if (!readOpened.running) readOpened.running = true
+            return root.opened.trim() !== "" && root.opened.trim().split("\n").length >= n
+        }, then, 50)
+    }
     readonly property var bars: [barA, barB]
     function kindOf(bar) { const i = root.icon(bar); return i ? (i.shown ? i.view.kind : "") : "(no icon)" }
 
@@ -241,18 +275,145 @@ ShellRoot {
                 })
             },
             function () {
-                // Click bar B's icon: Settings opens on Updates, on bar B's screen.
+                // An update available from a checker that does not name its
+                // release: the icon is a menu button now, for screen readers too.
+                const b = root.btn(root.icon(barB))
+                root.check("available: the screen reader name says it opens a menu",
+                           b && String(b.label).indexOf("Opens a menu: what's in this update, or Updates in Settings") > 0,
+                           b ? b.label : "")
+                root.eq("available: its role is a menu button", b ? b.Accessible.role : -1, Accessible.ButtonMenu)
+                NexusState.close()
+                Popups.notificationsOpen = true
+                root.openMenu(barB, function (m) {
+                    root.check("a click opened the update menu, not Settings", m && m.visible && !NexusState.open)
+                    root.check("and closed the bar's open panel", !Popups.notificationsOpen)
+                    root.eq("the menu is headed by what the icon says", m ? m.headline : "", "A Rime update is available")
+                    root.eq("no release named: no second line", m ? m.subline : "x", "")
+                    root.eq("two choices", m ? m.rows.length : 0, 2)
+                    root.eq("the first is what's in this update", m ? m.rows[0].label : "", "What's in this update")
+                    root.eq("the second opens Settings", m ? m.rows[1].label : "", "Open Updates settings")
+                    root.eq("the first row's screen reader name says where it goes",
+                            m ? m.rows[0].Accessible.name : "", "What's in this update, opens rimeos.com")
+                    root.eq("rows are menu items", m ? m.rows[0].Accessible.role : -1, Accessible.MenuItem)
+                    root.eq("the highlight starts on the first row", m ? m.curItem : null, m ? m.rows[0] : undefined)
+                    m.rows[0].activated()
+                    root.waitOpened(1, function () {
+                        root.eq("release unknown: the list of updates, never a guessed page",
+                                root.lastOpened(), "https://rimeos.com/updates")
+                        root.check("choosing closed the menu", root.menuOf(root.icon(barB)) === null
+                                   || !root.menuOf(root.icon(barB)).visible)
+                        root.check("looking at the notes is not 'seen' (releases.json untouched)",
+                                   ReleaseService.lastUserUrl === "https://rimeos.com/updates" && ReleaseService.state === null)
+                        root.next()
+                    })
+                })
+            },
+            function () {
+                // "Open Updates settings": Settings on Updates, on bar B's screen.
+                root.openMenu(barB, function (m) {
+                    m._step(1)
+                    root.eq("Down moves to Open Updates settings", m.curItem, m.rows[1])
+                    m._step(1)
+                    root.eq("and stops at the last row", m.curItem, m.rows[1])
+                    m.curItem.activated()
+                    root.waitFor("the menu opened Settings", function () { return NexusState.open }, function () {
+                        root.check("Open Updates settings opened Settings", NexusState.open)
+                        root.eq("on the Updates page", NexusState.page, "updates")
+                        root.eq("on the screen whose bar was clicked", NexusState.screenName, "TEST-B")
+                        root.check("and the menu closed", !root.icon(barB).menuOpen)
+                        NexusState.close()
+                        root.next()
+                    }, 20)
+                })
+            },
+            function () {
+                // A checker that names the release on offer and the running one.
+                root.writeInPlace("state=available\ndigest=sha256:" + "4".repeat(64)
+                                  + "\nrelease=2026.11.04.4\nrunning=2026.11.03\n", root.checkerPath, function () {
+                    root.waitFor("the checker's release is read", function () {
+                        return UpdateStateService.whatsNew && UpdateStateService.whatsNew.release === "2026.11.04.4"
+                    }, function () {
+                        root.openMenu(barA, function (m) {
+                            root.eq("the menu names what this computer runs (its release.json) and the release on offer",
+                                    m.subline, "Rime 2026.10.10 → 2026.11.04.4")
+                            if (root.shotPath !== "") {
+                                shot.command = ["grim", root.shotPath]
+                                shot.running = true
+                            }
+                            // Down, Up, choose: the keyboard's way to the first row.
+                            m._step(1); m._step(-1)
+                            root.eq("Up comes back to What's in this update", m.curItem, m.rows[0])
+                            shotWait.then = function () {
+                                m.curItem.activated()
+                                root.waitOpened(2, function () {
+                                    root.eq("the release's page, from the release this computer runs",
+                                            root.lastOpened(), "https://rimeos.com/updates/2026.11.04.4?from=2026.10.10")
+                                    root.next()
+                                })
+                            }
+                            shotWait.start()
+                        })
+                    }, 40)
+                })
+            },
+            function () {
+                // `sudo rime update` installed 2026.10.11 for the next restart:
+                // the link is to what runs after it.
+                root.placeRename("pending-reboot.json", root.statusPath, function () {
+                    root.expect("restart owed again", "restart", function () {
+                        root.eq("restart owed: the link is the installed release",
+                                UpdateStateService.whatsNew ? UpdateStateService.whatsNew.url : "",
+                                "https://rimeos.com/updates/2026.10.11?from=2026.10.10")
+                    })
+                })
+            },
+            function () {
+                // Only rimeos.com's update pages reach the browser: the runner
+                // fails the run if this one is in its log.
+                root.eq("openUrl refuses anything but a rimeos.com update page",
+                        [ReleaseService.openUrl("https://evil.example/updates/2026.11.04"),
+                         ReleaseService.openUrl("https://rimeos.com/updates/2026.11.04?from=x;rm"),
+                         ReleaseService.openUrl("https://rimeos.com.evil.example/updates")].join(","), "false,false,false")
+                root.openMenu(barB, function (m) {
+                    root.eq("restart owed: headed by the restart", m.headline, "Restart to finish the update")
+                    m.rows[0].activated()
+                    root.waitOpened(3, function () {
+                        root.eq("restart owed: the browser got the installed release's page",
+                                root.lastOpened(), "https://rimeos.com/updates/2026.10.11?from=2026.10.10")
+                        root.next()
+                    })
+                })
+            },
+            function () {
+                // A menu open when the icon goes away goes with it.
+                root.openMenu(barA, function (m) {
+                    root.writeInPlace('{"schema": 1, "state": "failed", "staged_for_boot": false}', root.statusPath, function () {
+                        root.expect("failed, nothing queued", "failed", function () {
+                            root.check("the menu closed when the update it was about failed",
+                                       !root.icon(barA).menuOpen && root.menuOf(root.icon(barA)) === null)
+                            root.eq("failed with nothing queued: no link", UpdateStateService.whatsNew, null)
+                            const b = root.btn(root.icon(barA))
+                            root.check("no link: the screen reader name says Settings",
+                                       b && String(b.label).indexOf(". Opens Updates in Settings") > 0, b ? b.label : "")
+                            root.eq("no link: a plain button", b ? b.Accessible.role : -1, Accessible.Button)
+                        })
+                    })
+                })
+            },
+            function () {
+                // No link: a click goes straight to Settings, as it always did.
                 NexusState.close()
                 Popups.notificationsOpen = true
                 const b = root.btn(root.icon(barB))
                 if (b) b.activated()
                 root.waitFor("the click opened Settings", function () { return NexusState.open }, function () {
                     root.check("the click opened Settings", NexusState.open)
+                    root.check("without a menu", !root.icon(barB).menuOpen)
                     root.eq("on the Updates page", NexusState.page, "updates")
                     root.eq("on the screen whose bar was clicked", NexusState.screenName, "TEST-B")
                     root.check("and closed the bar's open panel", !Popups.notificationsOpen)
                     NexusState.close()
-                    root.next()
+                    root.remove(root.statusPath, function () { root.next() })
                 }, 20)
             },
             function () {
@@ -281,4 +442,12 @@ ShellRoot {
         root.next()
     }
     Timer { id: settle; interval: 1500; onTriggered: root.next() }
+    Process { id: shot }
+    // Lets the menu finish its entrance before it is photographed and chosen.
+    Timer {
+        id: shotWait
+        property var then: null
+        interval: 600
+        onTriggered: { const t = shotWait.then; shotWait.then = null; if (t) t() }
+    }
 }
