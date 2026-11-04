@@ -47,11 +47,31 @@ bad() { echo "  FAIL  $1"; fail=$((fail + 1)); }
 
 echo "── the bar's update icon (Reduce Motion: ${REDUCE_MOTION:-false}) ──"
 log="$W/indicator.log"
+# The browser: a stand-in that writes down each URL it is handed
+# (ReleaseService's opener, as rime-open-browser is in the image).
+cat > "$W/opener" <<OPENER
+#!/bin/sh
+printf '%s\n' "\$1" >> "$W/opened"
+OPENER
+chmod +x "$W/opener"
+# The image's release.json: the release this computer runs.
+printf '{"schema": 1, "id": "2026.10.10", "notes": "https://rimeos.com/updates/2026.10.10"}\n' > "$W/release.json"
+# RIME_TEST_SHOT_DIR=<dir>: keep a picture of the open menu there.
+shot=""
+if [ -n "${RIME_TEST_SHOT_DIR:-}" ] && command -v grim >/dev/null 2>&1; then
+    mkdir -p "$RIME_TEST_SHOT_DIR"
+    shot="$RIME_TEST_SHOT_DIR/update-menu$( [ "${REDUCE_MOTION:-false}" = true ] && echo -reduced).png"
+fi
 ( cd "$root" && env \
     RIME_UI_FIXTURES="$here/fixtures/live-update" \
     RIME_LIVE_STATUS="$W/run-live/status.json" \
     RIME_UPDATE_STATE="$W/run-update/state" \
     RIME_UPDATE_REARM_MS=300 \
+    RIME_RELEASE_JSON="$W/release.json" \
+    RIME_RELEASE_OPENER="$W/opener" \
+    RIME_RELEASE_DELAY_MS=600000 \
+    RIME_TEST_OPENED="$W/opened" \
+    RIME_TEST_SHOT="$shot" \
     REDUCE_MOTION="${REDUCE_MOTION:-false}" \
     QT_LOGGING_RULES="qml=true" \
     timeout 120 quickshell -p "$staged" ) > "$log" 2>&1
@@ -64,7 +84,7 @@ if grep -E "is not a type|Cannot assign|Unable to assign|Failed to load configur
 else
     ok "the bar built without QML errors"
 fi
-if grep -E "TypeError|ReferenceError" "$log" | grep -E "Updates\.qml|UpdateStateService|liveupdate\.js|RightContent" >/dev/null; then
+if grep -E "TypeError|ReferenceError" "$log" | grep -E "Updates\.qml|UpdateMenu\.qml|UpdateStateService|ReleaseService|liveupdate\.js|RightContent" >/dev/null; then
     bad "no binding in the icon threw"
     grep -E "TypeError|ReferenceError" "$log" | sort -u | head -5 | sed 's/^/          /'
 else
@@ -76,6 +96,15 @@ if grep -E "WARN|ERROR" "$log" | grep -E "run-live|run-update|status\.json" >/de
     grep -E "WARN|ERROR" "$log" | grep -E "run-live|run-update|status\.json" | sort -u | head -5 | sed 's/^/          /'
 else
     ok "an absent file or directory logs nothing"
+fi
+# Only rimeos.com's update pages ever reach the browser.
+if [ -f "$W/opened" ] && grep -Ev '^https://rimeos\.com/updates(/[0-9.]+(\?from=[0-9.]+)?)?$' "$W/opened" >/dev/null; then
+    bad "the browser was only handed rimeos.com update pages"; sed 's/^/          /' "$W/opened"
+else
+    ok "the browser was only handed rimeos.com update pages"
+fi
+if [ -n "$shot" ]; then
+    if [ -s "$shot" ]; then ok "a picture of the open menu: $shot"; else bad "a picture of the open menu"; fi
 fi
 summary="$(grep -o 'passed=[0-9]* failed=[0-9]*' "$log" | tail -1)"
 if [ -z "$summary" ]; then

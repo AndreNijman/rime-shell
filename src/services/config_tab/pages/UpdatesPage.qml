@@ -59,6 +59,9 @@ CfgScroll {
     }
     readonly property string targetRelease:
         root.status.ok && root.status.target ? root.status.target.release : ""
+    // The release page for the update still to come (liveupdate.js
+    // whatsNew(), the same link as the bar's update menu), or null.
+    readonly property var whatsNew: L.whatsNew(root.status, root.checker, root.bootedRelease)
 
     function toneColor(tone) {
         switch (tone) {
@@ -155,6 +158,27 @@ CfgScroll {
             visible:   root.targetRelease !== ""
             label:     "Updating to"
             status:    "Rime " + root.targetRelease
+        }
+
+        CfgRow {
+            id: whatsNewRow
+            plainText:        true
+            visible:          root.whatsNew !== null
+            label:            "What's in this update"
+            descriptionLines: 2
+            description: {
+                const w = root.whatsNew
+                if (!w) return ""
+                if (w.release === "") return "Every Rime release and what it changed, on rimeos.com."
+                return "What Rime " + w.release + " changes"
+                       + (w.from !== "" ? ", and every release since " + w.from : "") + ", on rimeos.com."
+            }
+            CfgButton {
+                id: whatsNewButton
+                label: "Open"
+                icon:  "󰖟"
+                onClicked: if (root.whatsNew) ReleaseService.openUrl(root.whatsNew.url)
+            }
         }
     }
 

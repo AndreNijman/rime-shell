@@ -82,6 +82,14 @@ fail=0
 ok()  { echo "  PASS  $1"; pass=$((pass + 1)); }
 bad() { echo "  FAIL  $1"; fail=$((fail + 1)); }
 
+# The browser: a stand-in that writes down each URL it is handed. Never the
+# real one: "What's in this update" is pressed below.
+cat > "$W/opener" <<OPENER
+#!/bin/sh
+printf '%s\n' "\$1" >> "$W/opened"
+OPENER
+chmod +x "$W/opener"
+
 log="$W/page.log"
 ( cd "$root" && env \
     RIME_UP_FIXTURES="$here/fixtures/live-update" \
@@ -93,6 +101,9 @@ log="$W/page.log"
     RIME_UP_TERMLOG="$TERMLOG" \
     RIME_UP_GRAB="$W/updates-page.png" \
     RIME_RELEASE_JSON="$here/fixtures/live-update/release.json" \
+    RIME_RELEASE_OPENER="$W/opener" \
+    RIME_RELEASE_DELAY_MS=600000 \
+    RIME_UP_OPENED="$W/opened" \
     QT_LOGGING_RULES="qml=true" \
     timeout 240 quickshell -p "$staged" ) > "$log" 2>&1 &
 qs_pid=$!
@@ -201,6 +212,11 @@ want_tails=$'sudo rime update\nsudo rime update --plan\nrime live explain'
 [ "$tails" = "$want_tails" ] && ok "the three commands are sudo rime update, sudo rime update --plan, rime live explain" \
     || bad "the three commands are sudo rime update, sudo rime update --plan, rime live explain (got: ${tails//$'\n'/ | })"
 [ ! -s "$W/sudo-calls.log" ] && ok "nothing ran sudo" || bad "nothing ran sudo ($(cat "$W/sudo-calls.log"))"
+
+opened="$(cat "$W/opened" 2>/dev/null)"
+[ "$opened" = "https://rimeos.com/updates/2026.11.04.4?from=2026.10.09" ] \
+    && ok "What's in this update opened the release's page, from the running release, once" \
+    || bad "What's in this update opened the release's page (got: ${opened//$'\n'/ | })"
 
 png="$W/updates-page.png"
 if [ -f "$png" ] && command -v python3 >/dev/null 2>&1; then

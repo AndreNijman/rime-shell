@@ -152,6 +152,7 @@ ShellRoot {
             root.opening,
             root.missingBoth,
             root.checkerOnly,
+            root.whatsNewLink,
             root.expectAfter("active.json", "Activated live", function () {
                 root.eq("active: three component rows", root.compRows().length, 3)
                 const rows = root.compRows()
@@ -171,9 +172,13 @@ ShellRoot {
                 root.check("pending reboot: the recommendation is on screen",
                            root.showing("restart when convenient") !== null)
                 root.eq("pending reboot: three rows", root.compRows().length, 3)
+                root.check("pending reboot: the link is to the release installed for the restart",
+                           root.showing("What Rime 2026.10.11 changes, and every release since 2026.10.09") !== null)
             }),
             root.expectAfter("rolled-back.json", "Live activation rolled back", function () {
                 root.check("rolled back: no target row for a null target", root.showing("Updating to") === null)
+                root.check("rolled back, nothing queued: no link to a release",
+                           root.showing("What's in this update") === null)
             }),
             // Truncated JSON is not a state: the checker answers.
             root.expectAfter("malformed.json", "Update available", function () {
@@ -223,6 +228,30 @@ ShellRoot {
         root.place("checker-available", root.checkerPath, function () {
             root.waitFor("checker → available", function () { return root.heroTitle() === "Update available" },
                          function () { root.eq("checker only: update available", root.heroTitle(), "Update available"); root.next() })
+        })
+    }
+    // "What's in this update": the release page on rimeos.com (liveupdate.js
+    // whatsNew()), opened through ReleaseService's browser (a stand-in here).
+    readonly property string openedLog: Quickshell.env("RIME_UP_OPENED") || ""
+    function writeChecker(text, then) {
+        root.run(["sh", "-c", "mkdir -p \"${2%/*}\" && printf '%s' \"$1\" > \"$2\"", "sh", text, root.checkerPath], then)
+    }
+    function whatsNewLink() {
+        root.check("checker without release=: a link to every release",
+                   root.showing("Every Rime release and what it changed, on rimeos.com.") !== null)
+        root.writeChecker("state=available\ndigest=sha256:" + "4".repeat(64) + "\nrelease=2026.11.04.4\nrunning=2026.11.01\n", function () {
+            const want = "What Rime 2026.11.04.4 changes, and every release since 2026.10.09, on rimeos.com."
+            root.waitFor("the checker's release on the page", function () { return root.showing(want) !== null }, function () {
+                root.check("the row names the release on offer and the one running (release.json)", root.showing(want) !== null)
+                const b = root.button("Open")
+                root.check("an Open button", b !== null)
+                if (b) b.press()
+                root.run(["sh", "-c", "for i in $(seq 1 50); do [ -s \"$1\" ] && exec cat \"$1\"; sleep 0.1; done; exit 1", "sh",
+                          root.openedLog], function (code) {
+                    root.eq("Open handed the browser something", code, 0)
+                    root.place("checker-available", root.checkerPath, function () { root.next() })
+                })
+            }, 40)
         })
     }
     function deleted() {
