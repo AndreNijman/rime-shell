@@ -52,8 +52,8 @@ t()     { quickshell -p "$staged" ipc call fmtest "$@" 2>/dev/null; }
 focus() { quickshell -p "$staged" ipc call focus-toggle "$@" 2>/dev/null; }
 # wait_for <value> <seconds>: Focus Mode reaches <value> and nothing is pending
 wait_for() {
-    local i
-    for i in $(seq 1 $(( $2 * 10 ))); do
+    local _
+    for _ in $(seq 1 $(( $2 * 10 ))); do
         [ "$(t state)" = "$1" ] && [ "$(t busy)" = idle ] && return 0
         sleep 0.1
     done
