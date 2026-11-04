@@ -257,6 +257,27 @@ eq("an update running in a terminal: no link",
    W(js({ state: "activating", staged_for_boot: true, target: { release: "2026.11.02" } }), offer("2026.11.02"), ""), null);
 eq("the release already running is not offered", W(js({ state: "idle", booted: { digest: D2 } }), offer("2026.11.04.4"), ""), null);
 eq("no arguments at all: no link", W(undefined, undefined, undefined), null);
+// Rime OS on NixOS: rime's update client (rimed/rime/src/nixos/update.rs check_state) writes the same four keys,
+// status.json carries "product": "nixos", toplevels and generations, and there is no /usr/share/rime/release.json.
+const nixCheck = (state, rel, run) => L.parseChecker("state=" + state + "\ndigest=sha256:" + "ab".repeat(32) +
+                                                     "\nrelease=" + rel + "\nrunning=" + run + "\n");
+const nixStatus = (o) => js(Object.assign({ product: "nixos", txn: "nix-1",
+    booted: { digest: null, release: "2026.11.01", toplevel: "/nix/store/aaaa-nixos-system" },
+    generations: { current: 7, booted: 7, previous: 6, pinned: [] } }, o));
+eq("NixOS, available: the page, from the booted release (no release.json)",
+   W(nixStatus({ state: "idle", target: null }), nixCheck("available", "2026.11.04", "2026.11.01"), "").url,
+   "https://rimeos.com/updates/2026.11.04?from=2026.11.01");
+eq("NixOS, booted release not recorded: from the checker's running=",
+   W(nixStatus({ state: "idle", booted: { digest: null, release: null, toplevel: "/nix/store/aaaa-nixos-system" } }),
+     nixCheck("available", "2026.11.04", "2026.10.31"), "").url,
+   "https://rimeos.com/updates/2026.11.04?from=2026.10.31");
+eq("NixOS, installed for the next boot: the target release",
+   W(nixStatus({ state: "idle", staged_for_boot: true,
+                 target: { digest: "sha256:" + "cd".repeat(32), release: "2026.11.04", toplevel: "/nix/store/bbbb-nixos-system" } }),
+     nixCheck("none", "", "2026.11.01"), "").url,
+   "https://rimeos.com/updates/2026.11.04?from=2026.11.01");
+eq("NixOS, up to date (state=none, release= empty): no link",
+   W(nixStatus({ state: "idle", target: null }), nixCheck("none", "", "2026.11.01"), ""), null);
 check("every URL is on rimeos.com/updates",
       [W(missing, offer("2026.11.04.4", "2026.11.03"), ""), W(missing, AVAILABLE, ""), W(reboot, NONE, "")]
           .every(v => v && /^https:\/\/rimeos\.com\/updates(\/\d{4}\.\d{2}\.\d{2}(\.\d+)?(\?from=\d{4}\.\d{2}\.\d{2}(\.\d+)?)?)?$/.test(v.url)));
