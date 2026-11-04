@@ -5,6 +5,7 @@ import Quickshell.Io
 import Quickshell.Wayland
 import Quickshell.Services.UPower
 import "../."
+import "hyprConfig.js" as HyprConfig
 
 // Global shell state.
 //
@@ -289,20 +290,23 @@ QtObject {
     // Called by HyprlandBackend, which owns the probe: only the adapter
     // spawns hyprctl (tests/check-compositor-backends.sh). This side keeps the
     // answer and makes sure a bad one is never quiet.
+    //
+    // What an answer changes is decided in hyprConfig.js (tests/hypr-config-
+    // test.js): "unknown" changes nothing, "loaded again" is logged only when a
+    // problem clears, and a problem's critical notice is posted once.
     function reportHyprConfig(state, detail) {
+        const v = HyprConfig.step(root.hyprConfig, root._hyprConfigNotified, state)
+        if (!v.verdict) return
         root.hyprConfigDetail = detail || ""
-        root.hyprConfig = state
-        if (state === "ok" || state === "unknown") {
-            if (root._hyprConfigNotified !== "")
-                console.info("Rime Shell: Hyprland's Lua config is loaded again")
-            root._hyprConfigNotified = ""
-            return
-        }
+        root.hyprConfig = v.state
+        root._hyprConfigNotified = v.notified
+        if (v.loadedAgain)
+            console.info("Rime Shell: Hyprland's Lua config is loaded again")
+        if (!v.problem) return
         const msg = root._hyprConfigMessage(state)
         console.error("Rime Shell: Hyprland config problem (" + state + "): " + msg
                       + " " + root.hyprConfigFix)
-        if (root._hyprConfigNotified === state) return
-        root._hyprConfigNotified = state
+        if (!v.notify) return
         hyprConfigNotice.command = ["notify-send", "-a", "Rime Shell", "-i", "dialog-warning",
                                     "-u", "critical", "Hyprland config not loaded",
                                     msg + " " + root.hyprConfigFix]

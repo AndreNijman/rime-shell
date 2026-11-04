@@ -8,6 +8,7 @@ import "../../"
 import "boxes.js" as Boxes
 import "../kblayout.js" as KB
 import "hyprMotion.js" as HyprMotion
+import "../../state/hyprConfig.js" as HyprConfig
 import "../../shapes/fluid/geometry.js" as Geo
 
 // ─── HyprlandBackend ──────────────────────────────────────────────────────────
@@ -372,13 +373,29 @@ QtObject {
     // otherwise (Hyprland src/ipc/s1/Commands.cpp evalRequest). rime.keybindings
     // is the module the shell's own shell-keybinds module builds on, so its
     // presence in package.loaded is the proof Rime's tree loaded.
+    //
+    // A check asked for while the probe runs (a reload during the startup
+    // probe, two reloads in a row) is queued, not a restart: restarting killed
+    // the running probe, and its empty output read as "unknown" (three such
+    // warnings in one VM session). One more probe runs once it has finished.
     property int _hyprConfigRetries: 0
+    property bool _hyprConfigPending: false
     function checkHyprConfig() {
-        root._hyprConfigProbe.running = false
-        root._hyprConfigProbe.running = true
+        const r = HyprConfig.request(root._hyprConfigProbe.running, root._hyprConfigPending)
+        root._hyprConfigPending = r.pending
+        if (r.start) root._hyprConfigProbe.running = true
     }
     property Process _hyprConfigProbe: Process {
         running: false
+        // running goes false after the output has been read (QProcess emits
+        // readChannelFinished before finished), so the queued probe starts on
+        // a fresh run, after this one's answer was reported.
+        onRunningChanged: {
+            if (running) return
+            const r = HyprConfig.finished(root._hyprConfigPending)
+            root._hyprConfigPending = r.pending
+            if (r.start) Qt.callLater(root.checkHyprConfig)
+        }
         command: ["bash", "-c",
             "f=\"$HOME/.config/hypr/hyprland.lua\"; "
             + "[ -f \"$f\" ] || { echo no-config; exit 0; }; "
@@ -400,7 +417,6 @@ QtObject {
                     // hyprctl could not reach the instance (no signature in
                     // this environment yet): not a config verdict. Ask again.
                     console.warn("Rime Shell: could not ask Hyprland about its config: " + detail)
-                    ShellState.reportHyprConfig("unknown", detail)
                     if (root._hyprConfigRetries++ < 12) root._hyprConfigRetry.restart()
                     return
                 }

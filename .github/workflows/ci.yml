@@ -288,6 +288,14 @@ jobs:
           # matugen's Lua colour module. Each rule is mutated and must fail.
           ./tests/check-hypr-lua-only.sh
 
+      - name: The Hyprland config probe's verdicts
+        run: |
+          # "unknown" (a reload in flight, a hyprctl hiccup) changes neither the
+          # state nor the one-notice-per-problem guard; "loaded again" is only a
+          # problem clearing; a check during a running probe is queued, never a
+          # restart that kills it. The file ShellState and HyprlandBackend load.
+          node tests/hypr-config-test.js
+
       - name: Every singleton a file uses is imported there
         run: |
           # IpcManager called WindowSwitcherService without importing
@@ -2962,6 +2970,8 @@ jobs:
             "src/theme/Theme.qml"
             "src/theme/ColorLoader.qml"
             "src/state/ShellState.qml"
+            "src/state/hyprConfig.js"
+            "tests/hypr-config-test.js"
             "src/state/Popups.qml"
             "src/windows/TopBar.qml"
             "src/popups/Dashboard.qml"
