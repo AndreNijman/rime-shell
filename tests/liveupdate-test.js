@@ -202,6 +202,65 @@ for (const [s, c] of [[missing, AVAILABLE], [reboot, NONE], [rb, NONE], [st("fai
 eq("four kinds, four glyphs", Object.keys(kinds).length, 4);
 eq("nothing shown has no glyph and no tooltip", [L.indicator(missing, NONE).glyph, L.indicator(missing, NONE).tooltip], ["", ""]);
 
+console.log("── what's in this update ──");
+// The bar's menu and Settings → Updates link to the release page on rimeos.com.
+const W = (s, c, b) => L.whatsNew(s, c, b);
+const offer = (rel, run, d) => L.parseChecker("state=available\ndigest=" + (d || D2) + "\nrelease=" + rel +
+                                              (run !== undefined ? "\nrunning=" + run : "") + "\n");
+eq("the checker's release= is read", offer("2026.11.04.4").release, "2026.11.04.4");
+eq("the checker's running= is read", offer("2026.11.04.4", "2026.11.03").running, "2026.11.03");
+eq("a checker without them reads as empty", [AVAILABLE.release, AVAILABLE.running], ["", ""]);
+for (const bad of ["dev", "2026.11.04.1", "2026.11.4", "2026.11.04.", "2026.11.04.02", "../../x",
+                   "2026.11.04?x=1", "2026.11.04/../../evil", "https://evil.example/", "2026.11.04#a",
+                   "2026.11.04 4", "x2026.11.04", "2026.11.04x"])
+    eq("release= that is not a release ID is dropped: " + JSON.stringify(bad), L.parseChecker("release=" + bad).release, "");
+eq("release IDs .2 and .10 are kept", [L.releaseId("2026.11.04.2"), L.releaseId("2026.11.04.10")], ["2026.11.04.2", "2026.11.04.10"]);
+eq("releaseId of a non-string is empty", [L.releaseId(undefined), L.releaseId(20261104), L.releaseId(null)], ["", "", ""]);
+
+eq("available, release and running known: the page, from what runs",
+   W(missing, offer("2026.11.04.4", "2026.11.03"), "").url, "https://rimeos.com/updates/2026.11.04.4?from=2026.11.03");
+eq("the image's own release.json wins for from",
+   W(missing, offer("2026.11.04.4", "2026.11.01"), "2026.11.02").url, "https://rimeos.com/updates/2026.11.04.4?from=2026.11.02");
+eq("then status.json's booted release",
+   W(js({ state: "superseded", booted: { release: "2026.10.30" } }), offer("2026.11.04.4", "2026.11.01"), "").url,
+   "https://rimeos.com/updates/2026.11.04.4?from=2026.10.30");
+eq("a booted id that is not a release ID is skipped for the next source",
+   W(missing, offer("2026.11.04.4", "2026.11.03"), "dev").url, "https://rimeos.com/updates/2026.11.04.4?from=2026.11.03");
+eq("nothing known about what runs: the page alone",
+   W(missing, offer("2026.11.04.4"), "").url, "https://rimeos.com/updates/2026.11.04.4");
+eq("from is never the target itself",
+   W(missing, offer("2026.11.04.4", "2026.11.04.4"), "").url, "https://rimeos.com/updates/2026.11.04.4");
+eq("it says which release and from where",
+   [W(missing, offer("2026.11.04.4", "2026.11.03"), "").release, W(missing, offer("2026.11.04.4", "2026.11.03"), "").from],
+   ["2026.11.04.4", "2026.11.03"]);
+eq("available, release unknown (an older checker): the list of updates, no ?from=",
+   W(missing, AVAILABLE, "2026.11.03"), { url: "https://rimeos.com/updates", release: "", from: "" });
+eq("a hostile release= falls back to the list too",
+   W(missing, L.parseChecker("state=available\ndigest=" + D2 + "\nrelease=../../../etc\n"), "").url, "https://rimeos.com/updates");
+eq("restart owed: the release installed for the next boot, from the booted one",
+   W(reboot, NONE, "").url, "https://rimeos.com/updates/2026.10.11?from=2026.10.10");
+eq("restart owed: the checker's stale release= is not used",
+   W(reboot, offer("2026.12.01", "2026.10.10", D2), "").release, "2026.10.11");
+eq("restart owed with no target release: the list",
+   W(js({ state: "idle", staged_for_boot: true }), NONE, "").url, "https://rimeos.com/updates");
+eq("failed but queued for the next restart: what will run",
+   W(js({ state: "failed", staged_for_boot: true, booted: { release: "2026.11.01" }, target: { release: "2026.11.02" } }), NONE, "").url,
+   "https://rimeos.com/updates/2026.11.02?from=2026.11.01");
+eq("undone but queued for the next restart: what will run",
+   W(js({ state: "rolled-back", staged_for_boot: true, target: { release: "2026.11.02" } }), NONE, "2026.11.01").url,
+   "https://rimeos.com/updates/2026.11.02?from=2026.11.01");
+eq("failed with nothing queued: no link", W(js({ state: "failed", target: { release: "2026.11.02" } }), NONE, ""), null);
+eq("undone with nothing queued: no link", W(rb, NONE, ""), null);
+eq("nothing shown: no link", W(missing, NONE, "2026.11.03"), null);
+eq("up to date: no link", W(missing, UPTODATE, "2026.11.03"), null);
+eq("an update running in a terminal: no link",
+   W(js({ state: "activating", staged_for_boot: true, target: { release: "2026.11.02" } }), offer("2026.11.02"), ""), null);
+eq("the release already running is not offered", W(js({ state: "idle", booted: { digest: D2 } }), offer("2026.11.04.4"), ""), null);
+eq("no arguments at all: no link", W(undefined, undefined, undefined), null);
+check("every URL is on rimeos.com/updates",
+      [W(missing, offer("2026.11.04.4", "2026.11.03"), ""), W(missing, AVAILABLE, ""), W(reboot, NONE, "")]
+          .every(v => v && /^https:\/\/rimeos\.com\/updates(\/\d{4}\.\d{2}\.\d{2}(\.\d+)?(\?from=\d{4}\.\d{2}\.\d{2}(\.\d+)?)?)?$/.test(v.url)));
+
 console.log("── the only commands ──");
 const HOLD = "\"$@\"; printf '\\nPress Enter to close this window. '; read -r _";
 eq("Update now", L.UPDATE_ARGV, ["sh", "-c", HOLD, "sh", "sudo", "rime", "update"]);
