@@ -94,7 +94,7 @@ ipc() { quickshell -p "$staged" ipc call pps "$@" 2>/dev/null; }
 # wait_for <fn> <value> <seconds>
 wait_for() {
     local i
-    for i in $(seq 1 $(( $3 * 4 ))); do [ "$(ipc "$1")" = "$2" ] && return 0; sleep 0.25; done
+    for _ in $(seq 1 $(( $3 * 4 ))); do [ "$(ipc "$1")" = "$2" ] && return 0; sleep 0.25; done
     return 1
 }
 count() { grep -c -- "$1" "$2" 2>/dev/null || true; }
