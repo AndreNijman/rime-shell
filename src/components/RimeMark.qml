@@ -11,7 +11,8 @@ import QtQuick.Shapes
 // filled by `accent` and the other three by `foreground`, at any size, crisp
 // (QtQuick.Shapes' CurveRenderer anti-aliases on the GPU, like the bar's own
 // silhouette), and following the wallpaper the moment the palette changes.
-// The spark PNG this replaces was one fixed colour recoloured by MultiEffect.
+// The bar and About draw it only on NixOS (Brand.ridge); the bootc image keeps
+// the spark PNG, one fixed colour recoloured by MultiEffect.
 //
 // GEOMETRY. Copied point for point from the masters in
 // src/assets/brand/rime-ridge-symbol.svg (and -small.svg, used at 32 px and

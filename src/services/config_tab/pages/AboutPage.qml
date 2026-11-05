@@ -70,7 +70,17 @@ CfgScroll {
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 12
 
+                // The same mark as Settings → Misc → About: the spark's glyph on
+                // the bootc image, the layered ridge on NixOS (Brand.ridge).
+                Text {
+                    visible: !Brand.ridge
+                    text: "󰧑"
+                    font.pixelSize: theme.fs(30)
+                    color: Theme.active
+                    anchors.verticalCenter: parent.verticalCenter
+                }
                 RimeMark {
+                    visible: Brand.ridge
                     width: theme.px(44)
                     height: Math.round(width * 175 / 240)
                     accent: Theme.active

@@ -39,6 +39,12 @@ ShellRoot {
         readonly property color testAccent: "#91C2DC"
         readonly property color changedAccent: "#E0457B"
 
+        // The modules draw the ridge only where the NixOS build flipped
+        // Brand.ridge (the bootc image keeps the spark); the default is
+        // recorded, then the ridge is switched on for the pictures.
+        property bool brandDefault: true
+        Component.onCompleted: { brandDefault = Brand.ridge; Brand.ridge = true }
+
         Flow {
             id: flow
             width: parent.width
@@ -127,7 +133,8 @@ ShellRoot {
             const r = {
                 pass: win.pass, scheme: win.scheme, name: cell.cellName, kind: cell.kind, file: file,
                 dpr: win.devicePixelRatio === undefined ? 1 : win.devicePixelRatio,
-                missing: !mark
+                missing: !mark,
+                brandDefault: win.brandDefault
             }
             if (mark) {
                 const o = mark.mapToItem(cell, 0, 0)
@@ -138,6 +145,7 @@ ShellRoot {
                             hex(mark.planeColor(2)), hex(mark.planeColor(3))]
                 r.themeActive = hex(Theme.active); r.themeText = hex(Theme.text)
                 r.accessibleName = mark.Accessible.name
+                r.visible = mark.visible
             }
             return r
         }

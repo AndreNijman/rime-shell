@@ -212,8 +212,18 @@ for r in plain:
         ok("%s%s: plane 3 %s, planes 1/2/4 %s (%s master)" % (
             r["name"], " after the accent changed" if r["pass"] else "", acc, ink, "small" if r["small"] else "full"))
 
+# The bootc image keeps the spark: the modules draw the ridge only where rime-os's
+# NixOS build flips Brand.ridge (src/state/Brand.qml). The test flips it itself.
+if recs and {r.get("brandDefault") for r in recs} == {False}:
+    ok("Brand.ridge is false as shipped (the bootc spark), so the ridge is the NixOS build's choice")
+else:
+    bad("Brand.ridge as shipped: %s, want false" % sorted({str(r.get("brandDefault")) for r in recs}))
+
 for kind, what in (("bar", "the bar's mark (Left/ControlPanel)"), ("about", "the About mark (Settings → Misc)")):
     rs = [r for r in recs if r["kind"] == kind]
+    for r in rs:
+        if not r.get("missing") and not r.get("visible"):
+            bad("%s (%s): the ridge is not shown with Brand.ridge on" % (what, r["scheme"]))
     if not rs:
         bad("%s was not drawn" % what)
         continue
