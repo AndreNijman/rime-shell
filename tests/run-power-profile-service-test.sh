@@ -93,7 +93,6 @@ stop_shell() { [ -n "$qs" ] && kill "$qs" 2>/dev/null; wait "$qs" 2>/dev/null; q
 ipc() { quickshell -p "$staged" ipc call pps "$@" 2>/dev/null; }
 # wait_for <fn> <value> <seconds>
 wait_for() {
-    local i
     for _ in $(seq 1 $(( $3 * 4 ))); do [ "$(ipc "$1")" = "$2" ] && return 0; sleep 0.25; done
     return 1
 }
