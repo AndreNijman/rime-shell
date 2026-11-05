@@ -597,10 +597,16 @@ QtObject {
         function close() { Popups.overviewOpen = false }
     }
 
+    // FocusMode is a singleton, not QuickSettings: the dashboard builds that
+    // page only when it is first shown, and SUPER+B did nothing before then.
     property var focusMode: IpcHandler {
         target: "focus-toggle"
         function toggle() {
-            root.focusToggleRequested()
+            FocusMode.toggle()
+        }
+        // "on" / "off", and whether a press is waiting for the gaps to settle.
+        function state(): string {
+            return (ShellState.focusMode ? "on" : "off") + (FocusMode.queued ? " queued" : "")
         }
     }
 
@@ -646,8 +652,6 @@ QtObject {
             return ShellState.caffeine
         }
     }
-
-    signal focusToggleRequested()
 
     // ── The shell itself, for the OS's live update engine ────
     // `sudo rime update` can replace the running Rime Shell. Before it does,

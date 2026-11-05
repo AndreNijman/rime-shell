@@ -1,0 +1,4 @@
+accent_dark={{colors.primary.dark.hex}}
+fg_dark={{colors.on_surface.dark.hex}}
+accent_light={{colors.primary.light.hex}}
+fg_light={{colors.on_surface.light.hex}}

@@ -108,6 +108,9 @@ chk() {   # chk <title> <rc> [detail]
 # takes SIGPIPE, and the pipeline reports 141 on a MATCH (memory: "pipefail
 # makes a grep -q match return 141").
 says() { [[ "$1" == *"$2"* ]]; }
+# One output line matching an extended regex. The plugin logs an "installed"
+# line for Qt's own catalogue too, so a bare substring cannot tell whose it is.
+says_line() { printf '%s\n' "$1" | grep -E -- "$2" >/dev/null; }
 
 for f in "$PLUGIN_SRC" "$HOST_SRC" "$QMLDIR_SRC" "$CONTENT" "$TS"; do
     [ -f "$f" ] || { echo "FATAL: this tree has no ${f#"$root"/}" >&2; exit 2; }
@@ -357,7 +360,7 @@ says "$PLUGIN" "RIMEI18N: registerTypes uri=Rime.I18n" \
     || chk "the plugin's registerTypes runs, which is what makes the module exist to the engine" 1 \
            "no registerTypes line; $(tail -2 "$W/mode-plugin.txt" | tr '\n' ' ')"
 
-says "$PLUGIN" "RIMEI18N: installed " \
+says_line "$PLUGIN" "RIMEI18N: installed .*/rime-shell_[^/]*\.qm$" \
     && chk "the plugin installs a QTranslator from inside the engine's own process" 0 \
     || chk "the plugin installs a QTranslator from inside the engine's own process" 1 \
            "no install line; $(tail -2 "$W/mode-plugin.txt" | tr '\n' ' ')"

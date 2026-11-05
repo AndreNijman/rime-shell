@@ -161,15 +161,23 @@ QtObject {
         const bundled = p.match(/\/apex-shell-default-([0-9]+\.[A-Za-z0-9]+)$/)  // rime-rename: keep (a bundled wallpaper's name before the rename)
         if (bundled)
             return Quickshell.shellDir + "/src/assets/wallpapers/rime-shell-default-" + bundled[1]
-        const oldDir = "/usr/share/backgrounds/apex/"  // rime-rename: keep (the OS wallpaper directory before the rename)
-        if (p.indexOf(oldDir) === 0)
-            return "/usr/share/backgrounds/rime/" + p.slice(oldDir.length)
+        // The OS wallpaper directory as an image wrote it: the old name before the
+        // rename, /usr/share/backgrounds/rime/ after. Spelled as a
+        // regex on purpose: this is the path a SAVED config holds, so it must stay
+        // the Fedora spelling even where the build rewrites /usr/share to another
+        // system prefix (Rime OS on NixOS), and the target below is the directory
+        // this build actually ships the default in.
+        const os = p.match(/^\/usr\/share\/backgrounds\/(apex|rime)\/(.+)$/)  // rime-rename: keep (the OS wallpaper directory before the rename)
+        if (os) {
+            const moved = root._rimeDefault.replace(/[^\/]*$/, "") + os[2]
+            return moved === p ? "" : moved
+        }
         return ""
     }
 
     function _followRename() {
         const moved = root.renamedWallpaper(root.currentWall)
-        if (moved === "") { root.rethemeIfStale(); return }
+        if (moved === "") { root._paintIfNeverShown(); return }
         root._renameProc.command = ["bash", "-c",
             "[ -e \"$1\" ] || { [ -e \"$2\" ] && printf %s \"$2\"; }; exit 0",
             "--", root.currentWall, moved]
@@ -180,9 +188,35 @@ QtObject {
         stdout: StdioCollector {
             onStreamFinished: {
                 const moved = String(this.text).trim()
-                if (moved === "") { root.rethemeIfStale(); return }
+                if (moved === "") { root._paintIfNeverShown(); return }
                 console.info("WallpaperService: " + root.currentWall + " was renamed; applying " + moved)
                 root.apply(moved)
+            }
+        }
+    }
+
+    // ── A saved wallpaper that was never put on screen ───────────────────────
+    // rime-shell-firstrun seeds wallpaper.json with the OS default before the
+    // shell's first start, so `currentWall` is set and _applyDefault never runs.
+    // Nothing had ever called apply() for it: the wallpaper daemon has nothing to
+    // restore on a first login, so the desktop stayed bare until the user picked
+    // a wallpaper, and the palette was never derived from it. apply() is what
+    // leaves ~/.curr_wall behind, so its absence is the "never applied" mark; a
+    // session that has applied one before keeps the daemon's own restore.
+    function _paintIfNeverShown() {
+        root._paintProc.command = ["bash", "-c",
+            "[ -e \"$HOME/.curr_wall\" ] || [ -L \"$HOME/.curr_wall\" ] || { [ -f \"$1\" ] && printf %s \"$1\"; }; exit 0",
+            "--", root.currentWall]
+        root._paintProc.running = true
+    }
+
+    property var _paintProc: Process {
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const path = String(this.text).trim()
+                if (path === "") { root.rethemeIfStale(); return }
+                console.info("WallpaperService: " + path + " was saved but never applied; applying it")
+                root.apply(path)
             }
         }
     }
@@ -237,7 +271,11 @@ QtObject {
             "mkdir -p \"$(dirname \"$CFG\")\" && " +
             "sed -e \"s|@SRCDIR@|$2|g\" -e \"s|@HOME@|$HOME|g\" \"$TMPL\" > \"$CFG\" || exit 1; " +
             "missing=0; while IFS= read -r out; do " +
-            "[ -e \"$out\" ] || { missing=1; echo \"missing: $out\"; }; " +
+            // A seeded fallback (rime-os's rime-terminal-migrate writes Ghostty's
+            // theme before the first render) counts as missing: render over it.
+            "first=; [ -e \"$out\" ] && IFS= read -r first < \"$out\"; " +
+            "case \"$first\" in '# rime-os fallback'*) first=fallback ;; esac; " +
+            "{ [ -e \"$out\" ] && [ \"$first\" != fallback ]; } || { missing=1; echo \"missing: $out\"; }; " +
             "done < <(sed -n \"s/^output_path *= *'\\(.*\\)'.*/\\1/p\" \"$CFG\"); " +
             "[ \"$missing\" = 1 ] || exit 0; " +
             "STATIC=\"$(readlink -f ~/.curr_wall_static.jpg 2>/dev/null)\"; " +
@@ -293,6 +331,10 @@ QtObject {
             // silently skipped. Now the symlink + matugen theming always run.
             "SETTER=\"\"; for S in awww swww; do " +
             "if command -v \"$S\" >/dev/null 2>&1; then SETTER=\"$S\"; break; fi; done; " +
+            // The daemon is started by the compositor beside this shell, so on a
+            // first login the shell can get here first: wait for it to answer
+            // (5 s at most) rather than lose the image to a refused connection.
+            "if [ -n \"$SETTER\" ]; then for _ in $(seq 50); do \"$SETTER\" query >/dev/null 2>&1 && break; sleep 0.1; done; fi; " +
             // The transition runs at the fastest output's refresh rate, not a
             // fixed 60 that held a faster display to 60. The daemon draws on
             // frame callbacks, so a slower output is not drawn faster than it
@@ -369,8 +411,8 @@ QtObject {
     // colour in config.kdl and themerc-override, which are files with other
     // writers — matugen generates the labwc one — so a live override there would
     // be a second writer racing the generator. CompositorService reports that as
-    // `can.accentBorder` and refuses silently; the two-dialect Hyprland split
-    // this used to carry lives in HyprlandBackend now.
+    // `can.accentBorder` and refuses silently. On Hyprland it is one
+    // `hyprctl eval` (HyprlandBackend), re-pushed after every config reload.
     function updateBorders() {
         CompositorService.setAccentBorder(String(Theme.active).replace('#', ''))
     }

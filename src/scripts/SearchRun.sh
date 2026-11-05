@@ -85,25 +85,24 @@ valid_dest() {
 }
 
 # ── Opening a terminal ───────────────────────────────────────────────────────
-# Candidates in preference order, each with its own exec flag, because getting
-# the flag wrong opens an empty terminal and that looks like the action did
-# nothing. Same list and same reasoning as /usr/libexec/rime-agent-review.
+# Through rime-terminal.sh beside this file: the user's default terminal
+# (xdg-terminal-exec, which Settings → Misc → Default terminal writes) first,
+# then the emulators it knows, each with its own exec flag — getting the flag
+# wrong opens an empty terminal and that looks like the action did nothing.
+# This script used to keep its own list with $TERMINAL first, and the OS
+# exported TERMINAL=alacritty, so a user who chose Ghostty got Alacritty here.
 #
 # The command is passed to the terminal as ONE argument, and it is built here
 # from constants plus a single already-validated word. It is never built from
 # anything this script received unchecked.
 open_terminal() {
     local script="$1"
-    local entry name flag
-    for entry in "${TERMINAL:-}:-e" alacritty:-e ghostty:-e foot:-e kitty:-e \
-                 wezterm:start xterm:-e; do
-        name="${entry%%:*}"
-        flag="${entry##*:}"
-        [ -n "$name" ] || continue
-        command -v "$name" >/dev/null 2>&1 || continue
-        exec "$name" "$flag" bash -c "$script"
-    done
-    printf 'rime-search: no terminal emulator found\n' >&2
+    local launcher
+    launcher="$(dirname "${BASH_SOURCE[0]}")/rime-terminal.sh"
+    if [ -r "$launcher" ]; then
+        exec sh "$launcher" bash -c "$script"
+    fi
+    printf 'rime-search: no terminal launcher (%s)\n' "$launcher" >&2
     printf 'rime-search: run it yourself:\n  %s\n' "$script" >&2
     exit 3
 }

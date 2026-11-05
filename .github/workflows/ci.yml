@@ -39,7 +39,7 @@ jobs:
       - name: Update pacman & install base tools
         run: |
           pacman -Syu --noconfirm
-          pacman -S --needed --noconfirm git base-devel python nodejs
+          pacman -S --needed --noconfirm git base-devel python nodejs luajit
 
       - name: Validate pacman dependencies exist in repos
         run: |
@@ -169,6 +169,23 @@ jobs:
           # can skip.
           node tests/search-test.js
 
+      # The two terminals Rime offers (Ghostty, the default, and Alacritty):
+      # their measured desktop ids and Wayland app ids, Ghostty's launch with
+      # single-instance off, and the writer behind Settings → Default terminal
+      # (keeps the user's own lines, idempotent). No process, nothing to skip.
+      - name: Terminal identities and the Default terminal writer
+        run: node tests/terminals-test.js
+
+      # Every terminal the shell opens follows the user's default: no launch
+      # site names an emulator, rime-terminal.sh is run against stub terminals
+      # (xdg-terminal-exec first, $TERMINAL only without it, Ghostty with
+      # --gtk-single-instance=false, 127 with nothing), and the REAL
+      # xdg-terminal-exec resolves what the Settings writer wrote. Six mutants.
+      - name: Every terminal the shell opens follows the default terminal
+        run: |
+          pacman -S --needed --noconfirm xdg-terminal-exec || echo "xdg-terminal-exec unavailable: its checks will SKIP"
+          ./tests/check-terminal-default.sh
+
       - name: Test blueprint editor logic
         run: |
           # §10's editor keeps every decision it makes in a plain module —
@@ -260,6 +277,32 @@ jobs:
           # with what it does; the choice is saved and put back after a reload.
           ./tests/check-layout-menu.sh
 
+      - name: The shell talks to Hyprland in Lua only
+        run: |
+          # Hyprland's only config manager is Lua. The shell's old "conf"
+          # dialect was chosen by a probe that read "conf" until it answered,
+          # so against a Lua Hyprland its writes were silent no-ops. Runs the
+          # shipped functions: Lua string escaping (read back by luajit), a
+          # hostile shader file name, the eval-only writes, the config probe's
+          # five answers, the installers' refusal of a .conf-only home, and
+          # matugen's Lua colour module. Each rule is mutated and must fail.
+          ./tests/check-hypr-lua-only.sh
+
+      - name: The Hyprland config probe's verdicts
+        run: |
+          # "unknown" (a reload in flight, a hyprctl hiccup) changes neither the
+          # state nor the one-notice-per-problem guard; "loaded again" is only a
+          # problem clearing; a check during a running probe is queued, never a
+          # restart that kills it. The file ShellState and HyprlandBackend load.
+          node tests/hypr-config-test.js
+
+      - name: Saved keybinds cannot write code into the keybind files
+        run: |
+          # A combo from the saved keybinds JSON is a key name or it is ignored,
+          # and every Lua literal escapes control characters (a newline in one
+          # failed the whole module; in a comment it started a line of Lua).
+          node tests/keybind-text-test.js
+
       - name: Every singleton a file uses is imported there
         run: |
           # IpcManager called WindowSwitcherService without importing
@@ -288,6 +331,15 @@ jobs:
           # instead of rename, no symlink, move over an existing directory, …)
           # must each fail a case.
           ./tests/check-shell-migrate.sh
+
+      - name: Ghostty's Rime theme is rendered where Ghostty reads it
+        run: |
+          # Ghostty is Rime's terminal on NixOS and every user's config.ghostty
+          # says `theme = rime-os`. The matugen template renders that theme to
+          # ~/.config/ghostty/themes/rime-os, keeps Alacritty's stock look in its
+          # static block, and rethemeIfStale() renders over rime-os's seeded
+          # fallback. Five mutants must each fail a rule.
+          ./tests/check-ghostty-theme.sh
 
       - name: Firewall surface logic
         run: |
@@ -1058,17 +1110,24 @@ jobs:
           grep -qE '"\$browser",\s*"(firefox|zen)"' <<<"$code" \
             && { echo "✗ the browser bind names a browser"; fail=1; }
 
-          # `hyprctl keyword` is refused by a Lua config ("keyword can't work
-          # with non-legacy parsers. Use eval."), so every live config write has
-          # to have a lua branch. setGaps was the one that did not.
-          if grep -n 'hyprctl keyword' src/services/compositor/HyprlandBackend.qml \
-             | grep -v '_lua' | grep -qv 'root._lua'; then
-            grep -q '_lua' src/services/compositor/HyprlandBackend.qml \
-              || { echo "✗ a live keyword write has no Lua branch"; fail=1; }
+          # Hyprland's only config manager is Lua: the keyword request is
+          # refused ("keyword can't work with non-legacy parsers. Use eval.")
+          # and there is no .conf dialect to fall back to. So NOTHING under
+          # src/ (QML, JS, src/scripts/) may call it, in either spelling: the
+          # shell string `hyprctl keyword` or an argv ["hyprctl", "keyword"].
+          # Prose that names the old request is reworded, not exempted, so the
+          # check stays one grep with no allow-list to rot.
+          if grep -rnE "hyprctl[\"', ]+keyword" src/; then
+            echo "✗ src/ still uses the hyprctl keyword request; use hyprctl eval"; fail=1
           fi
-          grep -q "hyprctl eval 'hl.config({ general = { gaps_in =" \
+          # The old dialect switch is gone, not defaulted: a probe that read
+          # "conf" until it answered is what made every write a silent no-op.
+          if grep -rnE 'configProvider|root\._lua\b' src/; then
+            echo "✗ src/ still branches on the removed .conf/Lua dialect switch"; fail=1
+          fi
+          grep -q 'gaps_in = ${i}, gaps_out = ${o}' \
             src/services/compositor/HyprlandBackend.qml \
-            || { echo "✗ setGaps has no hyprctl eval branch; the gaps slider is inert on Lua"; fail=1; }
+            || { echo "✗ setGaps does not write both gaps in one hyprctl eval"; fail=1; }
 
           [ "$fail" -eq 0 ] || exit 1
           echo "✓ the Hyprland keybind generator writes Lua and the live writes use eval"
@@ -1775,6 +1834,22 @@ jobs:
       - name: Bar open pills are centred on their glyphs
         run: ./tests/run-open-pill-centre-test.sh
 
+      # The Rime layered ridge as drawn: the brand masters' geometry, plane 3
+      # in the accent (Rime Blue when the palette's accent would vanish into
+      # the ink), at 16-240 px on light and dark, redrawn when the accent
+      # moves; the bar's and About's marks bound to Theme. Three mutants.
+      # Needs labwc and PIL; skips cleanly without quickshell.
+      - name: The Rime mark is drawn as the brand says
+        run: ./tests/run-rime-mark-test.sh
+
+      # Settings → Default terminal end to end, with the real
+      # xdg-terminal-exec: the page's choice is written and read back, and a
+      # desktop-specific list that outranks it is reported, not hidden.
+      - name: Settings → Default terminal does what it shows
+        run: |
+          pacman -S --needed --noconfirm xdg-terminal-exec || echo "xdg-terminal-exec unavailable: the suite will SKIP"
+          ./tests/run-terminal-settings-test.sh
+
       # The Agents and Config tabs on the keyboard: the agents guide opens on
       # its section list, keeps Tab inside it, closes on Escape alone and hands
       # the keys back; a wallpaper applied from the Appearance strip, read off
@@ -1849,6 +1924,27 @@ jobs:
       # without quickshell.
       - name: Installed apps never show a broken icon
         run: ./tests/run-app-icons-test.sh
+
+      # Rime Settings, the app for GNOME, KDE Plasma and COSMIC: one window
+      # with app id org.rimeos.Settings, a second launch reuses it, no
+      # Shell-only page and no hyprctl call; inside a Rime session the
+      # launcher opens Nexus. SKIPS without quickshell or labwc.
+      - name: Rime Settings is one app window without the Shell's pages
+        run: ./tests/run-settings-app-test.sh
+
+      # The Shell's power control against a fake rimed on a private bus:
+      # follows PropertiesChanged on the power-profiles API, sets through
+      # ActiveProfile with busctl (a refusal shows its reason and the tier in
+      # force again), falls back to Rimed1 Tier when the name has no owner.
+      # SKIPS without quickshell.
+      - name: The power control follows rimed's power-profiles API
+        run: ./tests/run-power-profile-service-test.sh
+
+      # Focus Mode (SUPER+B) through the shipped focus-toggle IPC target with no
+      # dashboard ever built, and a press while the gaps settle queued rather
+      # than dropped. SKIPS without quickshell.
+      - name: Focus Mode works before the dashboard opens and queues a fast press
+        run: ./tests/run-focus-mode-test.sh
 
       # The surface and text roles (src/theme/roles.js) against every palette
       # the shell ships — six wallpapers, both matugen schemes — with the
@@ -2833,6 +2929,12 @@ jobs:
   nix-validate:
     name: NixOS — Flake & Package Check
     runs-on: ubuntu-latest
+    # The shell has no flake of its own: rime-os's flake builds it (nix/pkgs/rime-shell.nix), with this checkout
+    # standing in for its rime-shell input. That build runs the package's install check: the Rime.I18n plugin
+    # loads in the package's Qt and every catalogue installs, and the tree carries no Fedora path left unrewritten.
+    env:
+      # TODO(handover): point at rime-os main once the NixOS port lands there.
+      RIME_OS_FLAKE: github:AndreNijman/rime-os/feat/nixos
 
     steps:
       - name: Checkout
@@ -2841,57 +2943,24 @@ jobs:
       - name: Install Nix
         uses: cachix/install-nix-action@v27
         with:
-          nix_path: nixpkgs=channel:nixos-unstable
           extra_nix_config: |
             experimental-features = nix-command flakes
-            accept-flake-config = true
 
-      - name: Validate flake.nix syntax
+      - name: Build rime-shell through rime-os's flake
         run: |
-          # Check file exists and is valid UTF-8 text
-          cat flake.nix > /dev/null
-          # Use nix-instantiate for pure syntax check (no network, no path access)
-          nix-instantiate --parse flake.nix > /dev/null
-          echo "✓ flake.nix syntax OK"
+          nix build "$RIME_OS_FLAKE#rime-shell" \
+            --override-input rime-shell "path:$GITHUB_WORKSPACE" \
+            -L --print-out-paths
 
-      - name: Validate flake.lock structure
+      - name: Check the built tree
         run: |
-          python3 -c "
-          import json, sys
-          with open('flake.lock') as f:
-              lock = json.load(f)
-          assert lock.get('version') == 7, 'Expected lock version 7'
-          nodes = lock.get('nodes', {})
-          print(f'Lock version: {lock[\"version\"]}')
-          print(f'Nodes: {list(nodes.keys())}')
-          for name, node in nodes.items():
-              if 'locked' in node:
-                  rev = node['locked'].get('rev', 'N/A')[:10]
-                  print(f'  ✓ {name}: {rev}')
-          "
-
-      - name: Validate flake.nix declares required outputs
-        run: |
-          python3 -c "
-          with open('flake.nix') as f:
-              content = f.read()
-          checks = {
-            'packages':     'packages' in content,
-            'devShells':    'devShells' in content,
-            'nixosModules': 'nixosModules' in content,
-            'description':  'description' in content,
-            'rime-shell':  'rime-shell' in content,
-          }
-          failed = []
-          for key, ok in checks.items():
-              if ok:
-                  print(f'  ✓ {key} declared')
-              else:
-                  print(f'  ✗ {key} MISSING')
-                  failed.append(key)
-          if failed:
-              raise SystemExit(f'Missing from flake.nix: {failed}')
-          "
+          out=$(readlink -f result)
+          test -f "$out/share/rime-shell/shell.qml"
+          test -x "$out/bin/rime-shell"
+          test -f "$out/lib/qt-6/qml/Rime/I18n/qmldir"
+          grep -Ex ' *lock_cmd = qs -c /run/current-system/sw/share/rime-shell ipc call lockscreen lock' \
+            "$out/share/rime-shell/src/config/hypridle.conf"
+          echo "rime-shell built: $out"
 
   # ─────────────────────────────────────────────
   #  Structure Sanity Check (both runners agree)
@@ -2908,8 +2977,6 @@ jobs:
         run: |
           REQUIRED=(
             "shell.qml"
-            "flake.nix"
-            "flake.lock"
             "install.sh"
             "dots-extra/install-arch.sh"
             "dots-extra/validate-install.sh"
@@ -2917,6 +2984,10 @@ jobs:
             "src/theme/Theme.qml"
             "src/theme/ColorLoader.qml"
             "src/state/ShellState.qml"
+            "src/state/hyprConfig.js"
+            "tests/hypr-config-test.js"
+            "src/services/config_tab/keybindText.js"
+            "tests/keybind-text-test.js"
             "src/state/Popups.qml"
             "src/windows/TopBar.qml"
             "src/popups/Dashboard.qml"

@@ -21,8 +21,8 @@ import "compositorPin.js" as Pin
 // signal is in the environment) or nothing was detected; otherwise it is
 // ignored and `overrideIgnored` says so. compositorPin.js holds the rule.
 // Values: "hyprland" | "niri" | "labwc" | "auto"/"" (= use detection).
-// Written by the Config → Misc page through setOverride(); the sibling
-// "configProvider" key (read by ShellState) is preserved on every write.
+// Written by the Config → Misc page through setOverride(); any other key in
+// the file is preserved on every write.
 // ──────────────────────────────────────────────────────────────────────────────
 
 QtObject {
@@ -169,7 +169,7 @@ QtObject {
     property var _writeProc: Process { command: []; running: false }
 
     function setOverride(mode) {
-        // Clone existing keys so configProvider (and anything else) survives.
+        // Clone existing keys so anything else in the file survives.
         var data = {}
         var ks = Object.keys(root._cfgData || {})
         for (var i = 0; i < ks.length; i++) data[ks[i]] = root._cfgData[ks[i]]

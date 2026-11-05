@@ -117,7 +117,9 @@ rime_compositor() {
 rime_logout_command() {
     RIME_CMD=()
     case "${1:-}" in
-        hyprland) RIME_CMD=(hyprctl dispatch exit) ;;
+        # Under Lua, `hyprctl dispatch X` is `return hl.dispatch(X)`, so the
+        # hyprlang word `exit` was an undefined global and the button did nothing.
+        hyprland) RIME_CMD=(hyprctl dispatch 'hl.dsp.exit()') ;;
         niri)     RIME_CMD=(niri msg action quit --skip-confirmation) ;;
         labwc)    RIME_CMD=(labwc --exit) ;;
         *)        return 1 ;;
@@ -143,7 +145,9 @@ rime_logout_command() {
 rime_dpms_command() {
     RIME_CMD=()
     case "${1:-}:${2:-}" in
-        hyprland:on|hyprland:off) RIME_CMD=(hyprctl dispatch dpms "$2") ;;
+        # hl.dsp.dpms takes an action table (the hyprlang `dpms on` is refused under Lua).
+        hyprland:on)              RIME_CMD=(hyprctl dispatch 'hl.dsp.dpms({ action = "enable" })') ;;
+        hyprland:off)             RIME_CMD=(hyprctl dispatch 'hl.dsp.dpms({ action = "disable" })') ;;
         niri:on)                  RIME_CMD=(niri msg action power-on-monitors) ;;
         niri:off)                 RIME_CMD=(niri msg action power-off-monitors) ;;
         labwc:on)                 RIME_CMD=(wlopm --on '*') ;;
@@ -156,9 +160,9 @@ rime_dpms_command() {
 # screenshot.sh's two layer surfaces: the freeze (hyprpicker's still) and
 # slurp's selection. Run, not exec'd: the capture carries on after it.
 #
-# hyprland: Rime's appearance.lua fades layers in and out, and grimblast's own
-# exemption, `keyword layerrule noanim,selection`, is refused by a Lua config
-# ("keyword can't work with non-legacy parsers. Use eval."). Measured in a
+# hyprland: Rime's appearance.lua fades layers in and out, and the old
+# keyword-request form of this exemption is refused by Hyprland's only config
+# manager, Lua ("keyword can't work with non-legacy parsers. Use eval."). Measured in a
 # nested 0.56.2 with the live appearance.lua: the still took more than 120 ms
 # to become opaque, and grim 20 ms after slurp exited captured its overlay half
 # faded — slurp's border, on the edges of every area screenshot.
@@ -168,8 +172,7 @@ rime_dpms_command() {
 # (v0.56.2, LuaBindingsConfigRules.cpp: `rule->addEffect` on the existing rule),
 # so pushing on every screenshot would grow it without bound. The Lua global is
 # the guard: it survives between evals and, measured, a reload clears it along
-# with the runtime rules it guards. On a hyprlang config eval fails, and
-# grimblast's keyword works there.
+# with the runtime rules it guards.
 #
 # labwc animates no layer surface, so there is nothing to exempt. niri's layer
 # animations were not measured; it gets no rule rather than a guessed one.

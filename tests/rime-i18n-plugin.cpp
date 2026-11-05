@@ -60,6 +60,7 @@
 //  apart — the whole defect family this program keeps meeting.
 // ─────────────────────────────────────────────────────────────────────────────
 #include <QCoreApplication>
+#include <QLibraryInfo>
 #include <QLocale>
 #include <QQmlEngine>
 #include <QQmlExtensionPlugin>
@@ -101,6 +102,28 @@ public:
             qInfo("RIMEI18N: no catalogue for %s in %s",
                   qPrintable(QLocale().name()), qPrintable(dir));
             delete tr;
+        }
+
+        // Qt's own catalogue (qt_<lang>.qm, the qttranslations package). Qt
+        // decides the application's layout direction by TRANSLATING the
+        // string QT_LAYOUT_DIRECTION, so without this catalogue installed an
+        // Arabic or Hebrew session lays out left-to-right. quickshell installs
+        // no translator; on Fedora one arrives by accident (qt6ct links
+        // libKF6I18n, which loads it), elsewhere (NixOS's qt6ct links no KDE
+        // library) nothing does. Loading it here makes the direction a property
+        // of the shell rather than of a platform theme's link line. A second
+        // copy of the same catalogue beside KF6I18n's answers the same strings.
+        // Installing a translator sends LanguageChange, on which QGuiApplication
+        // re-reads the direction (unless something set it explicitly).
+        const QString qtDir = QLibraryInfo::path(QLibraryInfo::TranslationsPath);
+        auto *qt = new QTranslator(QCoreApplication::instance());
+        if (qt->load(QLocale(), QStringLiteral("qt"), QStringLiteral("_"), qtDir)) {
+            QCoreApplication::installTranslator(qt);
+            qInfo("RIMEI18N: installed %s", qPrintable(qt->filePath()));
+        } else {
+            qInfo("RIMEI18N: no Qt catalogue for %s in %s",
+                  qPrintable(QLocale().name()), qPrintable(qtDir));
+            delete qt;
         }
 
         if (engine)

@@ -64,9 +64,9 @@ if [[ -f /etc/os-release ]]; then
             ;;
         nixos)
             echo ""
-            log_error "NixOS is not currently supported by this installer."
-            log_info "The NixOS pipeline and Nix flake are known to be broken (see README)."
-            log_info "Manual configuration is required on NixOS for now."
+            log_error "This installer does not support NixOS."
+            log_info "Rime OS packages the shell for NixOS itself: the rime-shell package and"
+            log_info "its NixOS module live in the rime-os flake (nix/pkgs/rime-shell.nix, nix/modules/desktop.nix)."
             exit 1
             ;;
         *)
@@ -87,25 +87,23 @@ fi
 
 # Hyprland config
 HYPR_DIR="$HOME/.config/hypr"
-HYPRLAND_CONF=""
-CONFIG_TYPE=""
+HYPRLAND_CONF="$HYPR_DIR/hyprland.lua"
 
-# Hyprland loads .lua first when both exist; mirror that priority here so
-# the installer always targets the file Hyprland is actually reading.
+# Hyprland reads hyprland.lua and nothing else: its .conf parser is gone, so a
+# home with only a hyprland.conf is not a Hyprland config this shell can extend
+# (everything it writes is a Lua module, every live change is `hyprctl eval`).
+# Refuse rather than append to a file nothing reads.
 if [[ -f "$HYPR_DIR/hyprland.lua" ]]; then
-    HYPRLAND_CONF="$HYPR_DIR/hyprland.lua"
-    CONFIG_TYPE="lua"
     if [[ -f "$HYPR_DIR/hyprland.conf" ]]; then
-        log_ok "Hyprland config: hyprland.lua  ${DIM}(hyprland.conf also present but ignored by Hyprland)${NC}"
+        log_ok "Hyprland config: hyprland.lua  ${DIM}(hyprland.conf also present; Hyprland does not read it)${NC}"
     else
         log_ok "Hyprland config: hyprland.lua"
     fi
 elif [[ -f "$HYPR_DIR/hyprland.conf" ]]; then
-    HYPRLAND_CONF="$HYPR_DIR/hyprland.conf"
-    CONFIG_TYPE="conf"
-    log_ok "Hyprland config: hyprland.conf"
-    log_warn "hyprland.conf support is deprecated as of 0.55 and will be removed in a future release."
-    log_info "Consider migrating to hyprland.lua — see https://wiki.hypr.land/Configuring/Start/"
+    log_info "Only $HYPR_DIR/hyprland.conf exists, and Hyprland no longer reads .conf files."
+    log_info "Convert it first: on Rime OS run /usr/libexec/rime-hypr-migrate;"
+    log_info "elsewhere write hyprland.lua (https://wiki.hypr.land/Configuring/Start/)."
+    die "No hyprland.lua in $HYPR_DIR. Nothing was changed."
 else
     die "No Hyprland config found in $HYPR_DIR. Set up Hyprland first."
 fi
@@ -186,7 +184,7 @@ DISTRO_INSTALLER="$REPO_DIR/dots-extra/install-${DISTRO_TYPE}.sh"
 [[ -f "$DISTRO_INSTALLER" ]] || die "Distro installer not found: $DISTRO_INSTALLER"
 
 chmod +x "$DISTRO_INSTALLER"
-bash "$DISTRO_INSTALLER" "$HYPRLAND_CONF" "$BACKUP_DIR" "$CONFIG_TYPE"
+bash "$DISTRO_INSTALLER" "$HYPRLAND_CONF" "$BACKUP_DIR"
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -221,7 +219,7 @@ log_ok "Rime Shell is installed."
 echo ""
 echo -e "  ${BOLD}Restart Hyprland to activate Rime Shell:${NC}"
 log_info "Log out and log back in  ${DIM}(recommended)${NC}"
-log_info "hyprctl dispatch exit"
+log_info "hyprctl dispatch 'hl.dsp.exit()'"
 log_info "Ctrl+Alt+Q               ${DIM}(if configured)${NC}"
 echo ""
 echo -e "  ${BOLD}Paths:${NC}"

@@ -86,8 +86,11 @@ ShellRoot {
         // The whole point of this branch: app launches now reach niri.
         check("the browser bind is emitted",
               root.kdl.indexOf("rime-open-browser") >= 0)
+        // The user's default terminal (xdg-terminals.list), not a named one.
         check("the terminal bind is emitted",
-              root.kdl.indexOf('spawn "alacritty"') >= 0)
+              root.kdl.indexOf('spawn "xdg-terminal-exec"') >= 0)
+        check("no terminal is hardcoded in the terminal bind",
+              root.kdl.indexOf('spawn "alacritty"') < 0 && root.kdl.indexOf('spawn "ghostty"') < 0)
         check("the file manager bind is emitted",
               root.kdl.indexOf('spawn "thunar"') >= 0)
 

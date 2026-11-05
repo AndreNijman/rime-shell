@@ -1,0 +1,5 @@
+-- Rime Shell: the wallpaper's accent on the active window border.
+-- Written by matugen from rime-shell src/config/hypr-colors.lua.template on
+-- every wallpaper change; required by rime-os ~/.config/hypr/rime/appearance.lua.
+-- Do not edit: the next wallpaper change replaces it.
+hl.config({ general = { col = { active_border = { colors = { "rgb({{colors.primary.default.hex_stripped}})" } } } } })

@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=Rime Settings
+GenericName=Settings
+Comment=Rime's power, gaming, update, desktop and privacy settings
+Exec=rime-settings %u
+Icon=org.rimeos.Settings
+Terminal=false
+Categories=Settings;DesktopSettings;
+Keywords=Rime;power;gaming;updates;desktops;firewall;privacy;
+StartupNotify=true
+StartupWMClass=org.rimeos.Settings
+X-GNOME-UsesNotifications=true
+MimeType=x-scheme-handler/rime-settings;

@@ -6,6 +6,7 @@ import Quickshell.Io
 import "../../"
 import "../../components"
 import "../../services/home/."
+import "../../services/terminals.js" as Terms
 
 // CenterContent — scrollable dynamic island carousel.
 //
@@ -53,9 +54,11 @@ Item {
 	// separate NiriService mirror, right here in a view file, and it showed the
 	// application on Hyprland but the raw window title on niri.
 	//
-	// Capitalised for display: "kitty" -> "Kitty".
+	// Capitalised for display: "kitty" -> "Kitty". A known terminal's app id is
+	// named instead (terminals.js): niri and labwc report Ghostty's reverse-DNS
+	// id, which capitalised read "Com.mitchellh.ghostty".
 	readonly property string activeTitle: {
-		const n = CompositorService.focusedAppName
+		const n = Terms.displayName(CompositorService.focusedAppName)
 		return (n && n !== "") ? n.charAt(0).toUpperCase() + n.slice(1) : "Desktop"
 	}
 

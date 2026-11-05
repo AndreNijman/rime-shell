@@ -37,7 +37,7 @@ IconBtn {
     readonly property string rimeLogo: Quickshell.shellDir + "/src/assets/rime-logo.png"
 
     // Glyph fallback is used only when the Rime logo image is not available.
-    text: logo.status === Image.Ready
+    text: Brand.ridge || logo.status === Image.Ready
               ? ""
               : (distroGlyphs[distroId] !== undefined ? distroGlyphs[distroId] : "")
     label: "Rime menu"
@@ -65,7 +65,7 @@ IconBtn {
     Image {
         id: logo
         anchors.centerIn: parent
-        source: root.rimeLogo
+        source: Brand.ridge ? "" : root.rimeLogo
         // Keep the spark comfortably inside the IconBtn.
         width: 18
         height: 18
@@ -85,7 +85,24 @@ IconBtn {
         colorization: 1.0
         colorizationColor: root.hovered || root.pressed ? Qt.lighter(Theme.active, 1.25) : Theme.active
         Behavior on colorizationColor { MotionColor { role: "hover" } }
-        visible: logo.status === Image.Ready
+        visible: !Brand.ridge && logo.status === Image.Ready
+    }
+
+    // Rime on NixOS (Brand.ridge): the layered ridge, vectors, with only plane 3
+    // in the live accent and the other planes in the bar's ink.
+    RimeMark {
+        id: mark
+        objectName: "rimeMark"
+        visible: Brand.ridge
+        anchors.centerIn: parent
+        // The mark is wider than tall (240:175); 20 px wide keeps it inside the
+        // IconBtn at the height the spark has.
+        width: theme.px(20)
+        height: Math.round(width * 175 / 240)
+        accent: root.hovered || root.pressed ? Qt.lighter(Theme.active, 1.25) : Theme.active
+        foreground: root.hovered || root.pressed ? Theme.textPrimary : Theme.text
+        Behavior on accent { MotionColor { role: "hover" } }
+        Behavior on foreground { MotionColor { role: "hover" } }
     }
 
     property var osRelease: FileView {
@@ -98,7 +115,7 @@ IconBtn {
 
     // The open state of the control that opened the power menu (brief §D.5:
     // the same rule on the left notch as on the right).
-    OpenPill { shown: Popups.archMenuOpen; glyph: logo }
+    OpenPill { shown: Popups.archMenuOpen; glyph: Brand.ridge ? mark : logo }
 
     onClicked: {
         var next = !Popups.archMenuOpen
