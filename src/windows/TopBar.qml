@@ -214,6 +214,10 @@ PanelWindow {
         exitDuration:  Motion.morphExit
         liquid:        true
         surface:       root.rightSurface
+        // The panel's window is kept between opens (SurfaceLifecycle: the
+        // kept window), parked only with no fullscreen window.
+        keepWindow:    true
+        parkable:      ShellState.activeFullscreenToplevel === null
     }
     // The RightPanel's body, pushed by RightPanel once it exists.
     property Item rightSurface: null
@@ -324,6 +328,7 @@ PanelWindow {
 
             RightContent {
                 id: rightContent
+                screenName: root.screenName
                 anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
                 anchors.rightMargin: theme.notchPadding

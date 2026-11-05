@@ -18,9 +18,11 @@ PanelWindow {
 
 
     anchors.top:    true
-    anchors.left:   true
-    anchors.right:  true
-    anchors.bottom: true
+    anchors.left:   !life.parked
+    anchors.right:  !life.parked
+    anchors.bottom: !life.parked
+    implicitWidth:  1
+    implicitHeight: 1
 
     exclusionMode: ExclusionMode.Ignore
     color:         "transparent"
@@ -28,7 +30,11 @@ PanelWindow {
     WlrLayershell.layer:         WlrLayer.Overlay
 
     property bool wantsFocus: false
-    WlrLayershell.keyboardFocus: wantsFocus ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+    // Closing while another surface opens, it keeps the keyboard until its
+    // close ends: released at once, the compositor could hand the keys to a
+    // window before the opener's grab lands, and that focus move closes the
+    // opener (a parked window's grab lands with its next frame).
+    WlrLayershell.keyboardFocus: (wantsFocus || life.closing && Popups.anyOpen) && !life.parked ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
 
     Timer {
         id: focusGrabTimer
@@ -56,9 +62,17 @@ PanelWindow {
         exitDuration:  Motion.morphExit
         liquid:        true
         surface:       body
+        // Kept between opens, parked only with no fullscreen window
+        // (SurfaceLifecycle: the kept window).
+        keepWindow: true
+        parkable:   ShellState.activeFullscreenToplevel === null
     }
     readonly property bool windowVisible: life.mapped
-    visible: life.mapped
+    // No input at all while parked (it has no mask of its own).
+    mask: life.parked ? root._parkMask : null
+    property Region _parkMask: Region {}
+    visible: life.windowVisible
+    updatesEnabled: life.windowUpdates
 
     // ── Self-hover tracking ───────────────────────────────────────────────────
     property bool selfHovered: true
@@ -179,9 +193,8 @@ PanelWindow {
         id: body
         anchors.fill: parent
         family:   "bottomRise"
-        progress: life.progress
-        channels: ({ w: life.lead, d: life.body, n: life.trail, fw: life.leadFlow, fd: life.bodyFlow })
-        readonly property var chGeometry: Object.assign({}, geometry, { ch: channels })
+        motion:   life.frame
+        readonly property var chGeometry: Object.assign({}, geometry, { ch: ch })
         geometry: root.riseGeometry
         color:    Theme.background
         opacity:  life.alpha * Math.min(1, Math.max(0,

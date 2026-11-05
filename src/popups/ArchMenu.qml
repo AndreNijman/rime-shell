@@ -78,9 +78,11 @@ PanelWindow {
 	// between the bar and the bottom corner; that band's middle is still where
 	// it centres (midY).
 	anchors.top:    true
-	anchors.bottom: true
-	anchors.left:   true
-	anchors.right:  true
+	anchors.bottom: !life.parked
+	anchors.left:   !life.parked
+	anchors.right:  !life.parked
+	implicitWidth:  1
+	implicitHeight: 1
 	readonly property real midY: theme.notchHeight + (root.height - theme.notchHeight - theme.cornerRadius) / 2
 
 	exclusionMode: ExclusionMode.Ignore
@@ -95,7 +97,11 @@ PanelWindow {
 	// layer (PopupDismiss) never saw that click and the menu could not be
 	// closed by one (2026-09-27, found with the right-notch panes).
 	readonly property bool grabbing: Popups.archMenuOpen
-	WlrLayershell.keyboardFocus: root.grabbing ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+	// Closing while another surface opens, it keeps the keyboard until its
+	// close ends: released at once, the compositor could hand the keys to a
+	// window before the opener's grab lands, and that focus move closes the
+	// opener (a parked window's grab lands with its next frame).
+	WlrLayershell.keyboardFocus: (root.grabbing || life.closing && Popups.anyOpen) && !life.parked ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
 	MouseArea {
 		id: outside
 		anchors.fill: parent
@@ -120,8 +126,13 @@ PanelWindow {
 		// window's first frame, so it grows out of the strip.
 		liquid:  true
 		surface: body
+		// Kept between opens, parked only with no fullscreen window
+		// (SurfaceLifecycle: the kept window).
+		keepWindow: true
+		parkable:   ShellState.activeFullscreenToplevel === null
 	}
-	visible: life.mapped
+	visible: life.windowVisible
+	updatesEnabled: life.windowUpdates
 
 	// The finished body, retargeting over a page beat while it is up.
 	readonly property real targetW: _tW.value
@@ -164,15 +175,14 @@ PanelWindow {
 			id: body
 			anchors.fill: parent
 			family:   "leftSpill"
-			progress: life.progress
-			channels: ({ w: life.lead, d: life.body, n: life.trail, fw: life.leadFlow, fd: life.bodyFlow })
-			readonly property var chGeometry: Object.assign({}, geometry, { ch: channels })
+			motion:   life.frame
+			readonly property var chGeometry: Object.assign({}, geometry, { ch: ch })
 			color:    Theme.background
 			geometry: root.spillGeometry
 		}
 	}
 
-	mask: Region { item: root.grabbing ? outside : hit }
+	mask: Region { item: life.parked ? null : root.grabbing ? outside : hit }
 	Item {
 		id: hit
 		x: life.open ? body.result.bounds.x : 0

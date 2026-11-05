@@ -71,6 +71,23 @@ import "controls"
 //     SurfaceLifecycle { id: life; open: Popups.networkOpen; surface: body }
 //     PanelWindow { visible: life.mapped; … }
 //
+// ── The kept window (2026-11-03) ────────────────────────────────────────────
+// Most of that wait is the window itself: Quickshell destroys a layer window
+// the moment it is hidden and builds a new one (and its scene graph) on the
+// next show. With `keepWindow: true` the window outlives its first close:
+// instead of hiding, it PARKS — shrunk to 1x1, input region empty, keyboard
+// focus none — and stops rendering once that 1x1 frame is on screen
+// (`windowUpdates`), so a parked window costs no frames, no wakeups and no
+// compositor work. The next open only resizes it. A window parks only while
+// `parkable` (a surface binds it to "no fullscreen window covers this output",
+// so a parked overlay never sits over a game); otherwise it hides as before.
+//     PanelWindow {
+//         visible: life.windowVisible; updatesEnabled: life.windowUpdates
+//         anchors.left: !life.parked  …  implicitWidth: 1; implicitHeight: 1
+//     }
+// A window that is opening waits for a frame at its real size: the parked
+// window's own frames do not count.
+//
 // It observes `open` from construction, so a popup that a LazyPopup builds BY
 // its flag flipping true starts opening on its own; it needs no applyOpenState.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -129,26 +146,31 @@ QtObject {
     property real minFraction: 0.35
 
     // ── Output ───────────────────────────────────────────────────────────────
-    readonly property real progress: Math.max(0, Math.min(1, life._body.value))
-    readonly property real body:  life._body.value
-    readonly property real lead:  life.liquid ? life._lead.value  : life._body.value
-    readonly property real trail: life.liquid ? life._trail.value : life._body.value
-    readonly property real velocity:     life._body.velocity
-    readonly property real leadVelocity: life.liquid ? life._lead.velocity : life._body.velocity
+    // All of these change together, ONCE per frame: the springs are stepped
+    // in one tick and published as one snapshot (`frame`). A binding that
+    // reads several of them — a silhouette's channels — used to re-run for
+    // every spring write, six times a frame, each time rebuilding and parsing
+    // the whole path. Bind to `frame` to run once.
+    readonly property real progress: Math.max(0, Math.min(1, life._f.body))
+    readonly property real body:  life._f.body
+    readonly property real lead:  life._f.lead
+    readonly property real trail: life._f.trail
+    readonly property real velocity:     life._f.velocity
+    readonly property real leadVelocity: life._f.leadVelocity
     // FLOW: speed relative to the peak of a nominal open — a critically damped
     // spring from rest peaks at 2π/(e·response) ≈ 2.3/response — so about 1 at
     // the fastest and exactly 0 at rest. geometry.js bends edges by it.
-    readonly property real bodyFlow: life._body.response > 0
-                                     ? life._body.velocity * life._body.response / 2.3 : 0
-    readonly property real leadFlow: !life.liquid ? life.bodyFlow
-                                     : life._lead.response > 0
-                                       ? life._lead.velocity * life._lead.response / 2.3 : 0
+    readonly property real bodyFlow: life._f.bodyFlow
+    readonly property real leadFlow: life._f.leadFlow
+    // The snapshot itself: { progress, body, lead, trail, velocity,
+    // leadVelocity, bodyFlow, leadFlow }. A new object only when a value moved.
+    readonly property var frame: life._f
     property real content:  0
     property real alpha:    0
 
     readonly property bool mapped: life.open || life._settling
                                    || life.progress > 0 || life.content > 0 || life.alpha > 0
-                                   || (life.liquid && (life._lead.value > 0 || life._trail.value > 0))
+                                   || (life.liquid && (life._f.lead > 0 || life._f.trail > 0))
 
     readonly property string phase: {
         if (!life.mapped) return "Closed"
@@ -162,6 +184,42 @@ QtObject {
     // there runs _drive(), which writes `alpha` (measured on the spills'
     // opacity). This reads a plain flag that _drive() sets, with no effects.
     readonly property bool closing: life._settling
+
+    // ── Kept window (see the header) ─────────────────────────────────────────
+    property bool keepWindow: false
+    property bool parkable: true
+    // Whether the window should exist: shown, or parked.
+    readonly property bool windowVisible: life.mapped
+        || (life.keepWindow && life.parkable && life._everOpened)
+    // Shown but closed: 1x1, no input, no focus.
+    readonly property bool parked: life.windowVisible && !life.mapped
+    // False once a parked window has presented its 1x1 frame.
+    readonly property bool windowUpdates: !life.parked || !life._parkFlushed
+    // The window has its real size: a kept window opening renders at 1x1
+    // until the compositor's configure arrives (its state is sent with a frame).
+    readonly property bool windowSized: !life.keepWindow || (life._win !== null && life._win.width > 2)
+    // A kept window's content is hidden while parked or unsized, as a hidden
+    // window's was (Quickshell orphans the content of a window it destroys,
+    // and an orphaned item is not visible). So neither its 1x1 frames nor the
+    // one it parks with can show a pixel of a surface, and what runs only
+    // while visible (a loading pulse) stops while it is parked: a running
+    // animation anywhere ticks the whole shell's animation timer.
+    // The item hidden is the surface's top item under the window's root (a
+    // Quickshell window's own contentItem), never the root itself: the root
+    // has no parent item, so once its `visible` is written it computes as
+    // hidden for good, whatever is written next.
+    readonly property Item _veiled: {
+        const root = life._win ? life._win.contentItem : null
+        let it = root ? life.surface : null
+        while (it && it.parent && it.parent !== root) it = it.parent
+        return it && it.parent === root ? it : null
+    }
+    property Binding _veil: Binding {
+        when: life.keepWindow && life._veiled !== null
+        target: life._veiled
+        property: "visible"
+        value: !life.parked && life.windowSized
+    }
 
     signal opened()
     signal closed()
@@ -178,40 +236,103 @@ QtObject {
     property bool _contentPending: false
 
     // ── Springs ──────────────────────────────────────────────────────────────
-    property Spring _body: Spring {
-        epsilon: 0.0005
-        onValueChanged: life._onStep()
-        onSettled: { life._onStep(); life._check() }
-    }
-    property Spring _lead: Spring {
-        epsilon: 0.0005
-        onValueChanged: if (life.liquid) life._onStep()
-        onSettled: if (life.liquid) { life._onStep(); life._check() }
-    }
-    // A follower: its target is wherever the body is right now.
-    property Spring _trail: Spring {
-        epsilon: 0.0005
-        target: life.liquid ? life._body.value : 0
-        dampingFraction: 1.0
-        onValueChanged: if (life.liquid) life._onStep()
-        onSettled: if (life.liquid) { life._onStep(); life._check() }
-    }
+    // Stepped together by `_clock`, once a frame, on the frame clock.
+    property Spring _body:  Spring { epsilon: 0.0005; external: true }
+    property Spring _lead:  Spring { epsilon: 0.0005; external: true }
+    // A follower: its target is wherever the body is right now (set each tick).
+    property Spring _trail: Spring { epsilon: 0.0005; external: true; dampingFraction: 1.0 }
     function _anyRunning() {
         return life._body.running || (life.liquid && (life._lead.running || life._trail.running))
     }
     function _snapAll(to) {
         life._body.target = to; life._body.snap()
         life._lead.target = to; life._lead.snap()
-        life._trail.snap()      // its target follows the body's value
+        life._trail.target = life.liquid ? life._body.value : 0
+        life._trail.snap()
+        life._publish()
+    }
+
+    property var _f: ({ progress: 0, body: 0, lead: 0, trail: 0, velocity: 0,
+                        leadVelocity: 0, bodyFlow: 0, leadFlow: 0 })
+    function _publish() {
+        const B = life._body, L = life.liquid ? life._lead : life._body
+        const T = life.liquid ? life._trail : life._body
+        const f = life._f
+        if (f.body === B.value && f.lead === L.value && f.trail === T.value
+                && f.velocity === B.velocity && f.leadVelocity === L.velocity)
+            return
+        const bodyFlow = B.response > 0 ? B.velocity * B.response / 2.3 : 0
+        life._f = {
+            progress: Math.max(0, Math.min(1, B.value)),
+            body: B.value, lead: L.value, trail: T.value,
+            velocity: B.velocity, leadVelocity: L.velocity,
+            bodyFlow: bodyFlow,
+            leadFlow: !life.liquid ? bodyFlow
+                      : L.response > 0 ? L.velocity * L.response / 2.3 : 0
+        }
+    }
+
+    // ── The clock ────────────────────────────────────────────────────────────
+    // One tick a frame steps every spring, in order, then publishes. A channel
+    // released by another (the body once the lead crosses `openRelease`, the
+    // lead once the body falls below `closeRelease`) starts at the INSTANT of
+    // the crossing, found on the closed form, not at the next frame: checked
+    // once a frame, the release lagged up to a whole frame — at the lead's
+    // fastest, ~40 px of a Dashboard at 60 Hz.
+    property FrameAnimation _clock: FrameAnimation {
+        running: life._anyRunning()
+        // The first tick after a start carries the time since the start.
+        onTriggered: life._tick(Math.min(0.05, frameTime))
+    }
+    function _tick(dt) {
+        const B = life._body, L = life._lead, T = life._trail
+        let done = false
+        if (life.liquid && life._ready && dt > 0
+                && (life.open ? life.enterDuration : life.exitDuration) > 0) {
+            if (life.open && B.target < 1) {
+                const tc = L.crossingTime(dt, life.openRelease)
+                if (tc >= 0) {
+                    L.advance(dt)
+                    B.advance(tc); B.target = 1; B.advance(dt - tc)
+                    done = true
+                }
+            } else if (!life.open && L.target > 0) {
+                const tc = B.crossingTime(dt, life.closeRelease)
+                if (tc >= 0) {
+                    B.advance(dt)
+                    L.advance(tc); L.target = 0; L.advance(dt - tc)
+                    done = true
+                }
+            }
+        }
+        if (!done) {
+            if (life.liquid) L.advance(dt)
+            B.advance(dt)
+        }
+        if (life.liquid) {
+            T.target = B.value
+            T.advance(dt)
+        }
+        life._publish()
+        life._onStep()
+        life._check()
     }
 
     // ── The first frame ──────────────────────────────────────────────────────
     readonly property var _win: life.surface ? life.surface.Window.window : null
     property bool _presented: false
-    // A new backing window (Quickshell builds one per map) has shown nothing.
-    on_WinChanged: life._presented = false
+    // A new backing window (Quickshell builds one per map, unless it is kept)
+    // has shown nothing. Counted, for tests/run-kept-window-test.sh.
+    property int _windows: 0
+    on_WinChanged: {
+        life._presented = false
+        if (!life._win) return
+        life._windows++
+        if (Motion.pacingLog) console.info("Rime pacing: " + (life.name || "surface") + " window=" + life._windows)
+    }
     onMappedChanged: {
         if (!life.mapped) life._presented = false
+        else life._everOpened = true   // see _everOpened
         // For tests/visual/stress-matrix.sh: every map and unmap, by name.
         if (Motion.pacingLog)
             console.info("Rime pacing: " + (life.name || "surface") + " mapped=" + life.mapped)
@@ -220,13 +341,65 @@ QtObject {
         target: (life.surface && !life._presented) ? life._win : null
         ignoreUnknownSignals: true
         function onFrameSwapped() {
+            // A kept window's parked frames, or one presented before the
+            // compositor has given it its real size, are not this open's.
+            // (A swap queued before the first one disconnected this is late.)
+            if (life._presented) return
+            if (!life.windowSized || (life.keepWindow && !life.mapped)) return
             if (Motion.pacingLog && life.open)
                 console.info("Rime pacing: " + (life.name || "surface") + " first-frame ms="
                              + (Date.now() - life._openedAt))
             life._presented = true
         }
     }
+    // Pacing only: frames this window presented during an open or a close, and
+    // the first one presented after a spring left 0 — the open's first VISIBLE
+    // motion, so `motion` is the input-to-motion latency (UI/UX Phase 22).
+    property real _motionAt: 0
+    property Connections _paceSwaps: Connections {
+        target: (Motion.pacingLog && life.surface) ? life._win : null
+        ignoreUnknownSignals: true
+        function onFrameSwapped() {
+            const now = Date.now()
+            if (life.phase === "Opening" || life.phase === "Closing") life._pace.swaps++
+            else if (life.phase === "Closed")
+                console.info("Rime pacing: " + (life.name || "surface") + " swap-closed")
+            if (life.open && life._motionAt > 0 && life._pace.motion < 0)
+                life._pace.motion = now - life._openedAt
+        }
+    }
     property real _openedAt: 0
+    // Set in onMappedChanged once `mapped` is true, never from onOpenChanged: a handler there runs
+    // before `mapped` has re-evaluated, so windowVisible would see the window
+    // as parked and create it parked (1x1, no keyboard focus). With no
+    // exclusive layer for that frame, labwc hands focus to a toplevel, and the
+    // focus move closes the popup being opened.
+    property bool _everOpened: false
+    property bool _parkFlushed: false
+    // A parked window keeps its active focus item, and a focused text field
+    // keeps blinking its cursor: two wakeups a second for as long as it is
+    // parked (measured on the wallpaper picker's search field). Parking takes
+    // the focus off it, and the next open gives it back unless the opening
+    // surface has already focused something itself.
+    property Item _parkedFocus: null
+    onParkedChanged: {
+        const win = life._win
+        if (life.parked) {
+            const f = win ? win.activeFocusItem : null
+            if (f && f !== win.contentItem) { life._parkedFocus = f; f.focus = false }
+            return
+        }
+        life._parkFlushed = false
+        const f = life._parkedFocus
+        life._parkedFocus = null
+        if (f && win && (!win.activeFocusItem || win.activeFocusItem === win.contentItem))
+            f.forceActiveFocus()
+    }
+    property Connections _parkSwaps: Connections {
+        target: (life.surface && life.parked && !life._parkFlushed) ? life._win : null
+        ignoreUnknownSignals: true
+        function onFrameSwapped() { if (life._win.width <= 2) life._parkFlushed = true }
+    }
     readonly property bool _ready: !life.surface || life._presented
     on_ReadyChanged: if (life._ready && life.open) life._drive()
     // Never hold longer than this for a window that does not report frames.
@@ -249,6 +422,9 @@ QtObject {
     }
 
     function _onStep() {
+        if (Motion.pacingLog && life.open && life._motionAt === 0
+                && (life._lead.value > 0 || life._body.value > 0))
+            life._motionAt = Date.now()
         var spatial = (life.open ? life.enterDuration : life.exitDuration) > 0
         if (life.liquid && spatial && life._ready) {
             // Sequencing, evaluated both ways so a reversal resumes it.
@@ -288,20 +464,29 @@ QtObject {
         property real worstT: 0
         property real first: -1
         property string ph: ""
+        property int swaps: 0
+        property real motion: -1
+        property var iv: []
         onRunningChanged: {
             if (running) {
                 t0 = Date.now(); last = t0; n = 0; worst = 0; worstT = t0; first = -1; ph = life.phase
+                swaps = 0; iv = []
+                if (ph === "Opening") { motion = -1; life._motionAt = 0 }
             } else if (n > 0) {
                 const span = Math.max(1, last - t0)
                 console.info("Rime pacing: " + (life.name || "surface") + " " + ph
                              + " ms=" + Math.round(last - t0) + " frames=" + n
                              + " worst=" + Math.round(worst)
                              + " at=" + ((worstT - t0) / span).toFixed(2)
-                             + " first=" + Math.round(first))
+                             + " first=" + Math.round(first)
+                             + " swaps=" + swaps
+                             + (ph === "Opening" ? " motion=" + Math.round(motion) : "")
+                             + " iv=" + iv.join(","))
             }
         }
         onTriggered: {
             const now = Date.now()
+            if (n > 0) iv.push((frameTime * 1000).toFixed(1))
             if (first < 0) first = now - t0
             if (now - last > worst) { worst = now - last; worstT = now }
             last = now
@@ -485,5 +670,5 @@ QtObject {
         }
         life._drive()
     }
-    Component.onCompleted: if (life.open) { life._openedAt = Date.now(); life._drive() }
+    Component.onCompleted: if (life.open) { life._openedAt = Date.now(); life._everOpened = true; life._drive() }
 }

@@ -6,6 +6,7 @@ import Quickshell.Io
 import Quickshell.Hyprland
 import "../../"
 import "boxes.js" as Boxes
+import "../kblayout.js" as KB
 import "hyprMotion.js" as HyprMotion
 import "../../shapes/fluid/geometry.js" as Geo
 
@@ -100,6 +101,7 @@ QtObject {
         keyboardInterception: true,
         screenShader:         true,
         nightLight:           true,
+        keyboardLayouts:     true,
         motion:               true
     })
 
@@ -317,6 +319,8 @@ QtObject {
             root._refreshTitle()
             root._refreshWindows()
             root._refreshLayout()
+            if (event.name === "activelayout" || event.name === "configreloaded")
+                root._refreshKeyboardLayouts()
             if (root._FOCUS_EVENTS.indexOf(event.name) !== -1) root.focusMoved()
 
             if (event.name === "activespecial" || event.name === "activespecialv2")
@@ -539,6 +543,45 @@ QtObject {
             if (t && t.wayland) out["0x" + t.address] = t.wayland
         }
         return out
+    }
+
+    // ── Keyboard layouts ──────────────────────────────────────────────────────
+    // One `hyprctl devices` read at start and on the compositor's own
+    // `activelayout` / `configreloaded` events — a keybind, another client or a
+    // config reload — never on a timer. The active layout comes back as its xkb
+    // description, matched to a configured slot through evdev.lst (kblayout.js).
+    property var keyboardLayouts: ({ labels: [], names: [], index: 0 })
+    property var _kbLst: null
+
+    function switchKeyboardLayout(dir) {
+        root._start(root._kbActProc, ["hyprctl", "switchxkblayout", "all", dir === "prev" ? "prev" : "next"])
+    }
+    function _refreshKeyboardLayouts() {
+        if (!root._kbReadProc.running) root._kbReadProc.running = true
+    }
+    property Process _kbActProc: Process { command: []; running: false; onExited: root._refreshKeyboardLayouts() }
+    property Process _kbLstProc: Process {
+        command: ["cat", "/usr/share/X11/xkb/rules/evdev.lst"]
+        running: true
+        stdout: StdioCollector {
+            onStreamFinished: { root._kbLst = KB.parseLst(this.text); root._refreshKeyboardLayouts() }
+        }
+        onExited: if (root._kbLst === null) root._refreshKeyboardLayouts()
+    }
+    property Process _kbReadProc: Process {
+        command: ["hyprctl", "-j", "devices"]
+        running: false
+        stdout: StdioCollector {
+            onStreamFinished: {
+                let m = null
+                try { m = KB.fromHypr(JSON.parse(this.text), root._kbLst) } catch (e) { m = null }
+                if (!m) { root.keyboardLayouts = ({ labels: [], names: [], index: 0 }); return }
+                const names = m.codes.map(function (c, i) {
+                    return (root._kbLst && root._kbLst.layouts[c]) || m.labels[i]
+                })
+                root.keyboardLayouts = ({ labels: m.labels, names: names, index: m.index })
+            }
+        }
     }
 
     property Process _layoutProc: Process {

@@ -974,7 +974,9 @@ section("input masks follow the body");
         const m = src.match(/mask:\s*Region\s*\{\s*item:\s*([^}]*)\}/);
         if (!m) return false;
         const declared = new Set([...src.matchAll(/\bid:\s*(\w+)/g)].map(x => x[1]));
-        const ids = (m[1].match(/\b[A-Za-z_]\w*\b/g) || []).filter(x => declared.has(x) && x !== "outside" && x !== "root");
+        // A kept window takes no input while parked (`life.parked ? null : …`).
+        const expr = m[1].replace(/^\s*(?:\w+\.)*parked\s*\?\s*null\s*:/, "");
+        const ids = (expr.match(/\b[A-Za-z_]\w*\b/g) || []).filter(x => declared.has(x) && x !== "outside" && x !== "root");
         if (ids.length !== 1) return false;
         const id = ids[0];
         const at = src.indexOf("id: " + id);

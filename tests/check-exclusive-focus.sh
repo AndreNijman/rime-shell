@@ -16,7 +16,10 @@
 #  (discovered, not listed):
 #
 #   1. FULLSCREEN — the window is anchored to all four edges, so there is no
-#      "outside" the compositor can pin the pointer away from.
+#      "outside" the compositor can pin the pointer away from. A kept window
+#      (SurfaceLifecycle) lets go of three edges while parked, 1x1: that is
+#      allowed only when its keyboard focus is gated on not being parked
+#      (`… && !life.parked ?`, or on a property bound to `life.mapped`).
 #   2. INPUT — its input region, while it holds the keyboard, is the whole
 #      window: no mask at all, or a mask whose item fills the window. A
 #      popup that masks its body at other times says which with `grabbing`:
@@ -68,8 +71,15 @@ for f in sorted((root / "src").rglob("*.qml")):
     if not kf or "WlrKeyboardFocus.Exclusive" not in kf.group(1): continue
     rel = str(f.relative_to(root)); found.append(rel)
 
-    edges = all(re.search(r"\banchors\." + e + r":\s*true\b", src) or
-                re.search(r"\banchors\s*\{[^}]*\b" + e + r":\s*true", src) for e in ("top", "bottom", "left", "right"))
+    # Lifecycles the keyboard is never held while parked by.
+    gated = set(re.findall(r"!\s*((?:\w+\.)*\w+)\.parked\b", kf.group(1)))
+    for prop, ref in re.findall(r"readonly\s+property\s+bool\s+(\w+)\s*:\s*((?:\w+\.)*\w+)\.mapped\s*$", src, re.M):
+        if re.search(r"\broot\." + prop + r"\b", kf.group(1)): gated.add(ref)
+    def edge(e):
+        m = re.search(r"\banchors\." + e + r":\s*(true\b|!\s*((?:\w+\.)*\w+)\.parked\b)", src)
+        if m: return m.group(1) == "true" or m.group(2) in gated
+        return re.search(r"\banchors\s*\{[^}]*\b" + e + r":\s*true", src) is not None
+    edges = all(edge(e) for e in ("top", "bottom", "left", "right"))
     verdict("FULLSCREEN:" + rel, edges, "not anchored to all four edges: a click outside it goes nowhere on Hyprland")
 
     mask = re.search(r"\bmask:\s*Region\s*\{\s*item:\s*([^}\n]*)\}", src)
@@ -77,7 +87,8 @@ for f in sorted((root / "src").rglob("*.qml")):
     if not mask:
         good, why = True, ""
     elif grabbing:
-        mg = re.match(r"\s*root\.grabbing\s*\?\s*(\w+)\s*:", mask.group(1))
+        # (a kept window's parked state, `life.parked ? null :`, takes no input)
+        mg = re.match(r"\s*(?:(?:\w+\.)*parked\s*\?\s*null\s*:\s*)?root\.grabbing\s*\?\s*(\w+)\s*:", mask.group(1))
         good = bool(mg) and fills(src, mg.group(1))
         why = "while grabbing, the mask must be an item that fills the window (root.grabbing ? outside : …)"
     else:
@@ -88,11 +99,18 @@ for f in sorted((root / "src").rglob("*.qml")):
     verdict("INPUT:" + rel, good, why)
 
     if grabbing:
-        kfg = re.match(r"\s*root\.grabbing\s*\?\s*WlrKeyboardFocus\.Exclusive", kf.group(1)) is not None
+        # (a kept window closing while another popup opens holds on until its
+        # close ends: `(root.grabbing || life.closing && Popups.anyOpen)`)
+        kfg = re.match(r"\s*(?:root\.grabbing|\(\s*root\.grabbing\s*\|\|\s*(?:\w+\.)*closing\s*&&\s*Popups\.anyOpen\s*\))"
+                       r"\s*(?:&&\s*!\s*(?:\w+\.)*parked\s*)?\?\s*WlrKeyboardFocus\.Exclusive", kf.group(1)) is not None
         out = block_of(src, "outside")
         catcher = ("MouseArea" in src[max(0, src.find(out) - 40):src.find(out) + 1] if out else False) \
                   and re.search(r"\benabled:\s*root\.grabbing\b", out) is not None \
                   and re.search(r"\bonClicked:\s*Popups\.closeAll\(\)", out) is not None
+        # A kept window must hold on: released at once, labwc can hand the keys
+        # to a window before the opener's grab lands, and that closes the opener.
+        if re.search(r"\bkeepWindow:\s*true\b", src) and "Popups.anyOpen" not in kf.group(1):
+            kfg = False
         verdict("GRAB:" + rel, kfg and catcher,
                 "grabbing must drive the keyboard, and `outside` must be a MouseArea enabled by it that closes the popups")
 
@@ -126,16 +144,21 @@ PY
     else bad "self-test $1: SURVIVED"; fi
 }
 mutant "the right panel back in its corner" src/popups/RightPanel.qml \
-       "    anchors.left:   true
-    anchors.bottom: true
+       "    anchors.left:   !root.life.parked
+    anchors.bottom: !root.life.parked
 " "" FULLSCREEN:src/popups/RightPanel.qml
+mutant "a parked Dashboard that can still hold the keyboard" src/popups/Dashboard.qml \
+       "(wantsFocus || life.closing && Popups.anyOpen) && !life.parked ?" "(wantsFocus || life.closing && Popups.anyOpen) ?" FULLSCREEN:src/popups/Dashboard.qml
 mutant "the power menu masking only its body" src/popups/ArchMenu.qml \
-       "mask: Region { item: root.grabbing ? outside : hit }" "mask: Region { item: hit }" \
+       "mask: Region { item: life.parked ? null : root.grabbing ? outside : hit }" "mask: Region { item: hit }" \
        INPUT:src/popups/ArchMenu.qml
 mutant "quick controls grabbing without the catcher's condition" src/popups/QuickControl.qml \
-       "WlrLayershell.keyboardFocus: root.grabbing ? WlrKeyboardFocus.Exclusive" \
-       "WlrLayershell.keyboardFocus: Popups.quickOpen ? WlrKeyboardFocus.Exclusive" \
+       "WlrLayershell.keyboardFocus: (root.grabbing || life.closing && Popups.anyOpen) && !life.parked ? WlrKeyboardFocus.Exclusive" \
+       "WlrLayershell.keyboardFocus: (Popups.quickOpen || life.closing && Popups.anyOpen) && !life.parked ? WlrKeyboardFocus.Exclusive" \
        GRAB:src/popups/QuickControl.qml
+mutant "a kept power menu that lets go of the keys at once" src/popups/ArchMenu.qml \
+       "(root.grabbing || life.closing && Popups.anyOpen) && !life.parked ?" "root.grabbing && !life.parked ?" \
+       GRAB:src/popups/ArchMenu.qml
 mutant "a catcher that closes nothing" src/popups/ClipboardPopup.qml \
        "        onClicked: Popups.closeAll()
     }

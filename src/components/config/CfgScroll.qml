@@ -48,6 +48,16 @@ Item {
     // of the lifecycle blurb — see CfgLifecycle.
     property alias lifecycleError: banner.error
 
+    // What this page holds that the machine has not seen, if it stages
+    // anything (see CfgCommit). Declared here, drawn by the settings host's one
+    // CfgApplyBar, which floats over the bottom of the page.
+    property CfgCommit commit: null
+
+    // Room under the last control for that bar, set by the host while the bar
+    // is showing over this page: added to the scrollable height, so the last
+    // control can be scrolled clear of the bar instead of under it.
+    property real bottomInset: 0
+
     // ONE horizontal anchor plus an explicit width, not `x:` and not left+right.
     //
     // `x: 2` was the original, and it was the one thing in this file mirroring
@@ -83,7 +93,7 @@ Item {
         anchors.rightMargin: 4
         anchors.bottomMargin: 12
         contentWidth:  width
-        contentHeight: col.implicitHeight + 16
+        contentHeight: col.implicitHeight + 16 + root.bottomInset
         clip:          true
         boundsBehavior: Flickable.StopAtBounds
 
@@ -115,10 +125,13 @@ Item {
         while (p && p !== col) p = p.parent
         if (!p) return
         const y = it.mapToItem(col, 0, 0).y
+        // The bottom of the view is the top of the apply bar while it shows:
+        // a control scrolled "into view" underneath it is not in view.
+        const view = flick.height - root.bottomInset
         const top = y - 8, bottom = y + it.height + 8
         if (top < flick.contentY)
             flick.contentY = Math.max(0, top)
-        else if (bottom > flick.contentY + flick.height)
-            flick.contentY = Math.min(Math.max(0, flick.contentHeight - flick.height), bottom - flick.height)
+        else if (bottom > flick.contentY + view)
+            flick.contentY = Math.min(Math.max(0, flick.contentHeight - flick.height), bottom - view)
     }
 }

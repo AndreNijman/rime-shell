@@ -12,7 +12,7 @@ import "../../components"
 // machine has only the Radeon 780M iGPU, no NVIDIA dGPU.
 Item {
     id: root
-    readonly property ThemeSet theme: ThemeSet { scale: Theme.factorForHeight(Screen.height) }   // P1-040: this output's sizes
+    readonly property ThemeSet theme: ThemeSet { scale: Theme.factorForSize(Screen.width, Screen.height) }   // P1-040: this output's sizes
 
 
     required property var powerProfileService
@@ -40,6 +40,20 @@ Item {
                     onClicked: root.powerProfileService.setProfile(modelData.id)
                 }
             }
+        }
+
+        // Why a press did not change the profile (refused, daemon down). Without
+        // this the pill snapped back and the switch looked like it did nothing.
+        Text {
+            objectName: "powerProfileError"
+            width: parent.width
+            visible: text !== ""
+            text: root.powerProfileService.error || ""
+            wrapMode: Text.WordWrap
+            font.pixelSize: theme.typeCaption
+            color: Theme.danger
+            Accessible.role: Accessible.AlertMessage
+            Accessible.name: text
         }
     }
 }

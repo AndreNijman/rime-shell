@@ -31,7 +31,7 @@ import "../"
 // ─────────────────────────────────────────────────────────────────────────────
 RectangularShadow {
     id: root
-    readonly property ThemeSet theme: ThemeSet { scale: Theme.factorForHeight(Screen.height) }
+    readonly property ThemeSet theme: ThemeSet { scale: Theme.factorForSize(Screen.width, Screen.height) }
 
     required property Item target
     property string level: "modal"

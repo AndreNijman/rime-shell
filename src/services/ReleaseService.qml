@@ -181,10 +181,7 @@ Singleton {
                 const want = root._probeUrl.split("?")[0].replace(/\/+$/, "")
                 const code = landed === want ? parts[0] : "redirected:" + landed
                 if (code === "200") {
-                    root._openProc.command = ["sh", "-c",
-                        "h=\"$1\"; [ -x \"$h\" ] || h=xdg-open; command -v \"$h\" >/dev/null 2>&1 || exit 127; " +
-                        "setsid -f \"$h\" \"$2\" >/dev/null 2>&1 </dev/null",
-                        "sh", root.opener, root._probeUrl]
+                    root._openProc.command = root._openArgv(root._probeUrl)
                     root._openProc.running = true
                 } else {
                     console.info("ReleaseService: " + root._probeUrl.split("?")[0] + " answered '" + code
@@ -208,6 +205,33 @@ Singleton {
             root._busy = false
         }
     }
+
+    // The default browser (rime-open-browser, else xdg-open), detached so the
+    // browser outlives a shell restart. Exits 127 when there is neither.
+    function _openArgv(url) {
+        return ["sh", "-c",
+                "h=\"$1\"; [ -x \"$h\" ] || h=xdg-open; command -v \"$h\" >/dev/null 2>&1 || exit 127; " +
+                "setsid -f \"$h\" \"$2\" >/dev/null 2>&1 </dev/null",
+                "sh", root.opener, url]
+    }
+
+    // A release page the user ASKED for: "What's in this update" in the bar's
+    // update menu and in Settings → Updates (liveupdate.js whatsNew()). The
+    // same browser as the page opened after an update, and nothing else: it
+    // does not touch releases.json, because looking at the notes of an update
+    // before installing it is not having seen it after. Only rimeos.com's
+    // update pages are opened; anything else is refused (false).
+    function openUrl(url) {
+        const u = String(url || "")
+        if (!/^https:\/\/rimeos\.com\/updates(?:\/[0-9.]+)?(?:\?from=[0-9.]+)?$/.test(u)) {
+            console.warn("ReleaseService: not opening '" + u.slice(0, 120) + "': not a rimeos.com update page")
+            return false
+        }
+        root.lastUserUrl = u
+        Quickshell.execDetached(root._openArgv(u))
+        return true
+    }
+    property string lastUserUrl: ""      // the last page openUrl() handed to the browser (tests)
 
     // ── Notifications ──────────────────────────────────────────────────────
     function _notifyUpdated(url) {

@@ -18,7 +18,7 @@ import "../../components"
 // ─────────────────────────────────────────────────────────────────────────────
 Item {
     id: root
-    readonly property ThemeSet theme: ThemeSet { scale: Theme.factorForHeight(Screen.height) }   // P1-040: this output's sizes
+    readonly property ThemeSet theme: ThemeSet { scale: Theme.factorForSize(Screen.width, Screen.height) }   // P1-040: this output's sizes
 
     // Fully in place: the bar follows a held key smoothly only then, so it
     // arrives showing the value it has rather than growing from the last one.

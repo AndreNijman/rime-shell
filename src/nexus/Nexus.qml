@@ -118,18 +118,25 @@ PanelWindow {
         // takes the same beat, so the short fade stays.
         contentOut:      Motion.fadeOut
         contentOutCurve: Motion.standardDecel
+        // Kept between opens, parked only with no fullscreen window
+        // (SurfaceLifecycle: the kept window).
+        keepWindow: true
+        parkable:   ShellState.activeFullscreenToplevel === null
     }
 
     // The window stays mapped for the duration of the close animation.
     readonly property bool windowVisible: life.mapped
 
     color: "transparent"
-    visible: root.windowVisible
+    visible: life.windowVisible
+    updatesEnabled: life.windowUpdates
 
     anchors.top: true
-    anchors.left: true
-    anchors.right: true
-    anchors.bottom: true
+    anchors.left: !life.parked
+    anchors.right: !life.parked
+    anchors.bottom: !life.parked
+    implicitWidth:  1
+    implicitHeight: 1
 
     exclusionMode: ExclusionMode.Ignore
     WlrLayershell.layer: WlrLayer.Overlay
@@ -196,7 +203,8 @@ PanelWindow {
         FluidDrop {
             id: body
             anchors.fill: parent
-            channels: ({ w: life.lead, d: life.body, n: life.trail })
+            // From the one per-frame snapshot: the drop is built once a frame.
+            channels: ({ w: life.frame.lead, d: life.frame.body, n: life.frame.trail })
             geometry: root.dropGeometry
             color:    Theme.background
             opacity:  life.alpha

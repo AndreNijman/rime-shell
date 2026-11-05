@@ -44,6 +44,29 @@ function atRest(value, velocity, target, eps) {
     return Math.abs(value - target) < eps && Math.abs(velocity) < eps * 10;
 }
 
+// When, within the next `dt` seconds, a spring stepping from (value, velocity)
+// toward `target` first reaches `level`: the time in seconds, 0 < t <= dt, or
+// -1 if it does not get there in that step. A surface whose second channel
+// starts when the first crosses a level (SurfaceLifecycle's openRelease and
+// closeRelease) starts it AT that instant rather than on the next frame: a
+// frame boundary is 16.7 ms of lag at 60 Hz, and the lead moves fastest there.
+// Bisection on the closed form, to 0.1 µs; within one frame's step the motion
+// is monotone, so the bracket holds the crossing.
+function crossing(value, velocity, target, response, dampingFraction, dt, level) {
+    var f0 = value - level;
+    if (!(dt > 0) || f0 === 0) return -1;
+    var f1 = step(value, velocity, target, response, dampingFraction, dt)[0] - level;
+    if (f1 === 0) return dt;
+    if ((f0 < 0) === (f1 < 0)) return -1;
+    var lo = 0, hi = dt;
+    for (var i = 0; i < 40 && hi - lo > 1e-7; i++) {
+        var mid = (lo + hi) / 2;
+        var fm = step(value, velocity, target, response, dampingFraction, mid)[0] - level;
+        if ((fm < 0) === (f0 < 0)) lo = mid; else hi = mid;
+    }
+    return hi;
+}
+
 // How long a spring takes to come to rest from `from` at rest (for mapping,
 // logging and tests) — simulated at 1 ms.
 function settleTime(response, dampingFraction, from, target, eps) {
@@ -56,4 +79,4 @@ function settleTime(response, dampingFraction, from, target, eps) {
 }
 
 if (typeof module !== "undefined" && module.exports)
-    module.exports = { step: step, atRest: atRest, settleTime: settleTime };
+    module.exports = { step: step, atRest: atRest, crossing: crossing, settleTime: settleTime };

@@ -85,6 +85,7 @@ QtObject {
         // implement, but Rime does not ship it. See NiriBackend for the same
         // note — one `true` when it does.
         nightLight:           true,
+        keyboardLayouts:     false,
         motion:               false
     })
 

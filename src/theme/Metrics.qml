@@ -48,7 +48,7 @@ import "scaling.js" as Scaling
 // its OWN output's set:
 //
 //     readonly property ThemeSet theme: ThemeSet { scale: Theme.factorForScreen(root.screen) }     // a window
-//     readonly property ThemeSet theme: ThemeSet { scale: Theme.factorForHeight(Screen.height) }   // an Item
+//     readonly property ThemeSet theme: ThemeSet { scale: Theme.factorForSize(Screen.width, Screen.height) }   // an Item
 //
 // and reads `theme.px(...)` where it used to read `Theme.px(...)`. 1042 reads
 // across 99 files moved; tests/check-scale-tokens.sh's closure rule is what
@@ -128,5 +128,5 @@ ThemeSet {
 
     // The reference output's factor, through the same policy every per-output
     // surface uses. Manual mode wins here exactly as it wins there.
-    scale: OutputScale.factorForHeight(root.referenceHeight)
+    scale: OutputScale.factorForSize(root.referenceScreen ? root.referenceScreen.width : 1920, root.referenceHeight)
 }

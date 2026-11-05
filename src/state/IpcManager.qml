@@ -59,6 +59,14 @@ QtObject {
         }
     }
 
+    // Keyboard layout: `qs ipc call keyboard-layout next|prev` (bind it to a key
+    // on a compositor with no layout-switch binding of its own).
+    property var keyboardLayout: IpcHandler {
+        target: "keyboard-layout"
+        function next() { KeyboardLayoutService.next() }
+        function prev() { KeyboardLayoutService.prev() }
+    }
+
     property var dashboardHome: IpcHandler {
         target: "dashboard-home"
         function toggle() { root.toggleDashboard("home") }

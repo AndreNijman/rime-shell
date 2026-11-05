@@ -71,5 +71,38 @@ for (const z of [0.86, 1.0, 1.3]) {
 // with MotionSpring. Both are gone: at 16 ms a step it updated at ~62 Hz on a
 // 144 Hz panel. SpringFollower steps this closed form per frame instead.)
 
+// crossing(): the instant a step reaches a level, for a channel released by
+// another (SurfaceLifecycle's openRelease / closeRelease).
+{
+    const dt = 1 / 60;
+    // A lead from rest at 0 toward 1: find the frame where it crosses 0.12.
+    let x = 0, v = 0, t = 0, found = false;
+    for (let i = 0; i < 120 && !found; i++) {
+        const tc = S.crossing(x, v, 1, 0.3, 0.84, dt, 0.12);
+        const r = S.step(x, v, 1, 0.3, 0.84, dt);
+        if (tc >= 0) {
+            found = true;
+            const at = S.step(x, v, 1, 0.3, 0.84, tc)[0];
+            check("crossing: the value at the returned instant is the level", Math.abs(at - 0.12) < 1e-6, at);
+            check("crossing: inside the step", tc > 0 && tc <= dt, tc);
+            check("crossing: the step starts below and ends at or above the level", x < 0.12 && r[0] >= 0.12, x + " -> " + r[0]);
+        } else {
+            check("crossing: -1 on a step that stays below (frame " + i + ")", r[0] < 0.12 || x >= 0.12, r[0]);
+        }
+        x = r[0]; v = r[1]; t += dt;
+    }
+    check("crossing: found on the way up", found);
+    // Downward: a body from 1 toward 0 crosses 0.35.
+    let y = 1, w = 0, down = -1;
+    for (let i = 0; i < 120 && down < 0; i++) {
+        const tc = S.crossing(y, w, 0, 0.25, 1.0, dt, 0.35);
+        if (tc >= 0) { down = tc; check("crossing: downward value at the instant", Math.abs(S.step(y, w, 0, 0.25, 1.0, tc)[0] - 0.35) < 1e-6); }
+        const r = S.step(y, w, 0, 0.25, 1.0, dt); y = r[0]; w = r[1];
+    }
+    check("crossing: found on the way down", down > 0, down);
+    check("crossing: no step, no crossing", S.crossing(0, 0, 1, 0.3, 1, 0, 0.12) === -1);
+    check("crossing: already moving away from the level", S.crossing(0.5, 2, 1, 0.3, 1, dt, 0.12) === -1);
+}
+
 console.log("\nspring: passed=" + pass + " failed=" + fail);
 process.exit(fail === 0 ? 0 : 1);

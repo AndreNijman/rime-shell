@@ -180,6 +180,7 @@ QtObject {
         keyboardInterception: false,   // can grab all keys (Hyprland submaps)
         screenShader:         false,   // can run a fullscreen fragment shader
         nightLight:           false,   // has a colour-temperature shifter
+        keyboardLayouts:      false,   // can list the loaded keyboard layouts and switch between them
         motion:               false    // its animations can follow the shell's Motion
     })
 
@@ -438,6 +439,16 @@ QtObject {
     function setKeyboardInterception(on) {
         return root._act("keyboardInterception", "setKeyboardInterception", [on])
     }
+
+    // ── Keyboard layouts ──────────────────────────────────────────────────────
+    // The layouts the compositor has loaded ("us,ru"), which one is active, and
+    // the verb to change it. { labels: ["US","RU"], names: [...], index: 0 };
+    // labels is empty where the compositor cannot say. The bar's layout chip
+    // reads this through services/KeyboardLayoutService.
+    readonly property var keyboardLayouts: (root.can.keyboardLayouts && root.backend && root.backend.keyboardLayouts)
+        ? root.backend.keyboardLayouts : ({ labels: [], names: [], index: 0 })
+    // dir: "next" or "prev"
+    function switchKeyboardLayout(dir)  { return root._act("keyboardLayouts", "switchKeyboardLayout", [dir]) }
 
     // ── Screen shader ─────────────────────────────────────────────────────────
     // The Filter tile. A fullscreen fragment shader over the composited output;

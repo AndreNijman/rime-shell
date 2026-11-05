@@ -138,6 +138,129 @@ eq("versions capped at 8", long.components[0].versions.length, 8);
 eq("a label-less component is named by its id", L.parseStatus(JSON.stringify({ schema: 1,
     components: [{ component: "kernel" }] })).components[0].label, "kernel");
 
+console.log("── the top bar's indicator ──");
+// What the icon in the bar's right notch shows, or "" for nothing at all.
+const ind = (status, checker) => L.indicator(status, checker).kind;
+const js = (o) => L.parseStatus(JSON.stringify(Object.assign({ schema: 1 }, o)));
+const D1 = "sha256:" + "1".repeat(64), D2 = "sha256:" + "2".repeat(64), D3 = "sha256:" + "3".repeat(64);
+const avail = (d) => L.parseChecker("state=available\ndigest=" + d + "\n");
+eq("nothing known: nothing shown", ind(missing, NONE), "");
+eq("no arguments at all: nothing shown", ind(undefined, undefined), "");
+eq("the checker says none: nothing shown", ind(missing, UPTODATE), "");
+eq("the checker says available: available", ind(missing, AVAILABLE), "available");
+eq("available: its glyph is the page's", L.indicator(missing, AVAILABLE).glyph, L.hero(missing, AVAILABLE).glyph);
+eq("available: its tooltip", L.indicator(missing, AVAILABLE).tooltip, "A Rime update is available");
+eq("available without a digest is a partial write", ind(missing, L.parseChecker("state=available\n")), "");
+eq("the fallback text: digest still counts as new", ind(missing, avail("text:abc")), "available");
+eq("an unreadable status leaves it to the checker", ind(bad, AVAILABLE), "available");
+eq("available, but it is the image already booted", ind(js({ state: "superseded", booted: { digest: D2 } }), avail(D2)), "");
+eq("available, a different one from the booted", ind(js({ state: "superseded", booted: { digest: D1 } }), avail(D2)), "available");
+eq("available, already queued by rime update (plain staged, nothing owed)",
+   ind(js({ state: "active", booted: { digest: D1 }, target: { digest: D2 }, staged_for_boot: true, remaining: "nothing" }), avail(D2)), "");
+eq("available, already applied live (live-only, nothing owed)",
+   ind(js({ state: "active", booted: { digest: D1 }, target: { digest: D2 }, staged_for_boot: false, remaining: "nothing" }), avail(D2)), "");
+eq("available, only planned (downloaded, not queued): still available",
+   ind(js({ state: "deferred", booted: { digest: D1 }, target: { digest: D2 }, staged_for_boot: false, remaining: "soft-reboot" }), avail(D2)), "available");
+eq("available, a newer one than the target: available",
+   ind(js({ state: "active", booted: { digest: D1 }, target: { digest: D2 }, staged_for_boot: true, remaining: "nothing" }), avail(D3)), "available");
+eq("pending reboot: restart", ind(reboot, NONE), "restart");
+eq("restart: its glyph is the page's", L.indicator(reboot, NONE).glyph, L.hero(reboot, NONE).glyph);
+eq("restart: its tooltip", L.indicator(reboot, NONE).tooltip, "Restart to finish the update");
+eq("pending reboot outranks the stale checker", ind(reboot, AVAILABLE), "restart");
+eq("deferred while locked: nothing, unlocking finishes it", ind(deferred, AVAILABLE), "");
+eq("deferred with a restart owed, queued for boot: restart",
+   ind(js({ state: "deferred", staged_for_boot: true, remaining: "soft-reboot" }), NONE), "restart");
+eq("idle with an image staged for boot: restart", ind(idleStaged, NONE), "restart");
+eq("everything live, a boot queued: nothing", ind(active, AVAILABLE), "");
+eq("an app restart is not the computer's", ind(js({ state: "active", staged_for_boot: true, remaining: "app-restart" }), NONE), "");
+const relogin = js({ state: "active", staged_for_boot: true, remaining: "session-restart" });
+eq("a session restart: restart", ind(relogin, NONE), "restart");
+eq("a session restart says to log out", L.indicator(relogin, NONE).tooltip, "Log out and back in to finish the update");
+eq("a restart owed but nothing queued (plan only): nothing",
+   ind(js({ state: "deferred", staged_for_boot: false, remaining: "soft-reboot" }), NONE), "");
+eq("rolled back: shown", ind(rb, NONE), "rolled-back");
+eq("rolled back: the page's glyph", L.indicator(rb, NONE).glyph, L.hero(rb, NONE).glyph);
+eq("rolled back, nothing queued: its tooltip", L.indicator(rb, NONE).tooltip, "An update was undone");
+eq("rolled back, queued for boot: says when it applies",
+   L.indicator(js({ state: "rolled-back", staged_for_boot: true }), NONE).tooltip,
+   "An update was undone and applies at the next restart");
+eq("failed: shown", ind(st("failed"), AVAILABLE), "failed");
+eq("failed: the page's glyph", L.indicator(st("failed"), NONE).glyph, L.hero(st("failed"), NONE).glyph);
+eq("failed: drawn as bad", L.indicator(st("failed"), NONE).tone, "bad");
+eq("failed, nothing queued: its tooltip", L.indicator(st("failed"), NONE).tooltip, "An update could not be applied");
+eq("failed after it was queued for boot: says when it applies",
+   L.indicator(js({ state: "failed", staged_for_boot: true }), NONE).tooltip,
+   "An update could not be applied live; it applies at the next restart");
+eq("staged (in progress, queued): nothing yet", ind(js({ state: "staged", staged_for_boot: true, remaining: "reboot" }), AVAILABLE), "");
+eq("activating: nothing yet", ind(st("activating"), AVAILABLE), "");
+eq("verifying: nothing yet", ind(st("verifying"), AVAILABLE), "");
+eq("superseded leaves it to the checker", ind(st("superseded"), AVAILABLE), "available");
+eq("an unknown state leaves it to the checker", ind(st("teleporting"), UPTODATE), "");
+const kinds = {};
+for (const [s, c] of [[missing, AVAILABLE], [reboot, NONE], [rb, NONE], [st("failed"), NONE]])
+    kinds[L.indicator(s, c).glyph] = true;
+eq("four kinds, four glyphs", Object.keys(kinds).length, 4);
+eq("nothing shown has no glyph and no tooltip", [L.indicator(missing, NONE).glyph, L.indicator(missing, NONE).tooltip], ["", ""]);
+
+console.log("── what's in this update ──");
+// The bar's menu and Settings → Updates link to the release page on rimeos.com.
+const W = (s, c, b) => L.whatsNew(s, c, b);
+const offer = (rel, run, d) => L.parseChecker("state=available\ndigest=" + (d || D2) + "\nrelease=" + rel +
+                                              (run !== undefined ? "\nrunning=" + run : "") + "\n");
+eq("the checker's release= is read", offer("2026.11.04.4").release, "2026.11.04.4");
+eq("the checker's running= is read", offer("2026.11.04.4", "2026.11.03").running, "2026.11.03");
+eq("a checker without them reads as empty", [AVAILABLE.release, AVAILABLE.running], ["", ""]);
+for (const bad of ["dev", "2026.11.04.1", "2026.11.4", "2026.11.04.", "2026.11.04.02", "../../x",
+                   "2026.11.04?x=1", "2026.11.04/../../evil", "https://evil.example/", "2026.11.04#a",
+                   "2026.11.04 4", "x2026.11.04", "2026.11.04x"])
+    eq("release= that is not a release ID is dropped: " + JSON.stringify(bad), L.parseChecker("release=" + bad).release, "");
+eq("release IDs .2 and .10 are kept", [L.releaseId("2026.11.04.2"), L.releaseId("2026.11.04.10")], ["2026.11.04.2", "2026.11.04.10"]);
+eq("releaseId of a non-string is empty", [L.releaseId(undefined), L.releaseId(20261104), L.releaseId(null)], ["", "", ""]);
+
+eq("available, release and running known: the page, from what runs",
+   W(missing, offer("2026.11.04.4", "2026.11.03"), "").url, "https://rimeos.com/updates/2026.11.04.4?from=2026.11.03");
+eq("the image's own release.json wins for from",
+   W(missing, offer("2026.11.04.4", "2026.11.01"), "2026.11.02").url, "https://rimeos.com/updates/2026.11.04.4?from=2026.11.02");
+eq("then status.json's booted release",
+   W(js({ state: "superseded", booted: { release: "2026.10.30" } }), offer("2026.11.04.4", "2026.11.01"), "").url,
+   "https://rimeos.com/updates/2026.11.04.4?from=2026.10.30");
+eq("a booted id that is not a release ID is skipped for the next source",
+   W(missing, offer("2026.11.04.4", "2026.11.03"), "dev").url, "https://rimeos.com/updates/2026.11.04.4?from=2026.11.03");
+eq("nothing known about what runs: the page alone",
+   W(missing, offer("2026.11.04.4"), "").url, "https://rimeos.com/updates/2026.11.04.4");
+eq("from is never the target itself",
+   W(missing, offer("2026.11.04.4", "2026.11.04.4"), "").url, "https://rimeos.com/updates/2026.11.04.4");
+eq("it says which release and from where",
+   [W(missing, offer("2026.11.04.4", "2026.11.03"), "").release, W(missing, offer("2026.11.04.4", "2026.11.03"), "").from],
+   ["2026.11.04.4", "2026.11.03"]);
+eq("available, release unknown (an older checker): the list of updates, no ?from=",
+   W(missing, AVAILABLE, "2026.11.03"), { url: "https://rimeos.com/updates", release: "", from: "" });
+eq("a hostile release= falls back to the list too",
+   W(missing, L.parseChecker("state=available\ndigest=" + D2 + "\nrelease=../../../etc\n"), "").url, "https://rimeos.com/updates");
+eq("restart owed: the release installed for the next boot, from the booted one",
+   W(reboot, NONE, "").url, "https://rimeos.com/updates/2026.10.11?from=2026.10.10");
+eq("restart owed: the checker's stale release= is not used",
+   W(reboot, offer("2026.12.01", "2026.10.10", D2), "").release, "2026.10.11");
+eq("restart owed with no target release: the list",
+   W(js({ state: "idle", staged_for_boot: true }), NONE, "").url, "https://rimeos.com/updates");
+eq("failed but queued for the next restart: what will run",
+   W(js({ state: "failed", staged_for_boot: true, booted: { release: "2026.11.01" }, target: { release: "2026.11.02" } }), NONE, "").url,
+   "https://rimeos.com/updates/2026.11.02?from=2026.11.01");
+eq("undone but queued for the next restart: what will run",
+   W(js({ state: "rolled-back", staged_for_boot: true, target: { release: "2026.11.02" } }), NONE, "2026.11.01").url,
+   "https://rimeos.com/updates/2026.11.02?from=2026.11.01");
+eq("failed with nothing queued: no link", W(js({ state: "failed", target: { release: "2026.11.02" } }), NONE, ""), null);
+eq("undone with nothing queued: no link", W(rb, NONE, ""), null);
+eq("nothing shown: no link", W(missing, NONE, "2026.11.03"), null);
+eq("up to date: no link", W(missing, UPTODATE, "2026.11.03"), null);
+eq("an update running in a terminal: no link",
+   W(js({ state: "activating", staged_for_boot: true, target: { release: "2026.11.02" } }), offer("2026.11.02"), ""), null);
+eq("the release already running is not offered", W(js({ state: "idle", booted: { digest: D2 } }), offer("2026.11.04.4"), ""), null);
+eq("no arguments at all: no link", W(undefined, undefined, undefined), null);
+check("every URL is on rimeos.com/updates",
+      [W(missing, offer("2026.11.04.4", "2026.11.03"), ""), W(missing, AVAILABLE, ""), W(reboot, NONE, "")]
+          .every(v => v && /^https:\/\/rimeos\.com\/updates(\/\d{4}\.\d{2}\.\d{2}(\.\d+)?(\?from=\d{4}\.\d{2}\.\d{2}(\.\d+)?)?)?$/.test(v.url)));
+
 console.log("── the only commands ──");
 const HOLD = "\"$@\"; printf '\\nPress Enter to close this window. '; read -r _";
 eq("Update now", L.UPDATE_ARGV, ["sh", "-c", HOLD, "sh", "sudo", "rime", "update"]);

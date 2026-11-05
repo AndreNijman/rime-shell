@@ -8,7 +8,7 @@ import "../"
 // current default. Its own file so the keyboard suite can drive it.
 Column {
     id: list
-    readonly property ThemeSet theme: ThemeSet { scale: Theme.factorForHeight(Screen.height) }
+    readonly property ThemeSet theme: ThemeSet { scale: Theme.factorForSize(Screen.width, Screen.height) }
     function nameOf(node) {
         if (!node) return "Unknown"
         return node.nickname || node.description || node.name || "Unknown"

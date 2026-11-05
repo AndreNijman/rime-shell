@@ -401,8 +401,11 @@ ShellRoot {
             // would silently not reach these two windows.
             for (let m = 0; m < root.perOutput.length; m++) {
                 const e = root.perOutput[m];
+                // The override wins over the output's own density, but never over
+                // what the output can hold: 150% on a 1080p panel is held to
+                // OutputScale.maxFor, which is what overflowed the Dashboard.
                 root.eq(e.kind + " on " + e.screen.name + " follows the manual override, not its own density",
-                        e.win.theme.scale, 1.5);
+                        e.win.theme.scale, Math.min(1.5, OutputScale.maxFor(e.screen.width, e.screen.height)));
             }
             root.check("the manual override reached every per-output surface there is",
                        root.perOutput.length === screens.length * 2);
