@@ -88,18 +88,20 @@ IconBtn {
         visible: !Brand.ridge && logo.status === Image.Ready
     }
 
-    // Rime on NixOS (Brand.ridge): the layered ridge, vectors, with only plane 3
-    // in the live accent and the other planes in the bar's ink.
+    // Rime on NixOS (Brand.ridge): the Origin mark, vectors, in the live accent
+    // (the bar's ink if the accent would vanish into the bar).
     RimeMark {
         id: mark
         objectName: "rimeMark"
         visible: Brand.ridge
         anchors.centerIn: parent
-        // The mark is wider than tall (240:175); 20 px wide keeps it inside the
-        // IconBtn at the height the spark has.
-        width: theme.px(20)
-        height: Math.round(width * 175 / 240)
+        // A full disc reads heavier than the spark's open strokes: 16 px matches
+        // the weight of the bar's glyphs beside it (judged in the bar picture
+        // tests/run-rime-mark-test.sh writes with MARK_SHOTS).
+        width: theme.px(16)
+        height: width
         accent: root.hovered || root.pressed ? Qt.lighter(Theme.active, 1.25) : Theme.active
+        surface: Theme.background
         foreground: root.hovered || root.pressed ? Theme.textPrimary : Theme.text
         Behavior on accent { MotionColor { role: "hover" } }
         Behavior on foreground { MotionColor { role: "hover" } }

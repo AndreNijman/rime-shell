@@ -100,14 +100,15 @@ CfgScroll {
                     color:          Theme.active
                     anchors.verticalCenter: parent.verticalCenter
                 }
-                // Rime on NixOS (Brand.ridge): the layered ridge, plane 3 in the
-                // live accent, the rest in the page's ink (src/components/RimeMark.qml).
+                // Rime on NixOS (Brand.ridge): the Origin mark in the live accent
+                // (src/components/RimeMark.qml).
                 RimeMark {
                     objectName: "aboutRimeMark"
                     visible:    Brand.ridge
-                    width:      theme.px(44)
-                    height:     Math.round(width * 175 / 240)
+                    width:      theme.px(36)
+                    height:     width
                     accent:     Theme.active
+                    surface:    Theme.background
                     foreground: Theme.text
                     anchors.verticalCenter: parent.verticalCenter
                 }

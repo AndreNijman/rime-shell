@@ -1,11 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
   <title>Rime Settings</title>
-  <!-- The Rime ridge (src/assets/brand/rime-ridge-symbol.svg, unchanged geometry) on an app tile. -->
+  <!-- The Rime Origin mark (src/assets/brand/rime-origin-symbol.svg, unchanged geometry) on an app tile,
+       placed and coloured as rime-os's light app icon (files/branding/ridge/svg/rime-app-icon-light.svg). -->
   <rect x="8" y="8" width="240" height="240" rx="56" fill="#E9EEF1"/>
-  <g transform="translate(32 64) scale(0.8)">
-    <polygon fill="#212224" points="11,175 162.5,140 220,159 235.5,175"/>
-    <polygon fill="#212224" points="0,175 153,108 212,91.5 194.5,139 160.5,128"/>
-    <polygon fill="#91C2DC" points="47.5,136 149,75 231,45 217.5,76"/>
-    <polygon fill="#212224" points="91.5,100 129.5,58 240,0 222,36 142.5,67"/>
+  <g transform="translate(48.64 48.64) scale(1.8895)" fill="#3682AA" fill-rule="evenodd">
+    <path d="M0 42a42 42 0 1 0 84 0a42 42 0 1 0 -84 0ZM2.636 48.364a33 33 0 1 0 66 0a33 33 0 1 0 -66 0Z"/>
+    <path d="M4.686 53.314a26 26 0 1 0 52 0a26 26 0 1 0 -52 0ZM6.444 57.556a20 20 0 1 0 40 0a20 20 0 1 0 -40 0Z"/>
+    <path d="M7.908 61.092a15 15 0 1 0 30 0a15 15 0 1 0 -30 0Z"/>
   </g>
 </svg>
