@@ -2933,8 +2933,8 @@ jobs:
     # standing in for its rime-shell input. That build runs the package's install check: the Rime.I18n plugin
     # loads in the package's Qt and every catalogue installs, and the tree carries no Fedora path left unrewritten.
     env:
-      # TODO(handover): point at rime-os main once the NixOS port lands there.
-      RIME_OS_FLAKE: github:AndreNijman/rime-os/feat/nixos
+      # rime-os main: the NixOS port landed there (feat/nixos was merged and deleted 2026-11-06).
+      RIME_OS_FLAKE: github:AndreNijman/rime-os/main
 
     steps:
       - name: Checkout
