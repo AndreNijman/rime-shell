@@ -11,13 +11,15 @@ import "./src/services/config_tab/pages" as Pages
 // pictures this writes (tests/lib/rime-mark-check.py).
 //
 // What can only be seen in pixels:
-//   - plane 3 is the accent and planes 1, 2, 4 the ink, on a light and on a
-//     dark surface, at every size from the brand pack's 16 px minimum up;
+//   - every body (coat, ring, core) is the accent and both gaps are open
+//     (the surface shows through), on a light and on a dark surface, at every
+//     size from the brand's 16 px minimum up;
 //   - an accent that changes while the mark is on screen is redrawn (the
 //     wallpaper palette moves under a running shell);
 //   - the bar's mark (Left/ControlPanel) and the About mark (Settings → Misc)
 //     are the REAL modules, bound to the live Theme: their accent is
-//     Theme.active and their ink Theme.text, read back from the drawn items.
+//     Theme.active, their surface Theme.background and their ink Theme.text,
+//     read back from the drawn items.
 // Every picture is written to MARK_OUT; every record is one "MARK {json}" line.
 // ─────────────────────────────────────────────────────────────────────────────
 ShellRoot {
@@ -39,9 +41,9 @@ ShellRoot {
         readonly property color testAccent: "#91C2DC"
         readonly property color changedAccent: "#E0457B"
 
-        // The modules draw the ridge only where the NixOS build flipped
+        // The modules draw the mark only where the NixOS build flipped
         // Brand.ridge (the bootc image keeps the spark); the default is
-        // recorded, then the ridge is switched on for the pictures.
+        // recorded, then the switch is turned on for the pictures.
         property bool brandDefault: true
         Component.onCompleted: { brandDefault = Brand.ridge; Brand.ridge = true }
 
@@ -59,30 +61,33 @@ ShellRoot {
                     delegate: Rectangle {
                         property string cellName: "mark-" + perSurface.surface + "-" + modelData
                         property string kind: "plain"
-                        width: modelData + 16; height: Math.round(modelData * 175 / 240) + 16
+                        width: modelData + 16; height: modelData + 16
                         color: win.surfaces[perSurface.surface].bg
                         RimeMark {
                             objectName: "mark"
                             anchors.centerIn: parent
                             width: modelData
-                            height: Math.round(modelData * 175 / 240)
+                            height: modelData
                             accent: win.testAccent
+                            surface: win.surfaces[perSurface.surface].bg
                             foreground: win.surfaces[perSurface.surface].ink
                         }
                     }
                 }
             }
 
-            // The shipped light palette's own accent on its own ink (dE 9.9).
+            // An accent its own surface swallows (no shipped palette does
+            // this: dE >= 60.3 for all of them): #eceaee on #faf9fb, dE 5.2.
             Rectangle {
                 property string cellName: "mark-collapse"
                 property string kind: "collapse"
-                width: 136; height: 104; color: "#faf9fb"
+                width: 136; height: 136; color: "#faf9fb"
                 RimeMark {
                     objectName: "mark"
                     anchors.centerIn: parent
-                    width: 120; height: 88
-                    accent: "#000613"
+                    width: 120; height: 120
+                    accent: "#eceaee"
+                    surface: "#faf9fb"
                     foreground: "#1b1c1e"
                 }
             }
@@ -141,9 +146,10 @@ ShellRoot {
                 r.x = o.x; r.y = o.y; r.w = mark.width; r.h = mark.height
                 r.small = mark.small
                 r.accent = hex(mark.accent); r.foreground = hex(mark.foreground)
-                r.planes = [hex(mark.planeColor(0)), hex(mark.planeColor(1)),
-                            hex(mark.planeColor(2)), hex(mark.planeColor(3))]
+                r.surface = hex(mark.surface)
+                r.bodies = [hex(mark.bodyColor(0)), hex(mark.bodyColor(1)), hex(mark.bodyColor(2))]
                 r.themeActive = hex(Theme.active); r.themeText = hex(Theme.text)
+                r.themeBackground = hex(Theme.background)
                 r.accessibleName = mark.Accessible.name
                 r.visible = mark.visible
             }

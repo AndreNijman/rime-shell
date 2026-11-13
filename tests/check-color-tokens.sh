@@ -92,8 +92,9 @@ src/windows/DisplayConfirm.qml|#99000000|modal scrim over a layout the user may 
 src/windows/Lockscreen.qml|black|opaque lock base, so there is never a transparent flash before the wallpaper paints
 src/nexus/Nexus.qml|black|desktop dim behind the settings window; the opacity does the work, the colour must not move
 src/popups/Overview.qml|black|desktop dim behind the workspace overview, the Nexus's own scrim; the opacity does the work, the colour must not move
-src/components/RimeMark.qml|#91c2dc|the brand's Rime Blue: plane 3 for a caller with no palette (rime-greet), and where the palette's accent would vanish into the ink (the shipped light palette); the shell passes Theme.active
-src/components/RimeMark.qml|#212224|the brand's charcoal, the other planes' default for the same caller; the shell always passes Theme.text
+src/components/RimeMark.qml|#91c2dc|the brand's Rime Blue: the Origin mark's colour for a caller with no palette (rime-greet); the shell passes Theme.active
+src/components/RimeMark.qml|#212224|the brand's charcoal: the default surface for the same caller, so the separation rule has something to measure against; the shell passes Theme.background
+src/components/RimeMark.qml|#fafafa|the brand's off-white ink: the mark's colour for the same caller when the accent would vanish into the surface; the shell passes Theme.text
 "
 
 # Colours written as Qt.rgba component fractions. Same rule, separate list,
@@ -109,7 +110,7 @@ src/components/RimeMark.qml|#212224|the brand's charcoal, the other planes' defa
 ALLOW_FRAC_RAW="
 "
 
-EXPECT_TOTAL=12  # 9 → 10: the workspace overview dims the desk as the Nexus does (2026-09-29); 10 → 12: the ridge mark's brand defaults (2026-11-02)
+EXPECT_TOTAL=13  # 9 → 10: the workspace overview dims the desk as the Nexus does (2026-09-29); 10 → 12: the ridge mark's brand defaults (2026-11-02); 12 → 13: the Origin mark's ink default (2026-11-14)
 #                  10 → 9 earlier: the PowerMenu row tint is a tint of Theme.danger (UI/UX Phase 17)
 EXPECT_FRAC=0   # 2 → 0: TimeInput's digits are the palette's text (UI/UX Phase 21)
 
