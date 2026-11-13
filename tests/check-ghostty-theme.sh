@@ -52,13 +52,25 @@ PY
 # One fixture HOME; prints "ran" when the stub matugen was called. The theme is
 # `missing`, `fallback` (rime-os's seeded copy: the same block), `same` (rendered, the template's rime-static block), `old`
 # (rendered, a block an earlier template had) or a literal first line.
+#
+# The config is the shipped matugen.toml.in with every template entry (Ghostty
+# is not the first), so the check reads each input with its own output. Every
+# other output is present and rendered from its own template, so Ghostty's
+# theme alone decides.
 stale_case() {
-    local wall="$1" theme="$2" tmpl="$3" h="$WORK/home-$RANDOM" cmd block
-    mkdir -p "$h/.config/ghostty/themes" "$WORK/bin" "$WORK/shell/src/config"
+    local wall="$1" theme="$2" tmpl="$3" toml="$4" h="$WORK/home-$RANDOM" cmd block in out
+    rm -rf "$WORK/shell"
+    mkdir -p "$h/.config/ghostty/themes" "$WORK/bin" "$WORK/shell/src"
     printf '#!/bin/sh\necho ran\n' > "$WORK/bin/matugen"; chmod +x "$WORK/bin/matugen"
+    cp -r src/config "$WORK/shell/src/"
     cp "$tmpl" "$WORK/shell/src/config/ghostty-colors.template"
-    printf "[templates.ghostty]\ninput_path = '@SRCDIR@/src/config/ghostty-colors.template'\noutput_path = '@HOME@/.config/ghostty/themes/rime-os'\n" \
-        > "$WORK/shell/src/config/matugen.toml.in"
+    cp "$toml" "$WORK/shell/src/config/matugen.toml.in"
+    sed -e "s|@SRCDIR@|$WORK/shell|g" -e "s|@HOME@|$h|g" "$toml" \
+        | sed -n -e "s/^input_path *= *'\\(.*\\)'.*/\\1/p" -e "s/^output_path *= *'\\(.*\\)'.*/\\1/p" \
+        | while IFS= read -r in && IFS= read -r out; do
+            case "$out" in */ghostty/themes/rime-os) continue ;; esac
+            mkdir -p "$(dirname "$out")"; cp "$in" "$out"
+        done
     : > "$WORK/wall.jpg"
     block="$(sed -n '/^# rime-static-begin$/,/^# rime-static-end$/p' "$tmpl")"
     case "$theme" in
@@ -91,14 +103,14 @@ check_all() {
     head -n1 "$tmpl" | grep '^# rime-os fallback' >/dev/null \
         && bad "STATIC the rendered theme does not carry the fallback mark (it would re-render forever)$label" \
         || ok "STATIC the rendered theme does not carry the fallback mark (it would re-render forever)$label"
-    [ "$(stale_case "$wall" missing "$tmpl")" = ran ] \
+    [ "$(stale_case "$wall" missing "$tmpl" "$toml")" = ran ] \
         && ok "STALE a missing theme is rendered$label" || bad "STALE a missing theme is rendered$label"
-    [ "$(stale_case "$wall" fallback "$tmpl")" = ran ] \
+    [ "$(stale_case "$wall" fallback "$tmpl" "$toml")" = ran ] \
         && ok "STALE the seeded fallback is rendered over$label" \
         || bad "STALE the seeded fallback is rendered over$label"
-    [ -z "$(stale_case "$wall" same "$tmpl")" ] \
+    [ -z "$(stale_case "$wall" same "$tmpl" "$toml")" ] \
         && ok "STALE a rendered theme is left alone$label" || bad "STALE a rendered theme is left alone$label"
-    [ "$(stale_case "$wall" old "$tmpl")" = ran ] \
+    [ "$(stale_case "$wall" old "$tmpl" "$toml")" = ran ] \
         && ok "STALE a rendered theme from an older template (its static block differs) is rendered again$label" \
         || bad "STALE a rendered theme from an older template (its static block differs) is rendered again$label"
     [ "$fail" -gt "$before" ]
@@ -129,6 +141,7 @@ mutant "fallback not stale" wall "'# rime-os fallback'*) first=fallback" "'# nev
 # shellcheck disable=SC2016  # the QML's own text, $first included, matched literally
 mutant "everything stale" wall '[ \"$first\" != fallback ]' 'false'
 # shellcheck disable=SC2016  # the QML's own text
+mutant "input and output read in the wrong order" wall 'while IFS= read -r in && IFS= read -r out; do' 'while IFS= read -r out && IFS= read -r in; do'
 mutant "changed static block not stale" wall '|| { missing=1; echo \"changed: $out\"; }; ' '|| true; '
 mutant "new windows inherit the directory" tmpl "window-inherit-working-directory = false" "window-inherit-working-directory = true"
 mutant "matugen colour in static block" tmpl "font-size = 11.25" "font-size = {{colors.x}}"
