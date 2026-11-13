@@ -260,7 +260,10 @@ QtObject {
     // the static brand colour in the meantime. At startup, if any output the
     // shipped config names is missing, re-derive the palette from the wallpaper
     // that is already up. No wallpaper change, no transition, and nothing at all
-    // when every output exists.
+    // when every output exists. An output whose rime-static block (the settings a
+    // template fixes, no colours: Ghostty's) differs from the shipped template's is
+    // stale too: an update that changes one reaches the next login, not the next
+    // wallpaper change.
     function rethemeIfStale() {
         if (root.applying || root._rethemeProc.running) return
         root._rethemeProc.command = [
@@ -270,13 +273,18 @@ QtObject {
             "[ -f \"$TMPL\" ] && command -v matugen >/dev/null 2>&1 || exit 0; " +
             "mkdir -p \"$(dirname \"$CFG\")\" && " +
             "sed -e \"s|@SRCDIR@|$2|g\" -e \"s|@HOME@|$HOME|g\" \"$TMPL\" > \"$CFG\" || exit 1; " +
-            "missing=0; while IFS= read -r out; do " +
+            "blk() { sed -n '/^# rime-static-begin$/,/^# rime-static-end$/p' \"$1\" 2>/dev/null; }; " +
+            "missing=0; while IFS= read -r in && IFS= read -r out; do " +
             // A seeded fallback (rime-os's rime-terminal-migrate writes Ghostty's
             // theme before the first render) counts as missing: render over it.
             "first=; [ -e \"$out\" ] && IFS= read -r first < \"$out\"; " +
             "case \"$first\" in '# rime-os fallback'*) first=fallback ;; esac; " +
             "{ [ -e \"$out\" ] && [ \"$first\" != fallback ]; } || { missing=1; echo \"missing: $out\"; }; " +
-            "done < <(sed -n \"s/^output_path *= *'\\(.*\\)'.*/\\1/p\" \"$CFG\"); " +
+            "want=\"$(blk \"$in\")\"; " +
+            "[ -z \"$want\" ] || [ ! -e \"$out\" ] || [ \"$want\" = \"$(blk \"$out\")\" ] " +
+            "|| { missing=1; echo \"changed: $out\"; }; " +
+            "done < <(sed -n -e \"s/^input_path *= *'\\(.*\\)'.*/\\1/p\" " +
+            "-e \"s/^output_path *= *'\\(.*\\)'.*/\\1/p\" \"$CFG\"); " +
             "[ \"$missing\" = 1 ] || exit 0; " +
             "STATIC=\"$(readlink -f ~/.curr_wall_static.jpg 2>/dev/null)\"; " +
             "[ -f \"$STATIC\" ] || STATIC=\"$1\"; " +
@@ -290,7 +298,7 @@ QtObject {
     property var _rethemeProc: Process {
         stdout: SplitParser {
             onRead: function(line) {
-                if (line.indexOf("missing: ") === 0)
+                if (line.indexOf("missing: ") === 0 || line.indexOf("changed: ") === 0)
                     console.info("WallpaperService: re-rendering the palette, " + line)
             }
         }
