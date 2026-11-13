@@ -115,6 +115,8 @@ QtObject {
             if (!absent && !readable) {
                 console.warn("WallpaperService: " + root.configPath
                     + " exists but could not be read or parsed; leaving it and the current wallpaper alone")
+                // The theme check reads no wallpaper.json and writes none: an update's theme change still lands.
+                root.rethemeIfStale()
             } else if (root.currentWall === "") {
                 root._applyDefault()
             } else {
@@ -260,23 +262,32 @@ QtObject {
     // the static brand colour in the meantime. At startup, if any output the
     // shipped config names is missing, re-derive the palette from the wallpaper
     // that is already up. No wallpaper change, no transition, and nothing at all
-    // when every output exists.
+    // when every output exists. An output whose rime-static block (the settings a
+    // template fixes, no colours: Ghostty's) differs from the shipped template's is
+    // stale too: an update that changes one reaches the next login, not the next
+    // wallpaper change.
     function rethemeIfStale() {
         if (root.applying || root._rethemeProc.running) return
         root._rethemeProc.command = [
             "bash", "-c",
             "CFG=\"$HOME/.config/rime-shell/matugen.toml\"; " +
             "TMPL=\"$2/src/config/matugen.toml.in\"; " +
-            "[ -f \"$TMPL\" ] && command -v matugen >/dev/null 2>&1 || exit 0; " +
+            "[ -f \"$TMPL\" ] || exit 0; " +
+            "command -v matugen >/dev/null 2>&1 || { echo no-matugen; exit 0; }; " +
             "mkdir -p \"$(dirname \"$CFG\")\" && " +
             "sed -e \"s|@SRCDIR@|$2|g\" -e \"s|@HOME@|$HOME|g\" \"$TMPL\" > \"$CFG\" || exit 1; " +
-            "missing=0; while IFS= read -r out; do " +
+            "blk() { sed -n '/^# rime-static-begin$/,/^# rime-static-end$/p' \"$1\" 2>/dev/null; }; " +
+            "missing=0; while IFS= read -r in && IFS= read -r out; do " +
             // A seeded fallback (rime-os's rime-terminal-migrate writes Ghostty's
             // theme before the first render) counts as missing: render over it.
             "first=; [ -e \"$out\" ] && IFS= read -r first < \"$out\"; " +
             "case \"$first\" in '# rime-os fallback'*) first=fallback ;; esac; " +
             "{ [ -e \"$out\" ] && [ \"$first\" != fallback ]; } || { missing=1; echo \"missing: $out\"; }; " +
-            "done < <(sed -n \"s/^output_path *= *'\\(.*\\)'.*/\\1/p\" \"$CFG\"); " +
+            "want=\"$(blk \"$in\")\"; " +
+            "[ -z \"$want\" ] || [ ! -e \"$out\" ] || [ \"$want\" = \"$(blk \"$out\")\" ] " +
+            "|| { missing=1; echo \"changed: $out\"; }; " +
+            "done < <(sed -n -e \"s/^input_path *= *'\\(.*\\)'.*/\\1/p\" " +
+            "-e \"s/^output_path *= *'\\(.*\\)'.*/\\1/p\" \"$CFG\"); " +
             "[ \"$missing\" = 1 ] || exit 0; " +
             "STATIC=\"$(readlink -f ~/.curr_wall_static.jpg 2>/dev/null)\"; " +
             "[ -f \"$STATIC\" ] || STATIC=\"$1\"; " +
@@ -290,13 +301,19 @@ QtObject {
     property var _rethemeProc: Process {
         stdout: SplitParser {
             onRead: function(line) {
-                if (line.indexOf("missing: ") === 0)
+                if (line.indexOf("missing: ") === 0 || line.indexOf("changed: ") === 0)
                     console.info("WallpaperService: re-rendering the palette, " + line)
+                else if (line === "no-matugen")
+                    console.warn("WallpaperService: matugen is not installed; theme outputs an update added or changed are not rendered")
             }
         }
         onExited: function(exitCode) {
             if (exitCode !== 0)
                 console.warn("WallpaperService: re-rendering missing theme outputs failed (exit " + exitCode + ")")
+            // A wallpaper picked while this render ran: apply it now, so its palette is the one that lands last.
+            const next = root._applyAfterRetheme
+            root._applyAfterRetheme = ""
+            if (next !== "") root.apply(next)
         }
     }
 
@@ -312,8 +329,12 @@ QtObject {
     }
 
     // ── Apply pipeline ────────────────────────────────────────────────────────
+    // Set when apply() is asked for while rethemeIfStale()'s render runs (both write the same outputs).
+    property string _applyAfterRetheme: ""
+
     function apply(path) {
         if (root.applying || path === "") return
+        if (root._rethemeProc.running) { root._applyAfterRetheme = path; return }
         root.applying    = true
         root.currentWall = path
         applyProc.command = [

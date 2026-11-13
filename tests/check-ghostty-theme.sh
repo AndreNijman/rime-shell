@@ -15,7 +15,9 @@
 #           compares that block with its fallback copy at build time
 #   STALE   WallpaperService.rethemeIfStale() re-renders when an output is
 #           missing OR is rime-os's seeded fallback (first line
-#           "# rime-os fallback"), and leaves a rendered theme alone
+#           "# rime-os fallback") OR its rime-static block is not the
+#           template's (an update changed a setting there), and leaves a
+#           rendered theme with the template's block alone
 #
 #  STALE runs the real command WallpaperService builds (extracted from the QML)
 #  against a fixture HOME with a stub matugen. Each rule is mutated to prove it
@@ -47,16 +49,36 @@ sys.stdout.write("".join(json.loads(p) for p in parts))
 PY
 }
 
-# One fixture HOME; prints "ran" when the stub matugen was called.
+# One fixture HOME; prints "ran" when the stub matugen was called. The theme is
+# `missing`, `fallback` (rime-os's seeded copy: the same block), `same` (rendered, the template's rime-static block), `old`
+# (rendered, a block an earlier template had) or a literal first line.
+#
+# The config is the shipped matugen.toml.in with every template entry (Ghostty
+# is not the first), so the check reads each input with its own output. Every
+# other output is present and rendered from its own template, so Ghostty's
+# theme alone decides.
 stale_case() {
-    local wall="$1" theme="$2" h="$WORK/home-$RANDOM" cmd
-    mkdir -p "$h/.config/ghostty/themes" "$WORK/bin" "$WORK/shell/src/config"
+    local wall="$1" theme="$2" tmpl="$3" toml="$4" h="$WORK/home-$RANDOM" cmd block in out
+    rm -rf "$WORK/shell"
+    mkdir -p "$h/.config/ghostty/themes" "$WORK/bin" "$WORK/shell/src"
     printf '#!/bin/sh\necho ran\n' > "$WORK/bin/matugen"; chmod +x "$WORK/bin/matugen"
-    printf "[templates.ghostty]\noutput_path = '@HOME@/.config/ghostty/themes/rime-os'\n" \
-        > "$WORK/shell/src/config/matugen.toml.in"
+    cp -r src/config "$WORK/shell/src/"
+    cp "$tmpl" "$WORK/shell/src/config/ghostty-colors.template"
+    cp "$toml" "$WORK/shell/src/config/matugen.toml.in"
+    sed -e "s|@SRCDIR@|$WORK/shell|g" -e "s|@HOME@|$h|g" "$toml" \
+        | sed -n -e "s/^input_path *= *'\\(.*\\)'.*/\\1/p" -e "s/^output_path *= *'\\(.*\\)'.*/\\1/p" \
+        | while IFS= read -r in && IFS= read -r out; do
+            case "$out" in */ghostty/themes/rime-os) continue ;; esac
+            mkdir -p "$(dirname "$out")"; cp "$in" "$out"
+        done
     : > "$WORK/wall.jpg"
+    block="$(sed -n '/^# rime-static-begin$/,/^# rime-static-end$/p' "$tmpl")"
     case "$theme" in
         missing) ;;
+        fallback) printf '# rime-os fallback: seeded\n%s\nbackground = #181818\n' "$block" > "$h/.config/ghostty/themes/rime-os" ;;
+        same) printf '# Rime rendered theme\n%s\nbackground = #101010\n' "$block" > "$h/.config/ghostty/themes/rime-os" ;;
+        old) printf '# Rime rendered theme\n%s\nbackground = #101010\n' "$(printf '%s\n' "$block" | grep -v '^window-inherit-working-directory')" \
+                 > "$h/.config/ghostty/themes/rime-os" ;;
         *) printf '%s\n' "$theme" > "$h/.config/ghostty/themes/rime-os" ;;
     esac
     cmd="$(extract_cmd "$wall")"
@@ -74,19 +96,23 @@ check_all() {
     { printf '%s\n' "$block" | grep -x 'font-family = monospace' >/dev/null \
         && printf '%s\n' "$block" | grep -x 'font-size = 11.25' >/dev/null \
         && printf '%s\n' "$block" | grep -x 'palette = 1=#ac4242' >/dev/null \
+        && printf '%s\n' "$block" | grep -x 'window-inherit-working-directory = false' >/dev/null \
         && ! printf '%s\n' "$block" | grep '{{' >/dev/null; } \
         && ok "STATIC Alacritty's stock look sits between the markers, no matugen colour in it$label" \
         || bad "STATIC Alacritty's stock look sits between the markers, no matugen colour in it$label"
     head -n1 "$tmpl" | grep '^# rime-os fallback' >/dev/null \
         && bad "STATIC the rendered theme does not carry the fallback mark (it would re-render forever)$label" \
         || ok "STATIC the rendered theme does not carry the fallback mark (it would re-render forever)$label"
-    [ "$(stale_case "$wall" missing)" = ran ] \
+    [ "$(stale_case "$wall" missing "$tmpl" "$toml")" = ran ] \
         && ok "STALE a missing theme is rendered$label" || bad "STALE a missing theme is rendered$label"
-    [ "$(stale_case "$wall" '# rime-os fallback: seeded')" = ran ] \
+    [ "$(stale_case "$wall" fallback "$tmpl" "$toml")" = ran ] \
         && ok "STALE the seeded fallback is rendered over$label" \
         || bad "STALE the seeded fallback is rendered over$label"
-    [ -z "$(stale_case "$wall" '# Rime rendered theme')" ] \
+    [ -z "$(stale_case "$wall" same "$tmpl" "$toml")" ] \
         && ok "STALE a rendered theme is left alone$label" || bad "STALE a rendered theme is left alone$label"
+    [ "$(stale_case "$wall" old "$tmpl" "$toml")" = ran ] \
+        && ok "STALE a rendered theme from an older template (its static block differs) is rendered again$label" \
+        || bad "STALE a rendered theme from an older template (its static block differs) is rendered again$label"
     [ "$fail" -gt "$before" ]
 }
 
@@ -114,6 +140,10 @@ mutant "old output path" toml "/.config/ghostty/themes/rime-os'" "/.config/ghost
 mutant "fallback not stale" wall "'# rime-os fallback'*) first=fallback" "'# never'*) first=fallback"
 # shellcheck disable=SC2016  # the QML's own text, $first included, matched literally
 mutant "everything stale" wall '[ \"$first\" != fallback ]' 'false'
+# shellcheck disable=SC2016  # the QML's own text
+mutant "input and output read in the wrong order" wall 'while IFS= read -r in && IFS= read -r out; do' 'while IFS= read -r out && IFS= read -r in; do'
+mutant "changed static block not stale" wall '|| { missing=1; echo \"changed: $out\"; }; ' '|| true; '
+mutant "new windows inherit the directory" tmpl "window-inherit-working-directory = false" "window-inherit-working-directory = true"
 mutant "matugen colour in static block" tmpl "font-size = 11.25" "font-size = {{colors.x}}"
 mutant "template marked as fallback" tmpl "# Rime's Ghostty theme, rendered" "# rime-os fallback, rendered"
 
