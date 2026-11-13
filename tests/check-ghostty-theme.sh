@@ -11,7 +11,8 @@
 #   OUTPUT  matugen.toml.in renders ghostty-colors.template to
 #           ~/.config/ghostty/themes/rime-os
 #   STATIC  the template keeps Alacritty's stock look (font, size, padding,
-#           cursor, accent palette) between rime-static markers; rime-os
+#           cursor, accent palette, Ctrl+Enter left to the program) between
+#           rime-static markers; rime-os
 #           compares that block with its fallback copy at build time
 #   STALE   WallpaperService.rethemeIfStale() re-renders when an output is
 #           missing OR is rime-os's seeded fallback (first line
@@ -97,6 +98,7 @@ check_all() {
         && printf '%s\n' "$block" | grep -x 'font-size = 11.25' >/dev/null \
         && printf '%s\n' "$block" | grep -x 'palette = 1=#ac4242' >/dev/null \
         && printf '%s\n' "$block" | grep -x 'window-inherit-working-directory = false' >/dev/null \
+        && printf '%s\n' "$block" | grep -x 'keybind = ctrl+enter=unbind' >/dev/null \
         && ! printf '%s\n' "$block" | grep '{{' >/dev/null; } \
         && ok "STATIC Alacritty's stock look sits between the markers, no matugen colour in it$label" \
         || bad "STATIC Alacritty's stock look sits between the markers, no matugen colour in it$label"
@@ -144,6 +146,7 @@ mutant "everything stale" wall '[ \"$first\" != fallback ]' 'false'
 mutant "input and output read in the wrong order" wall 'while IFS= read -r in && IFS= read -r out; do' 'while IFS= read -r out && IFS= read -r in; do'
 mutant "changed static block not stale" wall '|| { missing=1; echo \"changed: $out\"; }; ' '|| true; '
 mutant "new windows inherit the directory" tmpl "window-inherit-working-directory = false" "window-inherit-working-directory = true"
+mutant "Ctrl+Enter left to Ghostty's fullscreen" tmpl "keybind = ctrl+enter=unbind" "keybind = ctrl+enter=toggle_fullscreen"
 mutant "matugen colour in static block" tmpl "font-size = 11.25" "font-size = {{colors.x}}"
 mutant "template marked as fallback" tmpl "# Rime's Ghostty theme, rendered" "# rime-os fallback, rendered"
 
