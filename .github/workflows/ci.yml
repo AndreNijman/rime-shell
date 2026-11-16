@@ -1925,6 +1925,14 @@ jobs:
       - name: Installed apps never show a broken icon
         run: ./tests/run-app-icons-test.sh
 
+      # The audio visualisers (the notch/dashboard bars and the recording
+      # level meter) never run cava on battery: they stop when the charger is
+      # pulled, never start at all when the Shell starts on battery, and come
+      # back on AC. Fake UPower + MPRIS on private buses, a stub cava. SKIPS
+      # without quickshell.
+      - name: The audio visualisers stay off on battery
+        run: ./tests/run-visualiser-battery-test.sh
+
       # Rime Settings, the app for GNOME, KDE Plasma and COSMIC: one window
       # with app id org.rimeos.Settings, a second launch reuses it, no
       # Shell-only page and no hyprctl call; inside a Rime session the
