@@ -2,6 +2,7 @@ pragma Singleton
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import Quickshell.Services.UPower
 import "../"
 
 // ScreenRecService — owns all screen recording state.
@@ -276,6 +277,7 @@ QtObject {
             root._pendingGeometry = ""
             root._currentFile     = ""
             root._cavaRecProc.running = false
+            root._cavaSource      = ""
             root.audioBars        = [0, 0, 0, 0, 0, 0]
             ShellState.screenRecord = false
 
@@ -448,6 +450,23 @@ QtObject {
     property var _sigProc: Process { command: []; running: false }
 
     // ── Cava — runs during recording, source mirrors wf-recorder's audio ──────
+    // Never on battery (the same rule as CavaService): the level bars lie flat
+    // and cava starts again if the charger is plugged in mid-recording. The
+    // recording itself, audio included, is not affected.
+    property string _cavaSource: ""
+
+    property var _batteryWatch: Connections {
+        target: UPower
+        function onOnBatteryChanged() {
+            if (UPower.onBattery) {
+                root._cavaRecProc.running = false
+                root.audioBars = [0, 0, 0, 0, 0, 0]
+            } else if (root.recording && root._cavaSource !== "") {
+                root._startCavaWithSource(root._cavaSource)
+            }
+        }
+    }
+
     property var _cavaRecProc: Process {
         command: []
         running: false
@@ -467,6 +486,8 @@ QtObject {
     }
 
     function _startCavaWithSource(src) {
+        root._cavaSource = src
+        if (UPower.onBattery) return
         var config =
             "[general]\nbars = 12\nframerate = 20\nnoise_reduction = 77\n\n" +
             "[output]\nmethod = raw\nraw_target = /dev/stdout\n" +

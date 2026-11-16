@@ -3,6 +3,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import Quickshell.Services.Mpris
+import Quickshell.Services.UPower
 import "../"
 
 // Single cava process shared by CenterContent and PlayerCard.
@@ -31,6 +32,13 @@ import "../"
 // than "any sound the machine makes". Anything with an MPRIS player (Firefox,
 // mpv, Spotify, playerctl-visible players) still drives it; a bare `aplay` or a
 // game no longer does.
+//
+// ── NEVER ON BATTERY ─────────────────────────────────────────────────────────
+// On battery cava does not run at all, whatever is playing and whatever is on
+// screen: no process, no PipeWire capture stream, no 30 fps repaints of the
+// notch. Measured on the L16 at 0.3-1 W while music plays, out of a ~5 W floor.
+// The bars lie flat (onWantedChanged) and come back the moment the charger is
+// plugged in. UPower.onBattery is false on a desktop, so nothing changes there.
 
 QtObject {
     id: root
@@ -47,7 +55,9 @@ QtObject {
     property bool centerWants: false
     property bool dashWants:   false
 
-    readonly property bool wanted: root.isPlaying && (root.centerWants || root.dashWants)
+    readonly property bool onBattery: UPower.onBattery
+
+    readonly property bool wanted: !root.onBattery && root.isPlaying && (root.centerWants || root.dashWants)
 
     property var bars: (function() {
         var a = []; for (var i = 0; i < 32; i++) a.push(0); return a
