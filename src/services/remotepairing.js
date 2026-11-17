@@ -179,11 +179,56 @@ function parseDevices(text) {
             revokedMs: d.revoked_ms === null || d.revoked_ms === undefined
                 ? null : Number(d.revoked_ms),
             requiresUserVerification: !!d.requires_user_verification,
-            lastPath: d.last_path ? String(d.last_path) : ""
+            lastPath: d.last_path ? String(d.last_path) : "",
+            phone: parsePhone(d.phone)
         })
     }
     return out
 }
+
+// What the phone last told this machine about itself (`rime remote devices
+// --json` puts it on a paired device as `phone`; contract §2.5). null when the
+// phone never reported, which is an older app, not an error. Out-of-range
+// values are dropped rather than drawn: the daemon already refuses them, and
+// a page should not be the place a 140 % battery shows up.
+function parsePhone(p) {
+    if (!p || typeof p !== "object") return null
+    var b = typeof p.battery === "number" && p.battery >= 0 && p.battery <= 100
+        ? Math.round(p.battery) : null
+    var can = Array.isArray(p.can) ? p.can : []
+    return {
+        battery: b,
+        charging: typeof p.charging === "boolean" ? p.charging : null,
+        canRing: can.indexOf("ring") >= 0,
+        reportedMs: Number(p.reported_ms) || 0
+    }
+}
+
+// "Battery 62%, charging · 3m ago", in the words `rime remote devices` prints
+// under its table. "" when there is nothing to say.
+function phoneLine(phone, nowMs) {
+    if (!phone || phone.battery === null) return ""
+    return "Battery " + phone.battery + "%" + (phone.charging === true ? ", charging" : "")
+        + " · " + ago(phone.reportedMs, nowMs)
+}
+
+// What `rime remote ring` said, for the row. The CLI writes one sentence to
+// stderr whichever way it went; the page shows it rather than paraphrasing,
+// except that "asked through its push service" is kept as the CLI says it so
+// nobody reads it as a confirmed ring.
+function ringOutcome(code, stderr) {
+    var lines = String(stderr || "").split("\n").filter(function (l) { return l.trim() !== "" })
+    var last = lines.length ? lines[lines.length - 1].replace(/^rime: /, "").trim() : ""
+    if (code === 0) {
+        if (last.indexOf("is ringing") >= 0) return { ok: true, text: "Ringing. Stop it on the phone." }
+        return { ok: true, text: last || "Asked the phone to ring." }
+    }
+    return { ok: false, text: last || ("rime remote ring exited " + code) }
+}
+
+// The token for the row's third line, a NAME looked up on Theme by the row:
+// a refused ring reads as danger, everything else as the quiet subtext.
+function ringToken(shown, ok) { return shown && !ok ? "danger" : "subtext" }
 
 // Device::is_active(): revoked_ms alone decides it. Mirrored rather than
 // re-derived from anything else, because the daemon enforces on this field and
@@ -314,6 +359,10 @@ function revokeCommand(id) {
     return ["rime", "remote", "revoke", String(id)]
 }
 
+function ringCommand(id) {
+    return ["rime", "remote", "ring", String(id)]
+}
+
 // Node (tests) sees `module`; the QML engine does not, and ignores this.
 if (typeof module !== "undefined" && module.exports)
     module.exports = {
@@ -338,5 +387,10 @@ if (typeof module !== "undefined" && module.exports)
         summary: summary,
         verificationNote: verificationNote,
         parseStatus: parseStatus,
-        revokeCommand: revokeCommand
+        revokeCommand: revokeCommand,
+        ringCommand: ringCommand,
+        parsePhone: parsePhone,
+        phoneLine: phoneLine,
+        ringOutcome: ringOutcome,
+        ringToken: ringToken
     }

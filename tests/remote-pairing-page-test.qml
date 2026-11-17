@@ -521,6 +521,44 @@ ShellRoot {
             },
 
             function () {
+                // The phone's own report, on its row, in the CLI's words.
+                root.check("the phone's battery is shown on its row",
+                           root.textShowing(root.page, "Battery 62%, charging") !== null)
+                const live = root.rowFor(root.page, "AAAAAQIDBAUGBwgJ")
+                const revoked = root.rowFor(root.page, "BBBBAQIDBAUGBwgJ")
+                const never = root.rowFor(root.page, "CCCCAQIDBAUGBwgJ")
+                const ringIn = function (row) {
+                    return root.collect(row, "label", []).filter(
+                        function (b) { return b.label === "Ring" && b.visible })
+                }
+                root.check("a phone that reported itself offers Ring", ringIn(live).length === 1)
+                root.check("a revoked phone offers no Ring", ringIn(revoked).length === 0)
+                root.check("a device that never reported offers no Ring", ringIn(never).length === 0)
+                root.next()
+            },
+
+            function () {
+                const live = root.rowFor(root.page, "AAAAAQIDBAUGBwgJ")
+                const btn = root.collect(live, "label", []).filter(
+                    function (b) { return b.label === "Ring" && b.visible })[0]
+                if (!btn) { root.check("a ring button to press", false); root.next(); return }
+                btn.clicked()
+                root.waitFor("the ring to run",
+                    function () { return RemotePairingService.ringing === ""
+                                         && RemotePairingService.ringText !== "" },
+                    function () {
+                        root.readLog(function () {
+                            const r = root.matching("remote ring")
+                            root.check("pressing Ring runs exactly one ring, naming the device (got "
+                                       + r.length + ")", r.length === 1 && r[0].indexOf("AAAAAQIDBAUGBwgJ") >= 0)
+                            root.check("the row says the phone is ringing",
+                                       root.textShowing(root.page, "Ringing. Stop it on the phone.") !== null)
+                            root.next()
+                        })
+                    })
+            },
+
+            function () {
                 const live = root.rowFor(root.page, "AAAAAQIDBAUGBwgJ")
                 const btn = root.collect(live, "label", []).filter(
                     function (b) { return b.label === "Revoke" && b.visible })[0]
