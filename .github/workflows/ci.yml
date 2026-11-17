@@ -1793,6 +1793,19 @@ jobs:
       - name: The notification centre and clipboard history answer the keyboard
         run: ./tests/run-lists-keys-test.sh
 
+      # Answering a notification from the desktop (the freedesktop inline-reply
+      # extension, which the phone link posts messages with). The component
+      # run checks the capability, one NotificationReplied with exactly the
+      # typed text and none for an empty or blank field, no Reply on a plain
+      # notification, and the toast's Reply opening the centre's field; the
+      # keys run types into the real shell's field under labwc, including the
+      # keys an empty field must keep from the list (BackSpace would dismiss).
+      # Both on private buses; they SKIP without quickshell (labwc/wtype).
+      - name: A notification can be answered from the desktop
+        run: |
+          ./tests/run-inline-reply-test.sh
+          ./tests/run-inline-reply-keys-test.sh
+
       # The Dashboard's Home and Tasks tabs on the keyboard, against a fake
       # MPRIS player (tests/lib/fake-mpris.py, on headless.sh's private bus),
       # fake-brightnessctl and fake-nmcli: Tab in reading order, play and
@@ -3101,6 +3114,9 @@ jobs:
             "tests/agenttelemetry-test.js"
             "tests/notify-spawn-test.qml"
             "tests/run-notify-spawn-test.sh"
+            "tests/inline-reply-test.qml"
+            "tests/run-inline-reply-test.sh"
+            "tests/run-inline-reply-keys-test.sh"
             "tests/check-compositor-naming.sh"
             "src/services/lid.js"
             "src/services/LidService.qml"
