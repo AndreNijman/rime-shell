@@ -13,6 +13,12 @@ NotificationServer {
     bodyMarkupSupported:   true
     bodySupported:         true
     actionsSupported:      true
+    // The freedesktop inline-reply extension: an action named "inline-reply"
+    // becomes n.hasInlineReply (and leaves n.actions), and the centre's card
+    // offers a field whose text goes back as NotificationReplied. The phone
+    // link posts message notifications this way only when the server says it
+    // can, and KDE apps and some chat clients do the same.
+    inlineReplySupported:  true
     keepOnReload:          true
 
     // ── The deduplication key (roadmap P1-022) ────────────────────────────────

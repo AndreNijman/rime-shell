@@ -19,6 +19,13 @@ import "../"
 //     since the centre lists every one of them;
 //   * the next queued toast waits for the surface to have finished closing
 //     (`surfaceIdle`) rather than for a timer's guess at how long that takes.
+//
+// A notification that takes an inline reply gets a Reply button here, but no
+// field: this pane takes no keyboard (RightPanel gives the surface the keys
+// only for a pane the user opened, never for a toast, which arrives unasked).
+// Reply opens the centre with that notification's field open and focused
+// (Popups.replyToNotification); the centre opening retires the toast as it
+// always does (`blocked`), and the notification stays.
 // ─────────────────────────────────────────────────────────────────────────────
 Item {
 	id: root
@@ -69,6 +76,12 @@ Item {
 				root.queue = [...root.queue, n]
 			}
 		}
+	}
+
+	function reply() {
+		const n = root.current
+		if (!n || !n.tracked || !n.hasInlineReply) return
+		Popups.replyToNotification(n.id)
 	}
 
 	function startShow(n) {
@@ -315,7 +328,36 @@ Item {
 				Row {
 					spacing:    6
 					topPadding: 2
-					visible:    (root.current?.actions?.length ?? 0) > 0
+					// inline-reply is not among the actions (a phone's message has
+					// no other), so the row also stands for its Reply.
+					visible:    (root.current?.actions?.length ?? 0) > 0 || !!root.current?.hasInlineReply
+
+					Item {
+						id:      replyBtn
+						visible: !!root.current?.hasInlineReply
+						width:   replyLbl.width + 20
+						height:  24
+						Accessible.role: Accessible.Button
+						Accessible.name: replyLbl.text
+						Accessible.onPressAction: root.reply()
+						Rectangle {
+							anchors.fill: parent
+							radius:       4
+							color:        replyHover.hovered
+							? Qt.rgba(Theme.text.r, Theme.text.g, Theme.text.b, 0.18)
+							: Qt.rgba(Theme.text.r, Theme.text.g, Theme.text.b, 0.08)
+							Behavior on color { MotionColor {} }
+						}
+						Text {
+							id:               replyLbl
+							anchors.centerIn: parent
+							text:             (root.current?.inlineReplyPlaceholder ?? "") !== "" ? root.current.inlineReplyPlaceholder : "Reply"
+							color:            Theme.text
+							font.pixelSize:   theme.fs(11)
+						}
+						HoverHandler { id: replyHover }
+						TapHandler   { onTapped: root.reply() }
+					}
 
 					Repeater {
 						model: root.current?.actions ?? []

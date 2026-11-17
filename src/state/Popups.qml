@@ -22,6 +22,18 @@ QtObject {
     property bool overviewOpen:      false
     property string overviewScreen:  ""
 
+    // ── Notification reply ───────────────────────────────────────────────────
+    // The id of the notification whose card the centre opens in reply mode, or
+    // null. The toast sets it: its surface takes no keyboard (RightPanel), so a
+    // reply is typed in the centre. closeAll() clears it, so every later open
+    // of the centre is a plain one.
+    property var notificationReplyId: null
+    function replyToNotification(id) {
+        closeAll()
+        notificationsOpen   = true
+        notificationReplyId = id
+    }
+
     // ── Dashboard — per-page state ───────────────────────────────────────────
     property int    dashboardPageWidth: 900
     property string dashboardPage:      "home"
@@ -89,6 +101,7 @@ QtObject {
         clipboardOpen     = false
         contextMenuOpen   = false
         overviewOpen      = false
+        notificationReplyId = null
         allClosed()
     }
 }

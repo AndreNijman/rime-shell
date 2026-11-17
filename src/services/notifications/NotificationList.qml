@@ -98,6 +98,16 @@ Item {
     // if it was last), so clearing several with the keyboard reads down the
     // list instead of snapping back to the top each time.
     //
+    // Inline reply: R on the highlighted card (or Tab to its Reply button)
+    // opens a field under it, focused. Return sends the text unless it is
+    // blank, Escape closes the field and gives the keys back to the list (a
+    // second Escape closes the pane, as before). The field swallows every key
+    // it does not use itself except Tab, because the list above it acts on
+    // them: Escape would close the pane, Up/Down would move the highlight, and
+    // BackSpace/Delete dismiss (which the phone link reads as the user swiping
+    // the notification away). TextInput keeps BackSpace even when empty today;
+    // the swallow does not rely on that.
+    //
     // The sentinel is null, not "" or 0: ids are the server's own `uint`
     // (org.freedesktop.Notifications never assigns 0 to a live
     // notification), and unlike WifiTab's placeholder row this pane never
@@ -133,6 +143,76 @@ Item {
         root._curId = nextId
         if (nextId !== null) contentList.forceActiveFocus()
     }
+
+    // ── Inline reply ──────────────────────────────────────────────────────
+    // Which card has its reply field open, by id like _curId, and held here
+    // rather than on the card: the toast asks for it (Popups.notificationReplyId)
+    // while the centre is still opening, and a replace-id update keeps it.
+    // Closing the centre drops it.
+    property var _replyId: null
+    property bool _replyFocusPending: false
+    function _noteFor(id) {
+        for (const w of root.entries) if (w.note && w.note.id === id) return w.note
+        return null
+    }
+    function _openReply(id) {
+        const n = root._noteFor(id)
+        if (!n || !n.hasInlineReply) return false
+        root._replyId = id
+        root._curId = id
+        root._replyFocusPending = true
+        Qt.callLater(root._focusReply)
+        return true
+    }
+    // The field takes the keys once it is actually on screen: the toast's
+    // request arrives while the pane is still invisible (its cross-fade has
+    // not started) and RightPanel's catcher takes the focus as the pane opens.
+    function _focusReply() {
+        if (!root._replyFocusPending || root._replyId === null) return
+        const c = root._cardFor(root._replyId)
+        if (!c || !c.replyFieldShown) return
+        root._replyFocusPending = false
+        c.focusReplyField()
+        const i = root._cardIds.indexOf(root._replyId)
+        if (i >= 0) contentList.positionViewAtIndex(i, ListView.Contain)
+    }
+    function _cancelReply() {
+        const id = root._replyId
+        root._replyId = null
+        root._replyFocusPending = false
+        if (id !== null) { root._curId = id; contentList.forceActiveFocus() }
+    }
+    // Sends exactly what was typed, unless it is blank. Everything that reads
+    // the card happens before sendInlineReply(): Quickshell emits
+    // NotificationReplied and then closes the notification, which destroys it,
+    // so the call is the last thing here. The highlight moves on as a dismiss
+    // moves it (_dismissCard), and the keys go back to the list either way, so
+    // the pane can still take Escape once this card has gone.
+    function _sendReply(id, text) {
+        if (id === null || id === undefined || root._replyId !== id) return false   // only an open field sends
+        if (typeof text !== "string" || text.trim() === "") return false
+        const n = root._noteFor(id)
+        if (!n || !n.hasInlineReply) return false
+        const list = root._cardIds
+        const i = list.indexOf(id)
+        root._curId = i + 1 < list.length ? list[i + 1] : (i > 0 ? list[i - 1] : null)
+        root._replyId = null
+        root._replyFocusPending = false
+        contentList.forceActiveFocus()
+        n.sendInlineReply(text)
+        return true
+    }
+    Connections {
+        target: Popups
+        function onNotificationReplyIdChanged() {
+            if (Popups.notificationReplyId !== null) root._openReply(Popups.notificationReplyId)
+        }
+        function onNotificationsOpenChanged() {
+            if (!Popups.notificationsOpen) { root._replyId = null; root._replyFocusPending = false }
+        }
+    }
+    // Built by the very open that asked for a reply (LazyPopup), after the ask.
+    Component.onCompleted: if (Popups.notificationReplyId !== null) root._openReply(Popups.notificationReplyId)
 
 
     width:  360
@@ -239,6 +319,9 @@ Item {
                     if (c) c.primary()
                 } else if (event.key === Qt.Key_Delete || event.key === Qt.Key_Backspace) {
                     root._dismissCard(root._curId)
+                } else if (event.key === Qt.Key_R
+                           && !(event.modifiers & (Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier))) {
+                    if (!root._openReply(root._curId)) return
                 } else return
                 event.accepted = true
                 // Keep the highlighted card in view.
@@ -413,6 +496,8 @@ Item {
         readonly property var    tActions: card.live ? (card.notification.actions ?? []) : card.sActions
         readonly property int    tUrgency: card.live ? (card.notification.urgency ?? NotificationUrgency.Normal) : card.sUrgency
         readonly property real   tTime:    card.sTime   // fixed at arrival; the snapshot is the only copy
+        readonly property bool   tReply:   card.live ? (card.notification.hasInlineReply ?? false) : card.sReply
+        readonly property string tReplyLabel: card.live ? (card.notification.inlineReplyPlaceholder ?? "") : card.sReplyLabel
 
         property string sApp:     ""
         property string sSummary: ""
@@ -422,6 +507,8 @@ Item {
         property var    sActions: []
         property int    sUrgency: NotificationUrgency.Normal
         property real   sTime:    0
+        property bool   sReply:   false
+        property string sReplyLabel: ""
         function _snap() {
             const n = card.notification
             if (!n) return
@@ -433,6 +520,8 @@ Item {
             card.sActions = n.actions ?? []
             card.sUrgency = n.urgency ?? NotificationUrgency.Normal
             card.sTime    = NotificationService.arrivedAt(n) || card.sTime
+            card.sReply   = n.hasInlineReply ?? false
+            card.sReplyLabel = n.inlineReplyPlaceholder ?? ""
         }
         // New content in the same notification (a replace-id update — how an
         // agent's status line is re-sent) is a new arrival: the time moves with it.
@@ -446,6 +535,28 @@ Item {
             function onBodyChanged()    { card._updated() }
             function onAppIconChanged() { card._snap() }
             function onActionsChanged() { card._snap() }
+            function onHasInlineReplyChanged() { card._snap() }
+            function onInlineReplyPlaceholderChanged() { card._snap() }
+        }
+
+        // ── Inline reply ─────────────────────────────────────────────────────
+        // The label is the app's own (the inline-reply action's text), "Reply"
+        // when it gave none. Only a live notification can be answered.
+        readonly property string replyLabel: card.tReplyLabel !== "" ? card.tReplyLabel : "Reply"
+        readonly property bool replying: card.live && card.tReply && root._replyId === card.notification.id
+        readonly property bool replyFieldShown: replyField.visible
+        readonly property int replyH: 32
+        function openReply()       { return root._openReply(card.notification?.id) }
+        function sendReply()       { return root._sendReply(card.notification?.id, replyField.text) }
+        function focusReplyField() { replyField.forceActiveFocus() }
+        // Closing the field takes its focus too. The list is a focus scope that
+        // remembers its focused child, so without this the list's
+        // forceActiveFocus() handed the keys straight back to the hidden field
+        // (measured under labwc: the next "r" went into it, and Return sent it).
+        // Every open starts empty.
+        onReplyingChanged: {
+            if (!card.replying) replyField.focus = false
+            replyField.text = ""
         }
 
         // Its place in a Clear all — how many cards were below it — read by
@@ -471,7 +582,8 @@ Item {
             let h = 0, n = 0
             for (const t of [appLine, summaryLine, bodyLine])
                 if (t.text !== "") { h += t.implicitHeight; n++ }
-            if (card.tActions.length > 0) { h += card.actionH; n++ }   // a Row's implicitHeight is polish-time too
+            if (card.tActions.length > 0 || card.tReply) { h += card.actionH; n++ }   // a Row's implicitHeight is polish-time too
+            if (card.replying) { h += card.replyH; n++ }
             return h + Math.max(0, n - 1) * textCol.spacing
         }
 
@@ -487,6 +599,9 @@ Item {
             target: null
             xAxis.enabled: true
             yAxis.enabled: false
+            // Not while a reply is being typed: selecting text in the field
+            // would throw the card away.
+            enabled: !card.replying
             onActiveTranslationChanged: if (active) card.dragX = activeTranslation.x
             onActiveChanged: if (!active) card._release(centroid.velocity.x)
         }
@@ -656,7 +771,38 @@ Item {
                 Row {
                     id:      actionsRow
                     spacing: 6
-                    visible: card.tActions.length > 0
+                    // inline-reply is not in tActions: a phone's message has
+                    // no other action, and the row is where its Reply goes.
+                    visible: card.tActions.length > 0 || card.tReply
+
+                    RimePressable {
+                        id: replyBtn
+                        visible: card.tReply
+                        width:  replyLbl.width + 20
+                        height: card.actionH
+                        radius: 3
+                        hitMargin: 5
+                        activeFocusOnTab: card.keyed
+                        Accessible.name: card.replyLabel
+                        onActivated: card.openReply()
+
+                        Rectangle {
+                            anchors.fill: parent
+                            radius:       parent.radius
+                            color:        replyBtn.hovered || card.replying
+                                          ? Qt.rgba(Theme.text.r, Theme.text.g, Theme.text.b, 0.15)
+                                          : Qt.rgba(Theme.text.r, Theme.text.g, Theme.text.b, 0.07)
+                            Behavior on color { MotionColor {} }
+                        }
+                        Text {
+                            id:               replyLbl
+                            anchors.centerIn: parent
+                            text:             card.replyLabel
+                            color:            Theme.text
+                            font.pixelSize:   theme.fs(11)
+                        }
+                        RimeFocusRing { target: replyBtn }
+                    }
 
                     Repeater {
                         model: card.tActions
@@ -688,6 +834,82 @@ Item {
                             }
                             RimeFocusRing { target: actBtn }
                         }
+                    }
+                }
+
+                // Reply field — one line, under the actions.
+                Rectangle {
+                    width:   parent.width
+                    height:  card.replyH
+                    visible: card.replying
+                    radius:  theme.radiusS
+                    color:   Qt.rgba(Theme.text.r, Theme.text.g, Theme.text.b, 0.06)
+                    border.width: 1
+                    border.color: replyField.activeFocus
+                                  ? Qt.rgba(Theme.active.r, Theme.active.g, Theme.active.b, 0.55)
+                                  : Qt.rgba(Theme.text.r, Theme.text.g, Theme.text.b, 0.12)
+                    Behavior on border.color { MotionColor { role: "state" } }
+
+                    Text {
+                        anchors { left: parent.left; leftMargin: 10; right: sendBtn.left; rightMargin: 6; verticalCenter: parent.verticalCenter }
+                        text:           card.replyLabel
+                        color:          Theme.textTertiary
+                        font.pixelSize: theme.fs(12)
+                        elide:          Text.ElideRight
+                        visible:        replyField.text === ""
+                    }
+                    TextInput {
+                        id: replyField
+                        anchors { left: parent.left; leftMargin: 10; right: sendBtn.left; rightMargin: 6; top: parent.top; bottom: parent.bottom }
+                        verticalAlignment: TextInput.AlignVCenter
+                        color:          Theme.text
+                        font.pixelSize: theme.fs(12)
+                        selectByMouse:  true
+                        selectionColor: Qt.rgba(Theme.active.r, Theme.active.g, Theme.active.b, 0.35)
+                        clip:           true
+                        activeFocusOnTab: card.replying
+                        Accessible.role: Accessible.EditableText
+                        Accessible.name: card.replyLabel
+                        Accessible.description: "Return sends, Escape cancels"
+                        onVisibleChanged: if (visible && root._replyFocusPending) Qt.callLater(root._focusReply)
+                        // After the field's own handling: what it did not use
+                        // stops here, except Tab, so nothing reaches the list
+                        // (see the header).
+                        Keys.priority: Keys.AfterItem
+                        Keys.onPressed: function (event) {
+                            if (event.key === Qt.Key_Tab || event.key === Qt.Key_Backtab) return
+                            if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) card.sendReply()
+                            else if (event.key === Qt.Key_Escape) root._cancelReply()
+                            event.accepted = true
+                        }
+                    }
+                    RimePressable {
+                        id: sendBtn
+                        anchors { right: parent.right; rightMargin: 4; verticalCenter: parent.verticalCenter }
+                        width:  24
+                        height: 24
+                        radius: 12
+                        hitMargin: 4
+                        // Beside the field: a press must not take the keys from it.
+                        focusOnPress: false
+                        activeFocusOnTab: card.replying && sendBtn.interactive
+                        interactive: replyField.text.trim() !== ""
+                        Accessible.name: "Send reply"
+                        onActivated: card.sendReply()
+
+                        Rectangle {
+                            anchors.fill: parent
+                            radius:       parent.radius
+                            color:        sendBtn.hovered ? Qt.rgba(Theme.text.r, Theme.text.g, Theme.text.b, 0.12) : "transparent"
+                            Behavior on color { MotionColor {} }
+                        }
+                        Text {
+                            anchors.centerIn: parent
+                            text:             "󰒊"
+                            color:            Theme.accentText
+                            font.pixelSize:   theme.fs(13)
+                        }
+                        RimeFocusRing { target: sendBtn }
                     }
                 }
             }
