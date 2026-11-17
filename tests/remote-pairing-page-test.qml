@@ -545,7 +545,7 @@ ShellRoot {
                 btn.clicked()
                 root.waitFor("the ring to run",
                     function () { return RemotePairingService.ringing === ""
-                                         && RemotePairingService.ringText !== "" },
+                                         && RemotePairingService.actText !== "" },
                     function () {
                         root.readLog(function () {
                             const r = root.matching("remote ring")
@@ -553,6 +553,35 @@ ShellRoot {
                                        + r.length + ")", r.length === 1 && r[0].indexOf("AAAAAQIDBAUGBwgJ") >= 0)
                             root.check("the row says the phone is ringing",
                                        root.textShowing(root.page, "Ringing. Stop it on the phone.") !== null)
+                            root.next()
+                        })
+                    })
+            },
+
+            function () {
+                const sendIn = function (row) {
+                    return root.collect(row, "label", []).filter(
+                        function (b) { return b.label === "Send clipboard" && b.visible })
+                }
+                root.check("a phone that said it receives offers Send clipboard",
+                           sendIn(root.rowFor(root.page, "AAAAAQIDBAUGBwgJ")).length === 1)
+                root.check("a revoked phone offers no Send clipboard",
+                           sendIn(root.rowFor(root.page, "BBBBAQIDBAUGBwgJ")).length === 0
+                           && sendIn(root.rowFor(root.page, "CCCCAQIDBAUGBwgJ")).length === 0)
+                const btn = sendIn(root.rowFor(root.page, "AAAAAQIDBAUGBwgJ"))[0]
+                if (!btn) { root.next(); return }
+                btn.clicked()
+                root.waitFor("the send to run",
+                    function () { return RemotePairingService.sending === ""
+                                         && RemotePairingService.actText.indexOf("has the text") >= 0 },
+                    function () {
+                        root.readLog(function () {
+                            const r = root.matching("remote send")
+                            root.check("pressing Send clipboard runs exactly one send of the clipboard (got "
+                                       + r.length + ")", r.length === 1 && r[0].indexOf("AAAAAQIDBAUGBwgJ") >= 0
+                                       && r[0].indexOf("--clipboard") >= 0)
+                            root.check("the row says what the CLI said",
+                                       root.textShowing(root.page, "Pixel 8 has the text and is taking it now.") !== null)
                             root.next()
                         })
                     })

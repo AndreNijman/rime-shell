@@ -126,11 +126,11 @@ devices)
   {"id":"AAAAAQIDBAUGBwgJ","name":"Pixel 8","public_key":"AAAAAQIDBAUGBwgJCgsMDQ4P",
    "paired_ms":1789000000000,"last_seen_ms":1789155000000,"revoked_ms":null,
    "requires_user_verification":true,"last_path":"lan",
-   "phone":{"battery":62,"charging":true,"can":["ring"],"reported_ms":1789155000000}},
+   "phone":{"battery":62,"charging":true,"can":["ring","receive"],"reported_ms":1789155000000}},
   {"id":"BBBBAQIDBAUGBwgJ","name":"Old phone","public_key":"BBBBAQIDBAUGBwgJCgsMDQ4P",
    "paired_ms":1780000000000,"last_seen_ms":1781000000000,"revoked_ms":1789100000000,
    "requires_user_verification":false,"last_path":"relay",
-   "phone":{"battery":10,"charging":false,"can":["ring"],"reported_ms":1781000000000}},
+   "phone":{"battery":10,"charging":false,"can":["ring","receive"],"reported_ms":1781000000000}},
   {"id":"CCCCAQIDBAUGBwgJ","name":"Tablet","public_key":"CCCCAQIDBAUGBwgJCgsMDQ4P",
    "paired_ms":1789154000000,"last_seen_ms":null,"revoked_ms":null,
    "requires_user_verification":false,"last_path":null}
@@ -156,6 +156,11 @@ revoke)
 ring)
     # The CLI's sentence goes to stderr, as the real command writes it.
     echo "rime: Pixel 8 is ringing." >&2
+    exit 0
+    ;;
+send)
+    # Never reads a clipboard: the stub only answers as the CLI would.
+    echo "rime: Pixel 8 has the text and is taking it now." >&2
     exit 0
     ;;
 esac
@@ -231,7 +236,7 @@ phase() {
 
 phase pair-ok    remote-pair    20 0
 phase pair-fail  remote-pair     8 1
-phase devices    remote-devices 28 0
+phase devices    remote-devices 32 0
 
 echo
 echo "passed=$pass failed=$fail"

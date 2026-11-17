@@ -200,6 +200,7 @@ function parsePhone(p) {
         battery: b,
         charging: typeof p.charging === "boolean" ? p.charging : null,
         canRing: can.indexOf("ring") >= 0,
+        canReceive: can.indexOf("receive") >= 0,
         reportedMs: Number(p.reported_ms) || 0
     }
 }
@@ -226,8 +227,18 @@ function ringOutcome(code, stderr) {
     return { ok: false, text: last || ("rime remote ring exited " + code) }
 }
 
+// What `rime remote send --clipboard` said, for the row: the CLI's own
+// sentence ("Pixel 8 has the text and is taking it now.", or that it waits
+// for the phone), since which of the two happened is the point.
+function sendOutcome(code, stderr) {
+    var lines = String(stderr || "").split("\n").filter(function (l) { return l.trim() !== "" })
+    var last = lines.length ? lines[lines.length - 1].replace(/^rime: /, "").trim() : ""
+    if (code === 0) return { ok: true, text: last || "Sent." }
+    return { ok: false, text: last || ("rime remote send exited " + code) }
+}
+
 // The token for the row's third line, a NAME looked up on Theme by the row:
-// a refused ring reads as danger, everything else as the quiet subtext.
+// a refused ring or send reads as danger, everything else as the quiet subtext.
 function ringToken(shown, ok) { return shown && !ok ? "danger" : "subtext" }
 
 // Device::is_active(): revoked_ms alone decides it. Mirrored rather than
@@ -363,6 +374,12 @@ function ringCommand(id) {
     return ["rime", "remote", "ring", String(id)]
 }
 
+// The CLI reads the clipboard itself (wl-paste, text only), so the Shell never
+// holds what is on it.
+function sendClipboardCommand(id) {
+    return ["rime", "remote", "send", String(id), "--clipboard"]
+}
+
 // Node (tests) sees `module`; the QML engine does not, and ignores this.
 if (typeof module !== "undefined" && module.exports)
     module.exports = {
@@ -392,5 +409,7 @@ if (typeof module !== "undefined" && module.exports)
         parsePhone: parsePhone,
         phoneLine: phoneLine,
         ringOutcome: ringOutcome,
+        sendClipboardCommand: sendClipboardCommand,
+        sendOutcome: sendOutcome,
         ringToken: ringToken
     }
