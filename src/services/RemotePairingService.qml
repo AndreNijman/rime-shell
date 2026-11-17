@@ -257,6 +257,48 @@ Singleton {
         }
     }
 
+    // `rime remote ring`: the phone plays its alarm so it can be found. Not
+    // a read, so never on the sweep; one ring at a time. The sentence the CLI
+    // wrote is kept per device so the row that was pressed says what happened.
+    property string ringing: ""
+    property string ringFor: ""
+    property string ringText: ""
+    property bool ringOk: false
+
+    function ring(id) {
+        if (!root.active || root._ringProc.running || !id) return
+        root.ringing = String(id)
+        root.ringFor = String(id)
+        root.ringText = ""
+        root._ringBuf = ""
+        root._ringProc.command = RP.ringCommand(id)
+        root._ringProc.running = true
+    }
+
+    function phoneLine(d) { return RP.phoneLine(d.phone, root.nowMs) }
+    function ringToken(shown) { return RP.ringToken(shown, root.ringOk) }
+
+    property string _ringBuf: ""
+    property Process _ringProc: Process {
+        command: []
+        running: false
+        stdout: StdioCollector {}
+        stderr: StdioCollector { onStreamFinished: root._ringBuf = this.text }
+        // As `_revokeProc`: `exited` clears `ringing` first, so this only
+        // fires for a binary that never ran.
+        onRunningChanged: if (!running && root.ringing !== "") {
+            root.ringOk = false
+            root.ringText = "rime remote is not available on this image"
+            root.ringing = ""
+        }
+        onExited: function (code) {
+            const out = RP.ringOutcome(code, root._ringBuf)
+            root.ringOk = out.ok
+            root.ringText = out.text
+            root.ringing = ""
+        }
+    }
+
     // ── Timers ───────────────────────────────────────────────────────────────
 
     // Reads only. Never `pair`.

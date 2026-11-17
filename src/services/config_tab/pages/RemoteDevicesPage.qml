@@ -89,8 +89,14 @@ CfgScroll {
                 readonly property color tone: Theme[RemotePairingService.stateToken(deviceRow.deviceState)]
                 readonly property string weight: RemotePairingService.stateWeight(deviceRow.deviceState)
 
+                readonly property string phoneLine: RemotePairingService.phoneLine(modelData)
+                readonly property bool canBeRung: modelData.phone !== null
+                    && RemotePairingService.deviceState(modelData) !== "revoked"
+                readonly property bool ringShown: RemotePairingService.ringFor === modelData.id
+                    && RemotePairingService.ringText !== ""
+
                 width: parent.width
-                height: theme.px(62)
+                height: theme.px(deviceRow.phoneLine !== "" || deviceRow.ringShown ? 80 : 62)
                 radius: theme.px(8)
                 color: deviceRow.weight === "tint"
                     ? Qt.rgba(deviceRow.tone.r, deviceRow.tone.g, deviceRow.tone.b, 0.08)
@@ -102,7 +108,7 @@ CfgScroll {
                 Column {
                     anchors.left: parent.left
                     anchors.leftMargin: theme.px(12)
-                    anchors.right: revokeBtn.left
+                    anchors.right: ringBtn.visible ? ringBtn.left : revokeBtn.left
                     anchors.rightMargin: theme.px(10)
                     anchors.verticalCenter: parent.verticalCenter
                     spacing: theme.px(3)
@@ -136,6 +142,33 @@ CfgScroll {
                             elide: Text.ElideRight
                         }
                     }
+
+                    // The phone's own report (battery, charging), or what the
+                    // last ring did. One line: the ring result wins while it
+                    // is fresh, because it answers the button just pressed.
+                    Text {
+                        text: deviceRow.ringShown ? RemotePairingService.ringText : deviceRow.phoneLine
+                        visible: text !== ""
+                        font.pixelSize: theme.typeCaption
+                        color: Theme[RemotePairingService.ringToken(deviceRow.ringShown)]
+                        elide: Text.ElideRight
+                        width: parent.width
+                    }
+                }
+
+                // Find the phone: `rime remote ring`. Only on a device that has
+                // reported itself, which means an app new enough to ring; an
+                // older one would only ever answer with a refusal.
+                CfgButton {
+                    id: ringBtn
+                    anchors.right: revokeBtn.left
+                    anchors.rightMargin: theme.px(6)
+                    anchors.verticalCenter: parent.verticalCenter
+                    label: RemotePairingService.ringing === modelData.id ? "Ringing…" : "Ring"
+                    icon: "󰂞"
+                    visible: deviceRow.canBeRung
+                    enabled: RemotePairingService.ringing === ""
+                    onClicked: RemotePairingService.ring(modelData.id)
                 }
 
                 CfgButton {

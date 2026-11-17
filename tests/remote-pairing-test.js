@@ -270,9 +270,42 @@ check("the device list is read as json rather than scraped from the table",
 check("status is read as json", R.STATUS_COMMAND, ["rime", "remote", "status", "--json"]);
 check("revoke names the device by id", R.revokeCommand("AAAA"),
       ["rime", "remote", "revoke", "AAAA"]);
-check("revoke is the only command that changes anything",
+check("ring names the device by id", R.ringCommand("AAAA"), ["rime", "remote", "ring", "AAAA"]);
+check("the reads neither revoke nor ring anything",
       [R.PAIR_COMMAND, R.DEVICES_COMMAND, R.STATUS_COMMAND]
-          .filter(c => /revoke|remove|delete|reset/.test(c.join(" "))), []);
+          .filter(c => /revoke|remove|delete|reset|ring/.test(c.join(" "))), []);
+
+// ── the phone's own report, and ring ─────────────────────────────────────────
+
+check("a phone report is read with its battery, charger and ring",
+      R.parsePhone({battery: 62, charging: true, can: ["ring"], reported_ms: 5}),
+      {battery: 62, charging: true, canRing: true, reportedMs: 5});
+check("no report is null, not an empty phone", R.parsePhone(undefined), null);
+check("a battery out of range is dropped, not drawn",
+      R.parsePhone({battery: 140, can: []}).battery, null);
+check("a phone that did not say ring cannot be rung through push",
+      R.parsePhone({battery: 5, can: []}).canRing, false);
+check("parseDevices carries the phone through",
+      R.parseDevices('[{"id":"A","phone":{"battery":9,"charging":false,"can":["ring"],"reported_ms":1}}]')[0].phone.battery, 9);
+check("a device with no report has phone null",
+      R.parseDevices('[{"id":"A"}]')[0].phone, null);
+check("the battery line reads as rime remote devices prints it",
+      R.phoneLine({battery: 62, charging: true, reportedMs: 0}, 180000), "Battery 62%, charging · 3m ago");
+check("not charging says nothing about the charger",
+      R.phoneLine({battery: 62, charging: false, reportedMs: 0}, 1000), "Battery 62% · 1s ago");
+check("no battery, no line", R.phoneLine({battery: null, charging: null, reportedMs: 0}, 0), "");
+check("a confirmed ring",
+      R.ringOutcome(0, "rime: Pixel 8 is ringing.\n"), {ok: true, text: "Ringing. Stop it on the phone."});
+check("a push ring keeps the CLI's own words, which do not claim it rang",
+      R.ringOutcome(0, "rime: asked Pixel 8 to ring through its push service. It rings if it is switched on and online.\n").text,
+      "asked Pixel 8 to ring through its push service. It rings if it is switched on and online.");
+check("a refusal is the CLI's sentence",
+      R.ringOutcome(1, "rime: Pixel 8 has not said it can ring. Open an up-to-date Rime Remote on it once, with its notifications allowed, then try again\n"),
+      {ok: false, text: "Pixel 8 has not said it can ring. Open an up-to-date Rime Remote on it once, with its notifications allowed, then try again"});
+check("a silent failure still says something", R.ringOutcome(2, "").text, "rime remote ring exited 2");
+check("a refused ring is drawn as danger, anything else quietly",
+      [R.ringToken(true, false), R.ringToken(true, true), R.ringToken(false, false)],
+      ["danger", "subtext", "subtext"]);
 
 if (failed > 0) {
     console.error(`\n${failed} assertion(s) failed`);
