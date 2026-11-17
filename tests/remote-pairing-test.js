@@ -271,15 +271,19 @@ check("status is read as json", R.STATUS_COMMAND, ["rime", "remote", "status", "
 check("revoke names the device by id", R.revokeCommand("AAAA"),
       ["rime", "remote", "revoke", "AAAA"]);
 check("ring names the device by id", R.ringCommand("AAAA"), ["rime", "remote", "ring", "AAAA"]);
-check("the reads neither revoke nor ring anything",
+check("send names the device and reads the clipboard in the CLI",
+      R.sendClipboardCommand("AAAA"), ["rime", "remote", "send", "AAAA", "--clipboard"]);
+check("the reads neither revoke, ring nor send anything",
       [R.PAIR_COMMAND, R.DEVICES_COMMAND, R.STATUS_COMMAND]
-          .filter(c => /revoke|remove|delete|reset|ring/.test(c.join(" "))), []);
+          .filter(c => /revoke|remove|delete|reset|ring|send/.test(c.join(" "))), []);
 
 // ── the phone's own report, and ring ─────────────────────────────────────────
 
 check("a phone report is read with its battery, charger and ring",
       R.parsePhone({battery: 62, charging: true, can: ["ring"], reported_ms: 5}),
-      {battery: 62, charging: true, canRing: true, reportedMs: 5});
+      {battery: 62, charging: true, canRing: true, canReceive: false, reportedMs: 5});
+check("a phone that said receive can be sent to",
+      R.parsePhone({battery: 62, can: ["ring", "receive"], reported_ms: 5}).canReceive, true);
 check("no report is null, not an empty phone", R.parsePhone(undefined), null);
 check("a battery out of range is dropped, not drawn",
       R.parsePhone({battery: 140, can: []}).battery, null);
@@ -303,6 +307,12 @@ check("a refusal is the CLI's sentence",
       R.ringOutcome(1, "rime: Pixel 8 has not said it can ring. Open an up-to-date Rime Remote on it once, with its notifications allowed, then try again\n"),
       {ok: false, text: "Pixel 8 has not said it can ring. Open an up-to-date Rime Remote on it once, with its notifications allowed, then try again"});
 check("a silent failure still says something", R.ringOutcome(2, "").text, "rime remote ring exited 2");
+check("a send says what the CLI said, which way it went",
+      R.sendOutcome(0, "rime: Pixel 8 is not connected. The text waits here for 15 minutes: open Rime Remote on the phone to take it.\n"),
+      {ok: true, text: "Pixel 8 is not connected. The text waits here for 15 minutes: open Rime Remote on the phone to take it."});
+check("a refused send is the CLI's sentence",
+      R.sendOutcome(1, "rime: the clipboard holds no text\n"), {ok: false, text: "the clipboard holds no text"});
+check("a silent send failure still says something", R.sendOutcome(2, "").text, "rime remote send exited 2");
 check("a refused ring is drawn as danger, anything else quietly",
       [R.ringToken(true, false), R.ringToken(true, true), R.ringToken(false, false)],
       ["danger", "subtext", "subtext"]);

@@ -92,8 +92,9 @@ CfgScroll {
                 readonly property string phoneLine: RemotePairingService.phoneLine(modelData)
                 readonly property bool canBeRung: modelData.phone !== null
                     && RemotePairingService.deviceState(modelData) !== "revoked"
-                readonly property bool ringShown: RemotePairingService.ringFor === modelData.id
-                    && RemotePairingService.ringText !== ""
+                readonly property bool canReceive: deviceRow.canBeRung && modelData.phone.canReceive
+                readonly property bool ringShown: RemotePairingService.actFor === modelData.id
+                    && RemotePairingService.actText !== ""
 
                 width: parent.width
                 height: theme.px(deviceRow.phoneLine !== "" || deviceRow.ringShown ? 80 : 62)
@@ -108,7 +109,7 @@ CfgScroll {
                 Column {
                     anchors.left: parent.left
                     anchors.leftMargin: theme.px(12)
-                    anchors.right: ringBtn.visible ? ringBtn.left : revokeBtn.left
+                    anchors.right: sendBtn.visible ? sendBtn.left : ringBtn.visible ? ringBtn.left : revokeBtn.left
                     anchors.rightMargin: theme.px(10)
                     anchors.verticalCenter: parent.verticalCenter
                     spacing: theme.px(3)
@@ -147,13 +148,29 @@ CfgScroll {
                     // last ring did. One line: the ring result wins while it
                     // is fresh, because it answers the button just pressed.
                     Text {
-                        text: deviceRow.ringShown ? RemotePairingService.ringText : deviceRow.phoneLine
+                        text: deviceRow.ringShown ? RemotePairingService.actText : deviceRow.phoneLine
                         visible: text !== ""
                         font.pixelSize: theme.typeCaption
-                        color: Theme[RemotePairingService.ringToken(deviceRow.ringShown)]
+                        color: Theme[RemotePairingService.actToken(deviceRow.ringShown)]
                         elide: Text.ElideRight
                         width: parent.width
                     }
+                }
+
+                // `rime remote send --clipboard`: this computer's clipboard,
+                // as text, onto the phone's. Only on a phone that said it can
+                // receive (an app with notifications allowed). The CLI reads
+                // the clipboard, so the Shell never holds it.
+                CfgButton {
+                    id: sendBtn
+                    anchors.right: ringBtn.visible ? ringBtn.left : revokeBtn.left
+                    anchors.rightMargin: theme.px(6)
+                    anchors.verticalCenter: parent.verticalCenter
+                    label: RemotePairingService.sending === modelData.id ? "Sending…" : "Send clipboard"
+                    icon: "󰅇"
+                    visible: deviceRow.canReceive
+                    enabled: RemotePairingService.sending === ""
+                    onClicked: RemotePairingService.sendClipboard(modelData.id)
                 }
 
                 // Find the phone: `rime remote ring`. Only on a device that has

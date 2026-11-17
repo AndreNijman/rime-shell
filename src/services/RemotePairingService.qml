@@ -257,26 +257,38 @@ Singleton {
         }
     }
 
-    // `rime remote ring`: the phone plays its alarm so it can be found. Not
-    // a read, so never on the sweep; one ring at a time. The sentence the CLI
-    // wrote is kept per device so the row that was pressed says what happened.
+    // `rime remote ring` and `rime remote send --clipboard`: things done TO a
+    // phone. Not reads, so never on the sweep; one of each at a time. The
+    // sentence the CLI wrote for the last one is kept with its device
+    // (`actFor`), so the row that was pressed says what happened.
     property string ringing: ""
-    property string ringFor: ""
-    property string ringText: ""
-    property bool ringOk: false
+    property string sending: ""
+    property string actFor: ""
+    property string actText: ""
+    property bool actOk: false
 
     function ring(id) {
         if (!root.active || root._ringProc.running || !id) return
         root.ringing = String(id)
-        root.ringFor = String(id)
-        root.ringText = ""
+        root.actFor = String(id)
+        root.actText = ""
         root._ringBuf = ""
         root._ringProc.command = RP.ringCommand(id)
         root._ringProc.running = true
     }
 
+    function sendClipboard(id) {
+        if (!root.active || root._sendProc.running || !id) return
+        root.sending = String(id)
+        root.actFor = String(id)
+        root.actText = ""
+        root._sendBuf = ""
+        root._sendProc.command = RP.sendClipboardCommand(id)
+        root._sendProc.running = true
+    }
+
     function phoneLine(d) { return RP.phoneLine(d.phone, root.nowMs) }
-    function ringToken(shown) { return RP.ringToken(shown, root.ringOk) }
+    function actToken(shown) { return RP.ringToken(shown, root.actOk) }
 
     property string _ringBuf: ""
     property Process _ringProc: Process {
@@ -287,15 +299,34 @@ Singleton {
         // As `_revokeProc`: `exited` clears `ringing` first, so this only
         // fires for a binary that never ran.
         onRunningChanged: if (!running && root.ringing !== "") {
-            root.ringOk = false
-            root.ringText = "rime remote is not available on this image"
+            root.actOk = false
+            root.actText = "rime remote is not available on this image"
             root.ringing = ""
         }
         onExited: function (code) {
             const out = RP.ringOutcome(code, root._ringBuf)
-            root.ringOk = out.ok
-            root.ringText = out.text
+            root.actOk = out.ok
+            root.actText = out.text
             root.ringing = ""
+        }
+    }
+
+    property string _sendBuf: ""
+    property Process _sendProc: Process {
+        command: []
+        running: false
+        stdout: StdioCollector {}
+        stderr: StdioCollector { onStreamFinished: root._sendBuf = this.text }
+        onRunningChanged: if (!running && root.sending !== "") {
+            root.actOk = false
+            root.actText = "rime remote is not available on this image"
+            root.sending = ""
+        }
+        onExited: function (code) {
+            const out = RP.sendOutcome(code, root._sendBuf)
+            root.actOk = out.ok
+            root.actText = out.text
+            root.sending = ""
         }
     }
 
