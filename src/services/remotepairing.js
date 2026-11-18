@@ -204,6 +204,9 @@ function parsePhone(p) {
         canRing: can.indexOf("ring") >= 0,
         canReceive: can.indexOf("receive") >= 0,
         canFocus: can.indexOf("focus") >= 0,
+        // Every word, for pages that act on more than the three above (the
+        // Phone page reads messages, calls, calls_* and photos). Only strings.
+        can: can.filter(function (w) { return typeof w === "string" }),
         reportedMs: Number(p.reported_ms) || 0
     }
 }
@@ -452,8 +455,16 @@ function parseStatus(text) {
     }
     var conns = Array.isArray(s.connections) ? s.connections : []
     var ids = []
+    // `device_id` is what `rime remote status --json` writes (rimed/rime/src/
+    // remote.rs, rime_remote_core::rendezvous::Connection). This read `device`
+    // and so never found one: every paired phone showed as "paired", never
+    // "connected". `device` is still read after it, for nothing that exists
+    // today but the old fixtures.
     for (var i = 0; i < conns.length; i++) {
-        if (conns[i] && conns[i].device) ids.push(String(conns[i].device))
+        var c = conns[i]
+        if (!c) continue
+        var id = c.device_id || c.device
+        if (id) ids.push(String(id))
     }
     return {
         ok: true,

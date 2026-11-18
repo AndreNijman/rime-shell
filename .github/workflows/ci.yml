@@ -1416,6 +1416,18 @@ jobs:
           # adding a per-device renderer fails here rather than in review.
           node tests/remote-pairing-test.js
 
+      - name: Phone page parsing (Messages, Calls, Photos)
+        run: |
+          # What the Dashboard's Phone page reads out of `rime remote messages|
+          # calls|photos --json`, in the shapes rimed/rime/src/remote.rs
+          # prints, plus the refusals and the empty answers; which state the
+          # page is in, read from structure (devices, status, the phone's
+          # `can` words), never from the daemon's prose; and every argv. The
+          # assertions that pay for it: the device is always ONE `--device=ID`
+          # argument (a base64url id may begin with "-"), and `messages send`
+          # carries no text in argv: the service writes it on standard input.
+          node tests/phone-test.js
+
       - name: Push-to-talk decision layer
         run: |
           # §8.2's push-to-talk, at the layer where its edge cases are: when
@@ -2815,6 +2827,23 @@ jobs:
           # Skips cleanly without quickshell or a compositor.
           ./tests/run-remote-pairing-page-test.sh
 
+      - name: The Phone page against a stub rime
+        run: |
+          # The Dashboard's Phone tab in a real Quickshell, against a stub
+          # `rime` that records every argv and every byte of standard input.
+          # A suite running the real commands would read and SEND real SMS
+          # from whoever's phone is paired, so the stub is the point.
+          #
+          # The assertions that pay for it: a reply's text reaches the stub's
+          # standard input exactly (a newline kept, a leading "--" just text)
+          # and appears in NO argv; nothing runs before the page is shown, and
+          # nothing more after it closes, while the poll is proven to run when
+          # it is open; and a feature that is off names the switch on the
+          # phone rather than showing an empty list.
+          #
+          # Skips cleanly without quickshell or a compositor.
+          ./tests/run-phone-page-test.sh
+
       - name: A staged settings edit, and what it survives
         run: |
           # Criteria 3, 4 and 6 of P0-023, none of which a grep can answer,
@@ -3118,6 +3147,15 @@ jobs:
             "tests/remote-pairing-test.js"
             "tests/remote-pairing-page-test.qml"
             "tests/run-remote-pairing-page-test.sh"
+            "src/services/phone.js"
+            "src/services/PhoneService.qml"
+            "src/services/phone/PhonePage.qml"
+            "src/services/phone/PhoneMessages.qml"
+            "src/services/phone/PhoneCalls.qml"
+            "src/services/phone/PhonePhotos.qml"
+            "tests/phone-test.js"
+            "tests/phone-page-test.qml"
+            "tests/run-phone-page-test.sh"
             "tests/fixtures/qr-vectors.json"
             "tests/fixtures/gen-qr-vectors.py"
             "src/services/notifybus.js"

@@ -51,7 +51,7 @@ grep -q "Configuration Loaded" "$log" || {
 
 targets=(
     dashboard-home dashboard-stats dashboard-agents dashboard-kanban
-    dashboard-launcher
+    dashboard-phone dashboard-launcher
     dashboard-config notification-toggle clipboard-toggle wallpaper-toggle
     wifi-toggle bluetooth-toggle audioOut-toggle quick-toggle
     context-menu
