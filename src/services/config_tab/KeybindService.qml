@@ -77,9 +77,9 @@ QtObject {
         // Volume goes through wpctl and brightness through brightnessctl, the
         // same commands the XF86 keys use, so the shell's OSD reacts to both
         // without either compositor telling it anything.
-        "media-play-pause":   { mods: "CTRL + SUPER", key: "SPACE",  label: "Play / Pause",         group: "Media", type: "exec", command: "playerctl play-pause" },
-        "media-next":         { mods: "CTRL + SUPER", key: "RIGHT",  label: "Next Track",           group: "Media", type: "exec", command: "playerctl next" },
-        "media-previous":     { mods: "CTRL + SUPER", key: "LEFT",   label: "Previous Track",       group: "Media", type: "exec", command: "playerctl previous" },
+        "media-play-pause":   { mods: "CTRL + SUPER", key: "SPACE",  label: "Play / Pause",         group: "Media", type: "exec", command: "/usr/libexec/rime-media-key play-pause" },
+        "media-next":         { mods: "CTRL + SUPER", key: "RIGHT",  label: "Next Track",           group: "Media", type: "exec", command: "/usr/libexec/rime-media-key next" },
+        "media-previous":     { mods: "CTRL + SUPER", key: "LEFT",   label: "Previous Track",       group: "Media", type: "exec", command: "/usr/libexec/rime-media-key previous" },
         "volume-up":          { mods: "CTRL + SUPER", key: "EQUAL",  label: "Volume Up",            group: "Media", type: "exec", repeat: true, command: "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+" },
         "volume-down":        { mods: "CTRL + SUPER", key: "MINUS",  label: "Volume Down",          group: "Media", type: "exec", repeat: true, command: "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-" },
         "volume-mute":        { mods: "CTRL + SUPER", key: "0",      label: "Mute",                 group: "Media", type: "exec", command: "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle" },

@@ -307,7 +307,8 @@ Item {
                     // Disabled (dimmed, no Tab stop) for what this player cannot
                     // do — and all three with no player at all.
                     interactive: {
-                        // A phone's player (Rime Remote) is read-only: CanControl false.
+                        // A phone's player (Rime Remote) is read-only unless the phone
+                        // allows control; then canControl and each can* say what it allows.
                         if (!root.player || !root.player.canControl) return false
                         if (modelData.key === "prev") return root.player.canGoPrevious
                         if (modelData.key === "next") return root.player.canGoNext
