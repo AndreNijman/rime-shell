@@ -6,7 +6,8 @@
 #  What it proves, per phase:
 #
 #    full      nothing runs before the page is shown; the conversation list,
-#              one conversation, an older page; a reply whose text goes in on
+#              one conversation, an older page; a failed send that keeps the
+#              draft and says why; a reply whose text goes in on
 #              standard input and is in NO argv (including a newline and a
 #              leading "--"); no reply box for a group; calls list, the call
 #              now, dial (and a refused number that runs nothing), hang up;
@@ -109,8 +110,14 @@ JSON
     ;;
 messages)
     if has send "$@"; then
-        cat >> "$RIME_PH_STDIN"
-        printf '\n<<END>>\n' >> "$RIME_PH_STDIN"
+        text="$(cat)"
+        printf '%s\n<<END>>\n' "$text" >> "$RIME_PH_STDIN"
+        sleep 0.4
+        if [[ "$text" == *NOSIGNAL* ]]; then
+            echo '{"error":"Pixel 8 could not send it: no mobile signal."}'
+            echo "rime: Pixel 8 could not send it: no mobile signal." >&2
+            exit 1
+        fi
         echo '{"sent":true,"device":"Pixel 8"}'
         exit 0
     fi
@@ -234,7 +241,7 @@ phase() {
     fi
 }
 
-phase full    43
+phase full    47
 phase off      5
 phase offline  5
 phase none     3

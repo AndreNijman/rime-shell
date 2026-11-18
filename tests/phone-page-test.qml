@@ -225,6 +225,24 @@ ShellRoot {
             })
         },
         function () {
+            // A send the phone's network refuses: the draft stays, and why.
+            const reply = root.find(page, "phoneReply")
+            reply.text = "NOSIGNAL test"
+            root.find(page, "phoneSend").press()
+            root.check("the draft stays while the send is out",
+                       PhoneService.sending === true && reply.text === "NOSIGNAL test")
+            root.waitFor("the refused send", function () { return !PhoneService.sending }, root.next)
+        },
+        function () {
+            root.check("a refused send says why, in the daemon's words",
+                       root.showing("Pixel 8 could not send it: no mobile signal."))
+            root.check("a refused send keeps the draft", root.find(page, "phoneReply").text === "NOSIGNAL test")
+            root.readLog(function () {
+                root.check("a refused send is not retried", root.count("[send]") === 1)
+                root.next()
+            })
+        },
+        function () {
             // A reply that looks like options, and one with a newline.
             const reply = root.find(page, "phoneReply")
             reply.text = "--thread 9 on my way"
@@ -240,15 +258,15 @@ ShellRoot {
         function () {
             root.readStdin(function () {
                 root.check("the first reply reached standard input exactly",
-                           root.stdinText.indexOf("--thread 9 on my way\n<<END>>") === 0)
+                           root.stdinText.indexOf("NOSIGNAL test\n<<END>>\n--thread 9 on my way\n<<END>>") === 0)
                 root.check("the second reply kept its newline on standard input",
                            root.stdinText.indexOf("line one\nline two\n<<END>>") > 0)
                 root.readLog(function () {
                     root.check("the send's argv is the device, the thread and --json, nothing else",
-                               root.count("[remote][messages][send]" + root.devArg + "[--thread][7][--json]") === 2
-                               && root.count("[send]") === 2)
+                               root.count("[remote][messages][send]" + root.devArg + "[--thread][7][--json]") === 3
+                               && root.count("[send]") === 3)
                     root.check("no reply text is in any argv",
-                               root.count("on my way") === 0 && root.count("line one") === 0 && root.count("line two") === 0)
+                               root.count("NOSIGNAL") === 0 && root.count("on my way") === 0 && root.count("line one") === 0 && root.count("line two") === 0)
                     root.next()
                 })
             })
