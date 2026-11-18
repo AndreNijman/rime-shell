@@ -8,7 +8,11 @@ does when the charger is pulled.
 
 MPRIS: org.mpris.MediaPlayer2.rimetest, PlaybackStatus "Playing".
 
-Usage: fake-upower-mpris.py ON_BATTERY(0|1) READY_FILE
+With PLAYERS "phone": only a phone's player, the way rime-remoted shows one
+(org.mpris.MediaPlayer2.rime_phone.d0102, Playing, CanControl false, every Can* false). The computer's player
+appears when `org.rimeos.Test.StartLocal()` is called on the UPower object.
+
+Usage: fake-upower-mpris.py ON_BATTERY(0|1) READY_FILE [PLAYERS(local|phone)]
 """
 import sys
 
@@ -67,6 +71,10 @@ class UPower(Props):
     def GetCriticalAction(self):
         return "PowerOff"
 
+    @dbus.service.method("org.rimeos.Test")
+    def StartLocal(self):
+        start_local()
+
     @dbus.service.method("org.rimeos.Test", in_signature="b")
     def SetOnBattery(self, value):
         self.props[UP]["OnBattery"] = dbus.Boolean(value)
@@ -87,10 +95,12 @@ def battery(bus, on_battery):
 
 
 class Player(Props):
-    def __init__(self, bus):
+    def __init__(self, bus, phone=False):
         root = "org.mpris.MediaPlayer2"
+        control = not phone
         super().__init__(bus, "/org/mpris/MediaPlayer2", {
-            root: {"Identity": dbus.String("Rime test player"), "CanQuit": dbus.Boolean(False),
+            root: {"Identity": dbus.String("pixel · Music" if phone else "Rime test player"),
+                   "CanQuit": dbus.Boolean(False),
                    "CanRaise": dbus.Boolean(False), "HasTrackList": dbus.Boolean(False),
                    "DesktopEntry": dbus.String(""),
                    "SupportedUriSchemes": dbus.Array([], signature="s"),
@@ -100,23 +110,38 @@ class Player(Props):
                 "Rate": dbus.Double(1.0), "Shuffle": dbus.Boolean(False), "Volume": dbus.Double(1.0),
                 "Position": dbus.Int64(0), "MinimumRate": dbus.Double(1.0), "MaximumRate": dbus.Double(1.0),
                 "CanGoNext": dbus.Boolean(False), "CanGoPrevious": dbus.Boolean(False),
-                "CanPlay": dbus.Boolean(True), "CanPause": dbus.Boolean(True), "CanSeek": dbus.Boolean(False),
-                "CanControl": dbus.Boolean(True),
+                "CanPlay": dbus.Boolean(control), "CanPause": dbus.Boolean(control),
+                "CanSeek": dbus.Boolean(False), "CanControl": dbus.Boolean(control),
                 "Metadata": dbus.Dictionary({"mpris:trackid": dbus.ObjectPath("/rimetest/1"),
                                              "xesam:title": dbus.String("Test tone"),
                                              "mpris:length": dbus.Int64(600000000)}, signature="sv"),
             }})
 
 
-def main():
-    on_battery = sys.argv[1] == "1"
-    DBusGMainLoop(set_as_default=True)
-    sysbus = dbus.bus.BusConnection(dbus.bus.BUS_SYSTEM)
-    names = [dbus.service.BusName(UP, sysbus)]
-    objs = [UPower(sysbus, on_battery), battery(sysbus, on_battery)]
-    sess = dbus.SessionBus()
+names = []
+objs = []
+
+
+def start_local():
+    # Its own connection: one object path per connection, and the phone's player holds /org/mpris/MediaPlayer2.
+    sess = dbus.bus.BusConnection(dbus.bus.BUS_SESSION)
     names.append(dbus.service.BusName("org.mpris.MediaPlayer2.rimetest", sess))
     objs.append(Player(sess))
+
+
+def main():
+    on_battery = sys.argv[1] == "1"
+    players = sys.argv[3] if len(sys.argv) > 3 else "local"
+    DBusGMainLoop(set_as_default=True)
+    sysbus = dbus.bus.BusConnection(dbus.bus.BUS_SYSTEM)
+    names.append(dbus.service.BusName(UP, sysbus))
+    objs.extend([UPower(sysbus, on_battery), battery(sysbus, on_battery)])
+    if players == "phone":
+        sess = dbus.bus.BusConnection(dbus.bus.BUS_SESSION)
+        names.append(dbus.service.BusName("org.mpris.MediaPlayer2.rime_phone.d0102", sess))
+        objs.append(Player(sess, phone=True))
+    else:
+        start_local()
     with open(sys.argv[2], "w") as f:
         f.write("ready\n")
     GLib.MainLoop().run()

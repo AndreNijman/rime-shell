@@ -5,6 +5,7 @@ import Quickshell.Services.Mpris
 import "../../"
 import "../../components"
 import "../../components/controls"
+import "../players.js" as Players
 
 Item {
     id: root
@@ -306,8 +307,11 @@ Item {
                     radius: height / 2
                     // Disabled (dimmed, no Tab stop) for what this player cannot
                     // do — and all three with no player at all.
+                    // `enabled` too, so a screen reader is told the button is unavailable.
+                    enabled: interactive
                     interactive: {
-                        if (!root.player) return false
+                        // A phone's player (Rime Remote) is read-only: CanControl false.
+                        if (!root.player || !root.player.canControl) return false
                         if (modelData.key === "prev") return root.player.canGoPrevious
                         if (modelData.key === "next") return root.player.canGoNext
                         return root.player.canTogglePlaying
@@ -316,7 +320,7 @@ Item {
                                      : modelData.key === "next" ? "Next track"
                                      : (root.isPlaying ? "Pause" : "Play")
                     onActivated: {
-                        if (!root.player) return
+                        if (!root.player || !root.player.canControl) return
                         switch (modelData.key) {
                             case "play":
                                 if (root.player.canTogglePlaying)
@@ -359,8 +363,11 @@ Item {
 
                 // On the keyboard: a Tab stop while the player can seek;
                 // Left/Right 5 s, Page Up/Down 30 s, Home the start.
-                readonly property bool seekable: !!root.player && root.player.canSeek && root.length > 0
+                readonly property bool seekable: !!root.player && root.player.canControl
+                                                 && root.player.canSeek && root.length > 0
                 activeFocusOnTab: seekBar.seekable
+                // Unavailable to a screen reader too while it cannot seek.
+                enabled: seekBar.seekable
                 Accessible.role: Accessible.Slider
                 Accessible.name: "Seek"
                 Accessible.description: root._fmt(root._pos) + " of " + root._fmt(root.length)
@@ -394,9 +401,9 @@ Item {
                         // above, down over the timestamps (not pressable) to the
                         // player chooser below; x still maps 1:1.
                         anchors.fill: parent; anchors.topMargin: -6; anchors.bottomMargin: -17
-                        cursorShape: Qt.PointingHandCursor
+                        cursorShape: seekBar.seekable ? Qt.PointingHandCursor : Qt.ArrowCursor
                         onClicked: function(mouse) {
-                            if (root.player && root.length > 0) {
+                            if (seekBar.seekable) {
                                 var f = mouse.x / width
                                 root.player.position = f * root.length
                                 root._pos = f * root.length
@@ -576,7 +583,9 @@ Item {
     Item {
         anchors { left: parent.left; right: parent.right; bottom: parent.bottom; leftMargin: 7; rightMargin: 7; bottomMargin: 4 }
         height: 32
-        opacity: root.isPlaying ? 1 : 0
+        // Not for a phone's player (Rime Remote): its sound is on the phone,
+        // cava hears nothing here, and a flat row would read as broken.
+        opacity: root.isPlaying && !Players.isPhone(root.player) ? 1 : 0
         visible: opacity > 0
         Behavior on opacity { MotionFade {} }
         Row {

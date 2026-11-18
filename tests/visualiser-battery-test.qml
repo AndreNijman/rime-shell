@@ -3,6 +3,8 @@ import QtQuick
 import "./src"
 import "./src/services"
 import "./src/nexus"
+import Quickshell.Services.Mpris
+import "./src/services/players.js" as Players
 
 // The audio visualisers, run for real (tests/run-visualiser-battery-test.sh stages this file at the repository
 // root and provides a fake UPower, a playing MPRIS player and a stub `cava`). This file only asks for the bars, the
@@ -23,6 +25,20 @@ ShellRoot {
 
     // The notch's bars are on screen.
     Binding { target: CavaService; property: "centerWants"; value: true }
+
+    // Which players Quickshell sees, and the one the notch would show (CenterContent uses the same call).
+    property string seen: {
+        var v = Mpris.players.values, out = []
+        for (var i = 0; i < v.length; i++)
+            out.push(v[i].dbusName + (Players.isPhone(v[i]) ? "=phone" : "=local") + ":" + v[i].canControl)
+        return out.join(",")
+    }
+    onSeenChanged: {
+        var n = Players.preferLocal(Mpris.players.values)
+        console.log("VIS players " + t.seen + " notch " + (n ? n.dbusName : "none"))
+    }
+    readonly property bool localPlaying: CavaService.isPlaying
+    onLocalPlayingChanged: console.log("VIS isPlaying " + t.localPlaying)
 
     property string shared: t.bars(CavaService.bars)
     property string rec: t.bars(ScreenRecService.audioBars)

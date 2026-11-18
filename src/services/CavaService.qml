@@ -5,6 +5,7 @@ import Quickshell.Io
 import Quickshell.Services.Mpris
 import Quickshell.Services.UPower
 import "../"
+import "players.js" as Players
 
 // Single cava process shared by CenterContent and PlayerCard.
 // 32 bars at 30fps, ON DEMAND — see below.
@@ -63,15 +64,11 @@ QtObject {
         var a = []; for (var i = 0; i < 32; i++) a.push(0); return a
     })()
 
-    // isPlaying is true if ANY MPRIS player is currently playing.
+    // isPlaying is true if ANY of this computer's MPRIS players is playing.
     // This ensures bars flow regardless of which player index is active in PlayerCard.
-    readonly property bool isPlaying: {
-        var vals = Mpris.players.values
-        for (var i = 0; i < vals.length; i++) {
-            if (vals[i].playbackState === MprisPlaybackState.Playing) return true
-        }
-        return false
-    }
+    // A phone's player (Rime Remote) does not count: its sound comes out of the
+    // phone, so cava would only capture silence here (players.js).
+    readonly property bool isPlaying: Players.localPlaying(Mpris.players.values, MprisPlaybackState.Playing)
 
     // Flatten the bars when cava stops, so the visualiser does not freeze
     // mid-waveform on whatever frame happened to arrive last.
