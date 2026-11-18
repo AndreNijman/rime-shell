@@ -122,6 +122,10 @@ ShellRoot {
             // (no file read, no command) unless the person turned it on.
             property var _phoneFocus: PhoneFocusService
 
+            // And for the same reason again: it is what sends a copy here to
+            // the phones. Off (no watcher, no command) unless turned on.
+            property var _phoneClipboard: PhoneClipboardService
+
             // Must exist at startup for the same kind of reason: a display transaction
             // the previous shell left open has to be settled whether or not anybody
             // opens the Display page. Enumeration stays on demand — this costs one
