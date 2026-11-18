@@ -1949,6 +1949,13 @@ jobs:
       - name: The audio visualisers stay off on battery
         run: ./tests/run-visualiser-battery-test.sh
 
+      # Do Not Disturb follows your phone: off by default; when on, a phone's
+      # focus.json reaches ShellState.dnd (never one from before following
+      # started), and only the person's own toggles run `rime remote focus`.
+      # Private HOME and runtime dir, a stub rime. SKIPS without quickshell.
+      - name: Do Not Disturb follows your phone
+        run: ./tests/run-phone-focus-test.sh
+
       # Rime Settings, the app for GNOME, KDE Plasma and COSMIC: one window
       # with app id org.rimeos.Settings, a second launch reuses it, no
       # Shell-only page and no hyprctl call; inside a Rime session the

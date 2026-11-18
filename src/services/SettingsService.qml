@@ -92,6 +92,13 @@ QtObject {
     // before.
     property string windowLayout:       ""         // "" | dwindle | master | monocle | scrolling
 
+    // ── Do Not Disturb follows your phone (2026-11-18) ──────────────────────
+    // Rime Remote's Focus sync, this computer's half (rime-os contract §2.9):
+    // on, a paired phone's Do Not Disturb sets the Shell's and a toggle here
+    // runs `rime remote focus on|off`. Off by default: PhoneFocusService
+    // neither reads the phone's state nor tells any phone anything.
+    property bool   phoneFocus:         false
+
     /// A path a person typed, made absolute: "~" and "$HOME" expanded.
     function expandPath(p) {
         let d = String(p || "").trim()
@@ -119,7 +126,7 @@ QtObject {
         "lockBackground", "scaleMode", "scaleManual", "scaleScreen",
         "nightLightTemp",
         "showVolumePercent", "showBatteryPercent", "clockFormat", "recordingDir", "avatarPath",
-        "windowLayout", "openReleaseNotes"
+        "windowLayout", "openReleaseNotes", "phoneFocus"
     ]
     readonly property var _defaults: ({
         cornerRadius: 17, borderWidth: 6, notchRadius: 15, notchHeight: 40,
@@ -133,7 +140,8 @@ QtObject {
         showVolumePercent: false, showBatteryPercent: false, clockFormat: "system",
         recordingDir: "", avatarPath: "",
         windowLayout: "",
-        openReleaseNotes: true
+        openReleaseNotes: true,
+        phoneFocus: false
     })
 
     // Bounds used by the UI sliders AND clamped on load so a hand-edited file
@@ -237,6 +245,7 @@ QtObject {
     onAvatarPathChanged:        _scheduleSave()
     onWindowLayoutChanged:      _scheduleSave()
     onOpenReleaseNotesChanged:  _scheduleSave()
+    onPhoneFocusChanged:        _scheduleSave()
 
     function _scheduleSave() { if (_loaded) _saveTimer.restart() }
 

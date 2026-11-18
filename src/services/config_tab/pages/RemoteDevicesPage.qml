@@ -227,6 +227,22 @@ CfgScroll {
         }
     }
 
+    // ── Do Not Disturb on both ───────────────────────────────────────────────
+    CfgSection {
+        title: "Focus"
+
+        CfgRow {
+            label: "Do Not Disturb follows your phone"
+            // Off by default: with it off the Shell reads nothing from the
+            // phone and tells the phone nothing. PhoneFocusService.
+            description: "When Do Not Disturb changes on a phone with Focus turned on in Rime Remote, it changes here too, and turning it on or off here does the same on the phone."
+            CfgSwitch {
+                checked: SettingsService.phoneFocus
+                onToggled: function(v) { SettingsService.set("phoneFocus", v) }
+            }
+        }
+    }
+
     // ── What revoking does ───────────────────────────────────────────────────
     CfgSection {
         title: "About revoking"
