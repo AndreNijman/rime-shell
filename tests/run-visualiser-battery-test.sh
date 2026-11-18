@@ -164,6 +164,15 @@ else bad "then plugged in: both run (stub log: $(tr '\n' ' ' < "$STUB_LOG"))"; f
 stop_run
 
 # ── 3. Only a phone plays (Rime Remote): its sound is on the phone, so no cava ─
+#  The notch's choice is logged by the test file with the same call
+#  CenterContent makes. CenterContent itself is not loaded here: its own
+#  centerWants binding would fight the one this test sets. So the file is held
+#  to that call, and a notch that went back to `Mpris.players.values[0]` fails.
+if grep -Eq 'readonly property var +player: +Players\.preferLocal\(Mpris\.players\.values\)' "$root/src/modules/Center/CenterContent.qml" \
+   && ! grep -q 'Mpris\.players\.values\[0\]' "$root/src/modules/Center/CenterContent.qml"
+then ok "the notch (CenterContent) picks its player with Players.preferLocal"
+else bad "the notch (CenterContent) picks its player with Players.preferLocal"; fi
+
 #  The notch bars: never. (The recording meter listens to the recording's own
 #  source and is not about players; it is left out here.)
 start_run 0 phone
