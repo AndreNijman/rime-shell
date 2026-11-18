@@ -17,9 +17,10 @@ import "phone.js" as P
 //
 // The page also holds RemotePairingService, which says which phone is paired
 // and whether it is connected. With no holder nothing here runs: no read, no
-// timer. A read in flight when the page closes is killed; an ACTION the person
-// took (a send, a dial, a hang up, a save) is not, because killing the CLI
-// would not stop the phone, only hide what it did.
+// timer. A read in flight when the page closes is killed (unless a send is
+// queued behind it, see onActiveChanged); an ACTION the person took (a send,
+// a dial, a hang up, a save) is not, because killing the CLI would not stop
+// the phone, only hide what it did.
 //
 // ── One messages request at a time ───────────────────────────────────────────
 //
@@ -220,6 +221,13 @@ Singleton {
         root._sendText = ""
         const what = q.kind === "send" ? "Sending" : "Messages"
         const r = P.outcome(code, root._msgOut, root._msgErr, what)
+        // A read that finished after the page closed (it was let run so a
+        // queued send could follow it): its answer is not kept.
+        if (q.kind !== "send" && !root.active) {
+            if (q.kind === "older") root.loadingOlder = false
+            root._pump()
+            return
+        }
         // An answer for a phone or a conversation that is no longer the one on
         // the page is dropped (the person switched while it was out).
         const samePhone = q.device === root.deviceId
@@ -517,9 +525,14 @@ Singleton {
 
     onActiveChanged: {
         if (root.active) return
-        // Reads are killed; actions run to the end (see the header).
+        // Reads are killed; actions run to the end (see the header). A send
+        // still queued behind a read is the exception: killing the read would
+        // not free the phone (the daemon keeps waiting for its answer), and
+        // nothing would pump the lane again, so the send would sit until the
+        // page was next opened and go out then. Instead the read finishes,
+        // its answer is dropped (_msgDone), and the send goes out now.
         root._queue = root._queue.filter(function (q) { return q.kind === "send" })
-        if (root._running && root._running.kind !== "send") {
+        if (root._running && root._running.kind !== "send" && root._queue.length === 0) {
             root._running = null
             root._msgProc.running = false
         }

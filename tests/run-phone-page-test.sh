@@ -121,6 +121,9 @@ messages)
         echo '{"sent":true,"device":"Pixel 8"}'
         exit 0
     fi
+    # A slow read, while the test's flag file exists: the window in which a
+    # send queues behind a read.
+    [[ -e "$RIME_PH_CALLS.slow" ]] && sleep 1.5
     if [[ "$scene" == error ]]; then
         echo '{"error":"Pixel 8 did not answer in time. Is Rime Remote open on it?"}'
         echo "rime: Pixel 8 did not answer in time. Is Rime Remote open on it?" >&2
@@ -241,7 +244,7 @@ phase() {
     fi
 }
 
-phase full    47
+phase full    51
 phase off      5
 phase offline  5
 phase none     3

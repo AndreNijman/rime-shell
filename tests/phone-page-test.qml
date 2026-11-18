@@ -133,6 +133,23 @@ ShellRoot {
         catProc.command = ["cat", path]
         catProc.running = true
     }
+    property var _afterRun: null
+    readonly property Process runProc: Process {
+        command: []
+        running: false
+        onExited: function () {
+            const f = root._afterRun
+            root._afterRun = null
+            if (f) f()
+        }
+    }
+    function run(cmd, then) {
+        root._afterRun = then
+        runProc.command = cmd
+        runProc.running = true
+    }
+    function stdinCount(needle) { return root.stdinText.split(needle).length - 1 }
+
     function readLog(then) {
         root.readFile(root.callLog, function (t) {
             root.lines = t.split("\n").filter(function (l) { return l !== "" })
@@ -346,21 +363,56 @@ ShellRoot {
             })
         },
         function () {
+            // A send pressed while a read is out queues behind it (one
+            // messages request per phone). Closing the page then must not
+            // strand it: it goes out once, now, and never on a later open.
             page.section = "messages"
-            root.sleep(300, function () {
-                page.onScreen = false
-                root.readLog(function () {
-                    const before = root.lines.length
-                    root.sleep(2500, function () {
-                        root.readLog(function () {
-                            root.check("nothing ran after the page closed (" + before + " then " + root.lines.length + ")",
-                                       root.lines.length === before)
-                            root.check("what the phone sent is gone once the page closed",
-                                       PhoneService.threads.length === 0 && PhoneService.messages.length === 0
-                                       && PhoneService.photos.length === 0 && PhoneService.calls === null)
-                            root.next()
-                        })
+            root.run(["touch", root.callLog + ".slow"], function () {
+                PhoneService.openConversation(PhoneService.threads[0])
+                root.sleep(300, function () {
+                    root.find(page, "phoneReply").text = "queued behind a read"
+                    root.find(page, "phoneSend").press()
+                    root.check("the send waits behind the read",
+                               PhoneService.sending && PhoneService._running !== null
+                               && PhoneService._running.kind !== "send")
+                    page.onScreen = false
+                    root.waitFor("the queued send after close", function () { return !PhoneService.sending }, root.next)
+                })
+            })
+        },
+        function () {
+            root.readStdin(function () {
+                root.check("the queued send went out once, after the page closed",
+                           root.stdinCount("queued behind a read") === 1)
+                root.run(["rm", "-f", root.callLog + ".slow"], root.next)
+            })
+        },
+        function () {
+            root.readLog(function () {
+                const before = root.lines.length
+                root.sleep(2500, function () {
+                    root.readLog(function () {
+                        root.check("nothing ran after the page closed (" + before + " then " + root.lines.length + ")",
+                                   root.lines.length === before)
+                        root.check("no poll timer runs while the page is closed", PhoneService._poll.running === false)
+                        root.check("what the phone sent is gone once the page closed",
+                                   PhoneService.threads.length === 0 && PhoneService.messages.length === 0
+                                   && PhoneService.photos.length === 0 && PhoneService.calls === null)
+                        root.next()
                     })
+                })
+            })
+        },
+        function () {
+            page.onScreen = true
+            root.waitFor("the list again", function () { return PhoneService.threads.length === 3 }, root.next)
+        },
+        function () {
+            root.sleep(1000, function () {
+                root.readStdin(function () {
+                    root.check("reopening sends nothing again", root.stdinCount("queued behind a read") === 1)
+                    page.onScreen = false
+                    root.next()
                 })
             })
         }
