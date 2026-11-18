@@ -87,6 +87,11 @@ QtObject {
         function toggle() { root.toggleDashboard("kanban") }
     }
 
+    property var dashboardPhone: IpcHandler {
+        target: "dashboard-phone"
+        function toggle() { root.toggleDashboard("phone") }
+    }
+
     property var dashboardLauncher: IpcHandler {
         target: "dashboard-launcher"
         function toggle() { root.toggleDashboard("launcher") }
