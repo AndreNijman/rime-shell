@@ -199,18 +199,80 @@ function parsePhone(p) {
     return {
         battery: b,
         charging: typeof p.charging === "boolean" ? p.charging : null,
+        network: parseNetwork(p.network),
+        dnd: typeof p.dnd === "boolean" ? p.dnd : null,
         canRing: can.indexOf("ring") >= 0,
         canReceive: can.indexOf("receive") >= 0,
+        canFocus: can.indexOf("focus") >= 0,
         reportedMs: Number(p.reported_ms) || 0
     }
 }
 
-// "Battery 62%, charging · 3m ago", in the words `rime remote devices` prints
-// under its table. "" when there is nothing to say.
+// How the phone said it is connected (contract §2.9): {type, signal}, signal
+// null when the phone did not know its bars (not the same as 0). A type the
+// daemon would have refused is null here too, rather than a label invented.
+var NETWORK_LABELS = {wifi: "Wi-Fi", cellular: "Mobile", ethernet: "Ethernet", none: "No network", other: "Online"}
+function parseNetwork(n) {
+    if (!n || typeof n !== "object" || !NETWORK_LABELS.hasOwnProperty(n.type)) return null
+    var s = n.signal
+    return {
+        type: n.type,
+        signal: typeof s === "number" && s >= 0 && s <= 4 && Math.floor(s) === s ? s : null
+    }
+}
+
+// "Wi-Fi, signal 3/4", "Mobile", "No network".
+function networkLabel(network) {
+    if (!network) return ""
+    return NETWORK_LABELS[network.type]
+        + (network.signal !== null ? ", signal " + network.signal + "/4" : "")
+}
+
+// "Battery 62%, charging · Wi-Fi, signal 3/4 · Do Not Disturb · 3m ago":
+// whatever the phone reported, in the words `rime remote devices` uses. Do
+// Not Disturb is named only while it is on. "" when there is nothing to say.
 function phoneLine(phone, nowMs) {
-    if (!phone || phone.battery === null) return ""
-    return "Battery " + phone.battery + "%" + (phone.charging === true ? ", charging" : "")
-        + " · " + ago(phone.reportedMs, nowMs)
+    if (!phone) return ""
+    var parts = []
+    if (phone.battery !== null && phone.battery !== undefined)
+        parts.push("Battery " + phone.battery + "%" + (phone.charging === true ? ", charging" : ""))
+    if (phone.network) parts.push(networkLabel(phone.network))
+    if (phone.dnd === true) parts.push("Do Not Disturb")
+    if (parts.length === 0) return ""
+    return parts.join(" · ") + " · " + ago(phone.reportedMs, nowMs)
+}
+
+// ── Focus: Do Not Disturb, following the phone (contract §2.9) ────────────────
+//
+// rime-remoted writes $XDG_RUNTIME_DIR/rime-remote/focus.json when a phone
+// that has Focus sync on reports a CHANGED Do Not Disturb; the Shell runs
+// `rime remote focus on|off` when the person toggles it here. Both are states,
+// not toggles, which is what keeps them from echoing (see PhoneFocusService).
+
+// The command the Shell runs on a toggle the person made here.
+function focusCommand(dnd) {
+    return ["rime", "remote", "focus", dnd ? "on" : "off"]
+}
+
+// focus.json's text as {dnd, device, atMs}, or null for anything that is not
+// one: an empty file, half of one, a dnd that is not a boolean.
+function parseFocus(text) {
+    var o
+    try { o = JSON.parse(String(text || "")) } catch (e) { return null }
+    if (!o || typeof o !== "object" || typeof o.dnd !== "boolean") return null
+    var at = Number(o.at_ms)
+    if (!isFinite(at) || at < 0) return null
+    return {dnd: o.dnd, device: typeof o.device === "string" ? o.device : "", atMs: at}
+}
+
+// Whether a read of focus.json is something to act on: written at or after
+// `sinceMs` (the moment following was turned on, or the Shell started with it
+// on), and not the same write as the last one acted on. A reload of the same
+// file -- a re-armed watch, a second change event for one rename -- must not
+// put back a state the person has since changed here.
+function focusIsNew(focus, sinceMs, last) {
+    if (!focus || focus.atMs < sinceMs) return false
+    return !(last && last.atMs === focus.atMs && last.device === focus.device && last.dnd === focus.dnd)
 }
 
 // What `rime remote ring` said, for the row. The CLI writes one sentence to
@@ -407,7 +469,12 @@ if (typeof module !== "undefined" && module.exports)
         revokeCommand: revokeCommand,
         ringCommand: ringCommand,
         parsePhone: parsePhone,
+        parseNetwork: parseNetwork,
+        networkLabel: networkLabel,
         phoneLine: phoneLine,
+        focusCommand: focusCommand,
+        parseFocus: parseFocus,
+        focusIsNew: focusIsNew,
         ringOutcome: ringOutcome,
         sendClipboardCommand: sendClipboardCommand,
         sendOutcome: sendOutcome,

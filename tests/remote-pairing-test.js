@@ -281,7 +281,8 @@ check("the reads neither revoke, ring nor send anything",
 
 check("a phone report is read with its battery, charger and ring",
       R.parsePhone({battery: 62, charging: true, can: ["ring"], reported_ms: 5}),
-      {battery: 62, charging: true, canRing: true, canReceive: false, reportedMs: 5});
+      {battery: 62, charging: true, network: null, dnd: null, canRing: true, canReceive: false,
+       canFocus: false, reportedMs: 5});
 check("a phone that said receive can be sent to",
       R.parsePhone({battery: 62, can: ["ring", "receive"], reported_ms: 5}).canReceive, true);
 check("no report is null, not an empty phone", R.parsePhone(undefined), null);
@@ -316,6 +317,50 @@ check("a silent send failure still says something", R.sendOutcome(2, "").text, "
 check("a refused ring is drawn as danger, anything else quietly",
       [R.ringToken(true, false), R.ringToken(true, true), R.ringToken(false, false)],
       ["danger", "subtext", "subtext"]);
+
+// ── status and Focus (contract §2.9) ─────────────────────────────────────────
+
+check("a phone's network and Do Not Disturb are read, and focus is a capability",
+      (p => [p.network, p.dnd, p.canFocus])(R.parsePhone(
+          {battery: 62, network: {type: "wifi", signal: 3}, dnd: true, can: ["focus"], reported_ms: 5})),
+      [{type: "wifi", signal: 3}, true, true]);
+check("a network with no bars keeps signal null, not 0",
+      R.parsePhone({network: {type: "cellular"}}).network, {type: "cellular", signal: null});
+check("0 bars is 0", R.parsePhone({network: {type: "cellular", signal: 0}}).network.signal, 0);
+check("a network type the daemon would refuse is not drawn",
+      [R.parseNetwork({type: "5g"}), R.parseNetwork("wifi"), R.parseNetwork(null)], [null, null, null]);
+check("a signal out of range is dropped and the type kept",
+      [R.parseNetwork({type: "wifi", signal: 5}), R.parseNetwork({type: "wifi", signal: 2.5})],
+      [{type: "wifi", signal: null}, {type: "wifi", signal: null}]);
+check("a dnd that is not a boolean is unknown", R.parsePhone({dnd: "on"}).dnd, null);
+check("each network has a label",
+      ["wifi", "cellular", "ethernet", "none", "other"].map(t => R.networkLabel({type: t, signal: null})),
+      ["Wi-Fi", "Mobile", "Ethernet", "No network", "Online"]);
+check("bars read as signal n/4", R.networkLabel({type: "wifi", signal: 3}), "Wi-Fi, signal 3/4");
+check("the phone line carries the network and Do Not Disturb",
+      R.phoneLine({battery: 62, charging: true, network: {type: "wifi", signal: 3}, dnd: true, reportedMs: 0}, 180000),
+      "Battery 62%, charging · Wi-Fi, signal 3/4 · Do Not Disturb · 3m ago");
+check("Do Not Disturb off is not named",
+      R.phoneLine({battery: 40, charging: false, network: {type: "cellular", signal: null}, dnd: false, reportedMs: 0}, 1000),
+      "Battery 40% · Mobile · 1s ago");
+check("no battery but a network is still a line",
+      R.phoneLine({battery: null, charging: null, network: {type: "none", signal: null}, dnd: null, reportedMs: 0}, 0),
+      "No network · 0s ago");
+check("the focus command sets a state, by word",
+      [R.focusCommand(true), R.focusCommand(false)],
+      [["rime", "remote", "focus", "on"], ["rime", "remote", "focus", "off"]]);
+check("focus.json is read as the daemon writes it",
+      R.parseFocus('{"dnd":true,"device":"AAAA","at_ms":1234}'), {dnd: true, device: "AAAA", atMs: 1234});
+check("half a focus file, or none, is not a state",
+      ["", "{", "null", '{"dnd":"yes","at_ms":1}', '{"dnd":true,"at_ms":"x"}'].map(R.parseFocus),
+      [null, null, null, null, null]);
+const F = {dnd: true, device: "AAAA", atMs: 2000};
+check("a write from before following was on is not acted on", R.focusIsNew(F, 2001, null), false);
+check("a write at or after it is", [R.focusIsNew(F, 2000, null), R.focusIsNew(F, 1000, null)], [true, true]);
+check("the same write read again is not acted on twice",
+      R.focusIsNew(F, 0, {dnd: true, device: "AAAA", atMs: 2000}), false);
+check("a newer write is, even with the same value",
+      R.focusIsNew(F, 0, {dnd: true, device: "AAAA", atMs: 1999}), true);
 
 if (failed > 0) {
     console.error(`\n${failed} assertion(s) failed`);
