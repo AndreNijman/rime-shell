@@ -35,6 +35,9 @@ Column {
     property string hint:    ""
     property string command: ""
     property bool   inline:  false
+    // Title and hint are drawn as plain text, never as markup. For words that
+    // came from somewhere else: a phone's name, a daemon's error sentence.
+    property bool   plain:   false
     default property alias actions: actionRow.data
 
     readonly property int _align: root.inline ? Text.AlignLeft : Text.AlignHCenter
@@ -53,6 +56,7 @@ Column {
         width: parent.width
         visible: text !== ""
         text: root.title
+        textFormat: root.plain ? Text.PlainText : Text.AutoText
         horizontalAlignment: root._align
         wrapMode: Text.WordWrap
         font.family: Theme.fontUi
@@ -66,6 +70,7 @@ Column {
         width: parent.width
         visible: text !== ""
         text: root.hint
+        textFormat: root.plain ? Text.PlainText : Text.AutoText
         horizontalAlignment: root._align
         wrapMode: Text.WordWrap
         font.family: Theme.fontUi
