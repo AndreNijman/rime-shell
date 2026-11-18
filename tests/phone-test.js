@@ -110,6 +110,10 @@ check("a list reply is not a thread reply",
       P.parseThread(JSON.parse(THREADS)), null);
 check("an older page goes in front, without a message twice",
       P.prependOlder([{id: 0, dateMs: 500}, {id: 1, dateMs: 1000}], thread.messages).map(m => m.id), [0, 1, 2]);
+check("a refresh merges: one copy each, the fresh one wins, older pages stay",
+      P.mergeMessages([{id: 0, dateMs: 500, status: "received"}, {id: 1, dateMs: 1000, status: "sending"}],
+                      [{id: 1, dateMs: 1000, status: "sent"}, {id: 2, dateMs: 2000, status: "received"}]),
+      [{id: 0, dateMs: 500, status: "received"}, {id: 1, dateMs: 1000, status: "sent"}, {id: 2, dateMs: 2000, status: "received"}]);
 check("an empty conversation page",
       P.parseThread({device: "P", thread: 4, messages: []}).oldestMs, 0);
 

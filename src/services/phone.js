@@ -144,6 +144,22 @@ function prependOlder(older, shown) {
     return older.filter(function (m) { return !seen[m.id] }).concat(shown)
 }
 
+// The newest page read again (a refresh) merged into what is shown: one copy
+// of each message, the fresh one winning (a "sending" becomes "sent"), oldest
+// first. Older pages already loaded stay.
+function mergeMessages(shown, fresh) {
+    var byId = {}
+    var out = []
+    for (var i = 0; i < fresh.length; i++) byId[fresh[i].id] = fresh[i]
+    for (var j = 0; j < shown.length; j++) {
+        if (byId[shown[j].id]) continue
+        out.push(shown[j])
+    }
+    out = out.concat(fresh)
+    out.sort(function (a, b) { return a.dateMs - b.dateMs || a.id - b.id })
+    return out
+}
+
 // The words under a message of mine that has not simply gone.
 function messageStatus(m) {
     if (!m || !m.fromMe) return ""
@@ -447,7 +463,7 @@ if (typeof module !== "undefined" && module.exports)
     module.exports = {
         FEATURES: FEATURES, PAGE_LIMIT: PAGE_LIMIT, MAX_TEXT: MAX_TEXT,
         lastLine: lastLine, outcome: outcome, wholeId: wholeId,
-        parseThreads: parseThreads, parseThread: parseThread, prependOlder: prependOlder,
+        parseThreads: parseThreads, parseThread: parseThread, prependOlder: prependOlder, mergeMessages: mergeMessages,
         messageStatus: messageStatus, replyCheck: replyCheck,
         parseCalls: parseCalls, caller: caller, callTypeLabel: callTypeLabel,
         callStateLabel: callStateLabel, duration: duration, dialNumber: dialNumber,
