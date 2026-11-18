@@ -117,6 +117,11 @@ ShellRoot {
             // low-battery warning, and nothing on screen "uses" it.
             property var _batteryAlert: BatteryAlert
 
+            // Must exist for the same reason: it is what lets a phone's Do Not
+            // Disturb reach this Shell, and nothing on screen "uses" it. Off
+            // (no file read, no command) unless the person turned it on.
+            property var _phoneFocus: PhoneFocusService
+
             // Must exist at startup for the same kind of reason: a display transaction
             // the previous shell left open has to be settled whether or not anybody
             // opens the Display page. Enumeration stays on demand — this costs one
