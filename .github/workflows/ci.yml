@@ -367,6 +367,9 @@ jobs:
           # so the launcher's ranked rows blinked out and back on every
           # Hyprland raw event. `[]` that parsed is still a real answer.
           node tests/clients-test.js
+          # A phone's player (Rime Remote) is read-only and its sound is on the
+          # phone: the visualiser ignores it and the notch prefers the computer's.
+          node tests/players-test.js
           # A Settings → Misc compositor pin used to win even when that
           # compositor was not running, and a "Scrolling" pin on Hyprland
           # took the workspace dots, the layout button and SUPER+TAB with it.

@@ -307,7 +307,8 @@ Item {
                     // Disabled (dimmed, no Tab stop) for what this player cannot
                     // do — and all three with no player at all.
                     interactive: {
-                        if (!root.player) return false
+                        // A phone's player (Rime Remote) is read-only: CanControl false.
+                        if (!root.player || !root.player.canControl) return false
                         if (modelData.key === "prev") return root.player.canGoPrevious
                         if (modelData.key === "next") return root.player.canGoNext
                         return root.player.canTogglePlaying
@@ -316,7 +317,7 @@ Item {
                                      : modelData.key === "next" ? "Next track"
                                      : (root.isPlaying ? "Pause" : "Play")
                     onActivated: {
-                        if (!root.player) return
+                        if (!root.player || !root.player.canControl) return
                         switch (modelData.key) {
                             case "play":
                                 if (root.player.canTogglePlaying)
@@ -359,7 +360,8 @@ Item {
 
                 // On the keyboard: a Tab stop while the player can seek;
                 // Left/Right 5 s, Page Up/Down 30 s, Home the start.
-                readonly property bool seekable: !!root.player && root.player.canSeek && root.length > 0
+                readonly property bool seekable: !!root.player && root.player.canControl
+                                                 && root.player.canSeek && root.length > 0
                 activeFocusOnTab: seekBar.seekable
                 Accessible.role: Accessible.Slider
                 Accessible.name: "Seek"
@@ -394,9 +396,9 @@ Item {
                         // above, down over the timestamps (not pressable) to the
                         // player chooser below; x still maps 1:1.
                         anchors.fill: parent; anchors.topMargin: -6; anchors.bottomMargin: -17
-                        cursorShape: Qt.PointingHandCursor
+                        cursorShape: seekBar.seekable ? Qt.PointingHandCursor : Qt.ArrowCursor
                         onClicked: function(mouse) {
-                            if (root.player && root.length > 0) {
+                            if (seekBar.seekable) {
                                 var f = mouse.x / width
                                 root.player.position = f * root.length
                                 root._pos = f * root.length

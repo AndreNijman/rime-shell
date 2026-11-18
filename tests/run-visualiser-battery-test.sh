@@ -116,10 +116,10 @@ battery() {
         /org/freedesktop/UPower org.rimeos.Test.SetOnBattery "boolean:$1" >/dev/null
 }
 
-start_run() {  # on_battery(0|1)
+start_run() {  # on_battery(0|1) [players(local|phone)]
     : > "$STUB_LOG"
     rm -f "$W/ready"
-    python3 -I "$here/fake-upower-mpris.py" "$1" "$W/ready" > "$W/fake.log" 2>&1 &
+    python3 -I "$here/fake-upower-mpris.py" "$1" "$W/ready" "${2:-local}" > "$W/fake.log" 2>&1 &
     fake_pid=$!
     until_true 10 test -e "$W/ready" || { echo "RESULT: the fake services did not start"; cat "$W/fake.log"; exit 1; }
     ( cd "$root" && exec env -u WAYLAND_DISPLAY -u DISPLAY -u HYPRLAND_INSTANCE_SIGNATURE PATH="$W/bin:$PATH" \
@@ -161,6 +161,25 @@ else bad "started on battery: cava ran (stub log: $(tr '\n' ' ' < "$STUB_LOG"))"
 battery false
 if until_true 10 both_alive; then ok "then plugged in: both run"
 else bad "then plugged in: both run (stub log: $(tr '\n' ' ' < "$STUB_LOG"))"; fi
+stop_run
+
+# ── 3. Only a phone plays (Rime Remote): its sound is on the phone, so no cava ─
+#  The notch bars: never. (The recording meter listens to the recording's own
+#  source and is not about players; it is left out here.)
+start_run 0 phone
+if until_true 15 log_has "VIS players org.mpris.MediaPlayer2.rime_phone.d0102=phone:false notch org.mpris.MediaPlayer2.rime_phone.d0102"
+then ok "a phone's player is seen as a phone's, read-only, and the notch shows it while it is alone"
+else bad "a phone's player is seen as a phone's (log: $(sed -e 's/\x1b\[[0-9;]*m//g' "$W/qs.log" | grep 'VIS players' | tail -2 | tr '\n' ' '))"; fi
+sleep 4
+if ! started shared; then ok "only a phone playing: the notch bars never ran cava"
+else bad "only a phone playing: cava ran (stub log: $(tr '\n' ' ' < "$STUB_LOG"))"; fi
+dbus-send --bus="$DBUS_SYSTEM_BUS_ADDRESS" --print-reply --dest=org.freedesktop.UPower \
+    /org/freedesktop/UPower org.rimeos.Test.StartLocal >/dev/null
+if until_true 10 alive shared; then ok "then a computer player plays: the notch bars run"
+else bad "then a computer player plays: the notch bars run (stub log: $(tr '\n' ' ' < "$STUB_LOG"))"; fi
+if until_true 5 log_has "notch org.mpris.MediaPlayer2.rimetest\$"
+then ok "with both, the notch shows the computer's player"
+else bad "with both, the notch shows the computer's player (log: $(sed -e 's/\x1b\[[0-9;]*m//g' "$W/qs.log" | grep 'VIS players' | tail -2 | tr '\n' ' '))"; fi
 stop_run
 
 echo "visualiser-battery: passed=$pass failed=$fail"

@@ -7,6 +7,7 @@ import "../../"
 import "../../components"
 import "../../services/home/."
 import "../../services/terminals.js" as Terms
+import "../../services/players.js" as Players
 
 // CenterContent — scrollable dynamic island carousel.
 //
@@ -40,8 +41,9 @@ Item {
 	readonly property int fw: theme.notchRadius
 	readonly property int requiredWidth: theme.cNotchMinWidth
 	// ── MPRIS ─────────────────────────────────────────────────────────────────
-	readonly property var    player:    Mpris.players.values.length > 0
-	? Mpris.players.values[0] : null
+	// A computer player ahead of a phone's (players.js): the media keys act on
+	// the computer's players, never on a phone's read-only one.
+	readonly property var    player:    Players.preferLocal(Mpris.players.values)
 	readonly property bool   isPlaying: player?.playbackState === MprisPlaybackState.Playing
 	?? false
 	readonly property string artUrl:    player?.trackArtUrl ?? ""
