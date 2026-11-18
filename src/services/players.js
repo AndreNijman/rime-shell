@@ -3,13 +3,18 @@
 //
 // Rime Remote shows what a paired phone is playing as an MPRIS player named
 // org.mpris.MediaPlayer2.rime_phone.<id> (rime-os, docs/remote-live-contract.md
-// §2.8). It is read-only: CanControl is false and every method is refused, and
-// its sound comes out of the phone, not this computer. So:
+// §2.8). It is read-only unless the phone allows control: then CanControl,
+// CanGoNext and the rest turn true for exactly what the phone allows, and the
+// PlayerCard's buttons and seek bar work through them with no code of their
+// own (a method the phone did not allow is refused). Its sound comes out of
+// the phone, not this computer. So:
 //
 //   - the audio visualiser must not run for it: cava would capture this
 //     computer's silence and the bars would only cost power (CavaService);
 //   - the notch shows a computer player ahead of a phone one, because the
-//     computer's player is the one the media keys act on (CenterContent).
+//     computer's player is the one the media keys act on (CenterContent;
+//     rime-os's /usr/libexec/rime-media-key reaches a phone only when the
+//     computer has no player at all).
 //
 // Lives in its own file so tests/players-test.js drives the code the Shell
 // loads.

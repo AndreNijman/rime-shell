@@ -310,7 +310,8 @@ Item {
                     // `enabled` too, so a screen reader is told the button is unavailable.
                     enabled: interactive
                     interactive: {
-                        // A phone's player (Rime Remote) is read-only: CanControl false.
+                        // A phone's player (Rime Remote) is read-only unless the phone
+                        // allows control; then canControl and each can* say what it allows.
                         if (!root.player || !root.player.canControl) return false
                         if (modelData.key === "prev") return root.player.canGoPrevious
                         if (modelData.key === "next") return root.player.canGoNext
