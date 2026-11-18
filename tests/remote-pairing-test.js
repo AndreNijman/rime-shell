@@ -291,7 +291,10 @@ check("the reads neither revoke, ring nor send anything",
 check("a phone report is read with its battery, charger and ring",
       R.parsePhone({battery: 62, charging: true, can: ["ring"], reported_ms: 5}),
       {battery: 62, charging: true, network: null, dnd: null, canRing: true, canReceive: false,
-       canFocus: false, reportedMs: 5});
+       canFocus: false, can: ["ring"], reportedMs: 5});
+check("every word the phone said is kept, for the Phone page",
+      R.parsePhone({can: ["messages", "calls_dial", 7, "photos"], reported_ms: 5}).can,
+      ["messages", "calls_dial", "photos"]);
 check("a phone that said receive can be sent to",
       R.parsePhone({battery: 62, can: ["ring", "receive"], reported_ms: 5}).canReceive, true);
 check("no report is null, not an empty phone", R.parsePhone(undefined), null);

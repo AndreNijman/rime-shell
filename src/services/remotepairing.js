@@ -204,6 +204,9 @@ function parsePhone(p) {
         canRing: can.indexOf("ring") >= 0,
         canReceive: can.indexOf("receive") >= 0,
         canFocus: can.indexOf("focus") >= 0,
+        // Every word, for pages that act on more than the three above (the
+        // Phone page reads messages, calls, calls_* and photos). Only strings.
+        can: can.filter(function (w) { return typeof w === "string" }),
         reportedMs: Number(p.reported_ms) || 0
     }
 }

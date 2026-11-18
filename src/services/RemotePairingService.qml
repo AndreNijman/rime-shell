@@ -82,6 +82,9 @@ Singleton {
     property string devicesError: ""
 
     property var status: ({ ok: false, connections: [], connectedIds: [], relay: "", lan: [] })
+    // True once a status read has come back, whatever it said: the Phone page
+    // says "not connected" only after it has asked, never before.
+    property bool statusChecked: false
 
     // ── The pairing offer ────────────────────────────────────────────────────
 
@@ -162,7 +165,9 @@ Singleton {
             root.status = code === 0
                 ? RP.parseStatus(root._statusBuf)
                 : ({ ok: false, connections: [], connectedIds: [], relay: "", lan: [] })
+            root.statusChecked = true
         }
+        onRunningChanged: if (!running && !root.statusChecked) root.statusChecked = true
     }
 
     // ── Minting a code ───────────────────────────────────────────────────────
