@@ -1956,6 +1956,14 @@ jobs:
       - name: Do Not Disturb follows your phone
         run: ./tests/run-phone-focus-test.sh
 
+      # Send my clipboard to my phone: off by default and nothing watches the
+      # clipboard; when on, each text copy goes to `rime remote clipboard` on
+      # stdin (never argv), except a sensitive copy, nothing, an empty one or
+      # one over 64 KiB, at most one per 500 ms. A stub wl-paste plays the
+      # clipboard, a stub rime records; no Wayland. SKIPS without quickshell.
+      - name: Send my clipboard to my phone
+        run: ./tests/run-phone-clipboard-test.sh
+
       # Rime Settings, the app for GNOME, KDE Plasma and COSMIC: one window
       # with app id org.rimeos.Settings, a second launch reuses it, no
       # Shell-only page and no hyprctl call; inside a Rime session the

@@ -98,6 +98,10 @@ QtObject {
     // runs `rime remote focus on|off`. Off by default: PhoneFocusService
     // neither reads the phone's state nor tells any phone anything.
     property bool   phoneFocus:         false
+    // "Send my clipboard to my phone" (contract §2.10): on, each text copied
+    // here goes to the paired phones that asked for it. Off by default:
+    // PhoneClipboardService does not watch the clipboard at all.
+    property bool   phoneClipboard:     false
 
     /// A path a person typed, made absolute: "~" and "$HOME" expanded.
     function expandPath(p) {
@@ -126,7 +130,7 @@ QtObject {
         "lockBackground", "scaleMode", "scaleManual", "scaleScreen",
         "nightLightTemp",
         "showVolumePercent", "showBatteryPercent", "clockFormat", "recordingDir", "avatarPath",
-        "windowLayout", "openReleaseNotes", "phoneFocus"
+        "windowLayout", "openReleaseNotes", "phoneFocus", "phoneClipboard"
     ]
     readonly property var _defaults: ({
         cornerRadius: 17, borderWidth: 6, notchRadius: 15, notchHeight: 40,
@@ -141,7 +145,8 @@ QtObject {
         recordingDir: "", avatarPath: "",
         windowLayout: "",
         openReleaseNotes: true,
-        phoneFocus: false
+        phoneFocus: false,
+        phoneClipboard: false
     })
 
     // Bounds used by the UI sliders AND clamped on load so a hand-edited file
@@ -246,6 +251,7 @@ QtObject {
     onWindowLayoutChanged:      _scheduleSave()
     onOpenReleaseNotesChanged:  _scheduleSave()
     onPhoneFocusChanged:        _scheduleSave()
+    onPhoneClipboardChanged:    _scheduleSave()
 
     function _scheduleSave() { if (_loaded) _saveTimer.restart() }
 

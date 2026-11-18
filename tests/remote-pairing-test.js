@@ -362,6 +362,37 @@ check("the same write read again is not acted on twice",
 check("a newer write is, even with the same value",
       R.focusIsNew(F, 0, {dnd: true, device: "AAAA", atMs: 1999}), true);
 
+// The computer's clipboard on phones (§2.10).
+check("the clipboard goes to the CLI on stdin, never in its argv",
+      R.clipboardSendCommand(), ["sh", "-c", "base64 -d | rime remote clipboard"]);
+check("the watcher asks wl-paste for text, once per change",
+      R.clipboardWatchCommand().slice(0, 5), ["wl-paste", "--type", "text", "--watch", "sh"]);
+const b64 = s => Buffer.from(s, "utf8").toString("base64");
+check("text is sent, with its size",
+      R.clipboardEvent("clip data " + b64(" two\nlines é ")), {send: true, b64: b64(" two\nlines é "), bytes: 14});
+check("padding is counted off the size",
+      ["a", "ab", "abc"].map(t => R.clipboardEvent("clip data " + b64(t)).bytes), [1, 2, 3]);
+check("exactly the cap is sent, one byte over is not",
+      [R.clipboardEvent("clip data " + b64("x".repeat(65536))).send, R.clipboardEvent("clip data " + b64("x".repeat(65537))).why],
+      [true, "too long"]);
+check("sensitive, nothing, cleared and empty are not sent",
+      ["clip sensitive", "clip nil", "clip clear", "clip data ", "clip data"].map(l => R.clipboardEvent(l).why),
+      ["sensitive", "nil", "clear", "empty", "empty"]);
+check("a line that is not the watcher's is not sent",
+      ["", "hello", "clip", "clip data ab$=", "clip data abc", "clip data YQ== more"].map(l => R.clipboardEvent(l).send),
+      [false, false, false, false, false, false]);
+{
+    // The watch script itself, run as wl-paste would run it.
+    const sh = (state, input) => require("child_process").execFileSync(
+        "sh", ["-c", R.CLIPBOARD_WATCH_SCRIPT], {input, env: {...process.env, CLIPBOARD_STATE: state}}).toString();
+    check("the watch script prints text as base64, verbatim",
+          R.clipboardEvent(sh("data", " a\n\tb ")), {send: true, b64: b64(" a\n\tb "), bytes: 6});
+    check("the watch script reads one byte past the cap and drains the rest",
+          R.clipboardEvent(sh("data", "y".repeat(200000))).why, "too long");
+    check("the watch script never prints a sensitive copy",
+          sh("sensitive", "hunter2"), "clip sensitive\n");
+}
+
 if (failed > 0) {
     console.error(`\n${failed} assertion(s) failed`);
     process.exit(1);
