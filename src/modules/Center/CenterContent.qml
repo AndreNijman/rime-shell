@@ -42,7 +42,8 @@ Item {
 	readonly property int requiredWidth: theme.cNotchMinWidth
 	// ── MPRIS ─────────────────────────────────────────────────────────────────
 	// A computer player ahead of a phone's (players.js): the media keys act on
-	// the computer's players, never on a phone's read-only one.
+	// the computer's players first, and reach a phone's player only when the
+	// computer has none (rime-os's rime-media-key, via src/scripts/media-key.sh).
 	readonly property var    player:    Players.preferLocal(Mpris.players.values)
 	readonly property bool   isPlaying: player?.playbackState === MprisPlaybackState.Playing
 	?? false
