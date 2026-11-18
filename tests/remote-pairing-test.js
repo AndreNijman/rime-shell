@@ -246,6 +246,15 @@ check("a status reply names the devices connected right now",
           version: 1, machine: "l16", lan: ["192.168.1.20:7717"], relay: null,
           connections: [{ device: "AAAAAQIDBAUGBwgJ", path: "lan", rtt_ms: 12 }]
       })).connectedIds, ["AAAAAQIDBAUGBwgJ"]);
+// The shape `rime remote status --json` really prints (rimed/rime/src/
+// remote.rs, the `connections` map in `status`): `device_id`, not `device`.
+check("the CLI's own status shape names the connected device by device_id",
+      R.parseStatus(JSON.stringify({
+          machine: "l16", protocol: 1, identity: "AAAA", paired: 1, lan: [], relay: null,
+          rendezvous: "abcd", offer_ms_left: null,
+          connections: [{ device_id: "AAAAAQIDBAUGBwgJ", device_name: "Pixel 8", path: "relay",
+                          since_ms: 1789155000000, rtt_ms: 40, quality: "good", disclosure: "" }]
+      })).connectedIds, ["AAAAAQIDBAUGBwgJ"]);
 check("a daemon too old to report connections is not an error",
       R.parseStatus(JSON.stringify({ version: 1, machine: "l16" })).connectedIds, []);
 check("a service that did not answer is marked not ok",

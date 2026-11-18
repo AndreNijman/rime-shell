@@ -146,7 +146,7 @@ status)
 {"reply":"status","version":1,"key":"AAAA","machine":"l16",
  "lan":["192.168.1.20:7717"],"relay":null,"rendezvous":"abcd","paired":2,
  "offer_ms_left":null,
- "connections":[{"device":"AAAAAQIDBAUGBwgJ","path":"lan","rtt_ms":12,"since_ms":1789155000000}]}
+ "connections":[{"device_id":"AAAAAQIDBAUGBwgJ","device_name":"Pixel 8","path":"lan","rtt_ms":12,"since_ms":1789155000000,"quality":"good"}]}
 JSON
     exit 0
     ;;
