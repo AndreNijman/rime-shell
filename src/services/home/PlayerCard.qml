@@ -5,6 +5,7 @@ import Quickshell.Services.Mpris
 import "../../"
 import "../../components"
 import "../../components/controls"
+import "../players.js" as Players
 
 Item {
     id: root
@@ -306,6 +307,8 @@ Item {
                     radius: height / 2
                     // Disabled (dimmed, no Tab stop) for what this player cannot
                     // do — and all three with no player at all.
+                    // `enabled` too, so a screen reader is told the button is unavailable.
+                    enabled: interactive
                     interactive: {
                         // A phone's player (Rime Remote) is read-only: CanControl false.
                         if (!root.player || !root.player.canControl) return false
@@ -363,6 +366,8 @@ Item {
                 readonly property bool seekable: !!root.player && root.player.canControl
                                                  && root.player.canSeek && root.length > 0
                 activeFocusOnTab: seekBar.seekable
+                // Unavailable to a screen reader too while it cannot seek.
+                enabled: seekBar.seekable
                 Accessible.role: Accessible.Slider
                 Accessible.name: "Seek"
                 Accessible.description: root._fmt(root._pos) + " of " + root._fmt(root.length)
@@ -578,7 +583,9 @@ Item {
     Item {
         anchors { left: parent.left; right: parent.right; bottom: parent.bottom; leftMargin: 7; rightMargin: 7; bottomMargin: 4 }
         height: 32
-        opacity: root.isPlaying ? 1 : 0
+        // Not for a phone's player (Rime Remote): its sound is on the phone,
+        // cava hears nothing here, and a flat row would read as broken.
+        opacity: root.isPlaying && !Players.isPhone(root.player) ? 1 : 0
         visible: opacity > 0
         Behavior on opacity { MotionFade {} }
         Row {
