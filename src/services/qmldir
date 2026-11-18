@@ -4,6 +4,7 @@ BatteryStatus  BatteryStatus.qml
 BatteryWarning BatteryWarning.qml
 singleton BatteryAlert 1.0 BatteryAlert.qml
 singleton PhoneFocusService 1.0 PhoneFocusService.qml
+singleton PhoneClipboardService 1.0 PhoneClipboardService.qml
 AudioControl AudioControl.qml
 singleton MemService 1.0 ./system/MemService.qml
 singleton NetService 1.0 ./system/NetService.qml

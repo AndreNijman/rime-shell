@@ -243,6 +243,22 @@ CfgScroll {
         }
     }
 
+    // ── This computer's clipboard on the phones ──────────────────────────────
+    CfgSection {
+        title: "Clipboard"
+
+        CfgRow {
+            label: "Send my clipboard to my phone"
+            // Off by default: with it off nothing watches the clipboard.
+            // PhoneClipboardService; rime-os contract §2.10.
+            description: "Text you copy here goes to each connected phone with \"Get the computer's clipboard\" turned on in Rime Remote. A password manager's copy, images and text over 64 KB are not sent."
+            CfgSwitch {
+                checked: SettingsService.phoneClipboard
+                onToggled: function(v) { SettingsService.set("phoneClipboard", v) }
+            }
+        }
+    }
+
     // ── What revoking does ───────────────────────────────────────────────────
     CfgSection {
         title: "About revoking"

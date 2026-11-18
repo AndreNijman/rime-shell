@@ -278,6 +278,55 @@ function focusIsNew(focus, sinceMs, last) {
     return !(last && last.atMs === focus.atMs && last.device === focus.device && last.dnd === focus.dnd)
 }
 
+// ── The computer's clipboard on phones (contract §2.10) ──────────────────────
+//
+// PhoneClipboardService watches this computer's clipboard with wl-paste while
+// "Send my clipboard to my phone" is on, and hands each new text to
+// `rime remote clipboard` on stdin. The text never goes on a command line
+// (any process may read one) and the Shell never decodes it: the watcher
+// prints it as base64, and the sender decodes it straight into the CLI.
+
+// The most text sent, in bytes: rime-remoted's cap. Larger is skipped, not cut.
+var CLIPBOARD_MAX_BYTES = 65536
+
+// What wl-paste runs once per selection change (wl-clipboard 2.3.0, measured):
+// CLIPBOARD_STATE is "data" with the text on stdin, "nil" for nothing or a
+// non-text offer such as an image, "clear" for a cleared selection, and
+// "sensitive" for a password manager's copy (x-kde-passwordManagerHint),
+// which is never sent. One byte over the cap is read, so too long is known
+// without reading it all; the rest is drained so the source is not cut off.
+var CLIPBOARD_WATCH_SCRIPT =
+    'case "$CLIPBOARD_STATE" in ' +
+    'data) b=$(head -c ' + (CLIPBOARD_MAX_BYTES + 1) + ' | base64 -w0); cat >/dev/null; printf "clip data %s\\n" "$b";; ' +
+    '*) cat >/dev/null 2>&1; printf "clip %s\\n" "$CLIPBOARD_STATE";; ' +
+    'esac'
+
+function clipboardWatchCommand() {
+    return ["wl-paste", "--type", "text", "--watch", "sh", "-c", CLIPBOARD_WATCH_SCRIPT]
+}
+
+// Reads the base64 the service writes to its stdin. No text in the argv.
+function clipboardSendCommand() {
+    return ["sh", "-c", "base64 -d | rime remote clipboard"]
+}
+
+// One watcher line as {send, b64, bytes} for text to send, or {send: false,
+// why} for what is not: "sensitive", "nil", "clear", "empty", "too long", or
+// a line that is not one of the script's.
+function clipboardEvent(line) {
+    var w = String(line || "").trim().split(" ")
+    if (w[0] !== "clip" || w.length < 2) return { send: false, why: "not a clipboard line" }
+    if (w[1] !== "data") return { send: false, why: w[1] }
+    var b = w.length > 2 ? w[2] : ""
+    if (w.length > 3 || b.length % 4 !== 0 || !/^[A-Za-z0-9+\/]*={0,2}$/.test(b))
+        return { send: false, why: "not a clipboard line" }
+    var pad = b.slice(-2) === "==" ? 2 : (b.slice(-1) === "=" ? 1 : 0)
+    var bytes = b.length / 4 * 3 - pad
+    if (bytes === 0) return { send: false, why: "empty" }
+    if (bytes > CLIPBOARD_MAX_BYTES) return { send: false, why: "too long" }
+    return { send: true, b64: b, bytes: bytes }
+}
+
 // What `rime remote ring` said, for the row. The CLI writes one sentence to
 // stderr whichever way it went; the page shows it rather than paraphrasing,
 // except that "asked through its push service" is kept as the CLI says it so
@@ -488,6 +537,11 @@ if (typeof module !== "undefined" && module.exports)
         focusIsNew: focusIsNew,
         ringOutcome: ringOutcome,
         sendClipboardCommand: sendClipboardCommand,
+        CLIPBOARD_MAX_BYTES: CLIPBOARD_MAX_BYTES,
+        CLIPBOARD_WATCH_SCRIPT: CLIPBOARD_WATCH_SCRIPT,
+        clipboardWatchCommand: clipboardWatchCommand,
+        clipboardSendCommand: clipboardSendCommand,
+        clipboardEvent: clipboardEvent,
         sendOutcome: sendOutcome,
         ringToken: ringToken
     }
