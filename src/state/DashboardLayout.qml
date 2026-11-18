@@ -29,6 +29,7 @@ QtObject {
         { key: "stats",    icon: "󰻠", label: "System" },
         { key: "agents",   icon: "󰚩", label: "Agents" },
         { key: "kanban",   icon: "󰄬", label: "Tasks"  },
+        { key: "phone",    icon: "󰄜", label: "Phone"  },
         { key: "launcher", icon: "󱓞", label: "Apps"   }
     ]
 
@@ -51,6 +52,7 @@ QtObject {
         "home":     900,
         "stats":    900,
         "kanban":   900,
+        "phone":    900,
         "launcher": 560
     })
     readonly property int fallbackBaseWidth: 900

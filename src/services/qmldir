@@ -121,4 +121,13 @@ AgentHelpEntry agents/AgentHelpEntry.qml
 AgentHelpCard agents/AgentHelpCard.qml
 AgentHelpPanel agents/AgentHelpPanel.qml
 AgentHelpBlock agents/AgentHelpBlock.qml
+# The Dashboard's Phone tab: the paired phone's Messages, Calls and Photos.
+# Same rule as AgentCenter: the page is loaded THROUGH this qmldir, so its
+# parts are named here too, or each is `not a type` and the shell refuses to
+# start.
+singleton PhoneService 1.0 PhoneService.qml
+PhonePage phone/PhonePage.qml
+PhoneMessages phone/PhoneMessages.qml
+PhoneCalls phone/PhoneCalls.qml
+PhonePhotos phone/PhonePhotos.qml
 singleton KeyboardLayoutService 1.0 KeyboardLayoutService.qml

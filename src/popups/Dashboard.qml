@@ -374,6 +374,18 @@ PanelWindow {
 
                     LazyPage {
                         anchors.fill: parent
+                        shown: root.shownPage === "phone"
+                        direction: root.pageDir
+                        sourceComponent: Component {
+                            PhonePage {
+                                anchors.fill: parent
+                                onScreen: root.pageLive && root.page === "phone"
+                            }
+                        }
+                    }
+
+                    LazyPage {
+                        anchors.fill: parent
                         shown: root.shownPage === "launcher"
                         direction: root.pageDir
                         // Its field is the anchor (LENS_REVEAL): the page is
