@@ -18,8 +18,13 @@ import "../remotepairing.js" as RP
 // switched off on the phone (naming the switch), and a command that failed
 // (its own sentence). Nothing is shown that the phone did not send.
 //
+// Your other paired Rime computers are a fourth section, Computers
+// (PhoneComputers), shown whenever at least one is paired: beside the phone's
+// sections when a phone is paired too, and alone, with no tabs, when none is.
+//
 // `onScreen` is the Dashboard's word for "this page is the one showing". The
-// services run only while it is true; see PhoneService's header.
+// services run only while it is true; see PhoneService's and
+// ComputersService's headers.
 // ─────────────────────────────────────────────────────────────────────────────
 Item {
     id: root
@@ -29,19 +34,36 @@ Item {
 
     ServiceRef { service: RemotePairingService; active: root.onScreen }
     ServiceRef { service: PhoneService; active: root.onScreen }
+    ServiceRef { service: ComputersService; active: root.onScreen }
 
     readonly property var phone: PhoneService.phone
     readonly property string state: PhoneService.pageState
 
     // The section survives a close and reopen: it is where the person was.
     property string section: "messages"
-    Binding { target: PhoneService; property: "section"; value: root.section; when: root.onScreen }
 
-    readonly property var _sections: [
+    // The phone's sections are offered once it is connected and sharing, or,
+    // when computers are paired too, whenever a phone is paired at all (each
+    // section then says what the phone's state is). With no phone, Computers
+    // is the whole page.
+    readonly property bool hasComputers: ComputersService.paired.length > 0
+    readonly property bool phoneSections: root.state === "ready" || (root.hasComputers && root.state !== "none")
+    // A page reopened on Computers stays there while the list is first read,
+    // rather than asking the phone for its messages in the meantime.
+    readonly property string shown: root.section === "computers"
+        ? (root.hasComputers || !ComputersService.checked ? "computers" : "messages")
+        : (root.hasComputers && !root.phoneSections ? "computers" : root.section)
+
+    // Computers is not a phone section: PhoneService reads nothing while it shows.
+    Binding { target: PhoneService; property: "section"; value: root.shown; when: root.onScreen }
+
+    readonly property var _phoneSections: [
         { key: "messages", icon: "󰍡", label: "Messages" },
         { key: "calls",    icon: "󰏲", label: "Calls" },
         { key: "photos",   icon: "󰉏", label: "Photos" }
     ]
+    readonly property var _sections: (root.phoneSections ? root._phoneSections : [])
+        .concat(root.hasComputers ? [{ key: "computers", icon: "󰍹", label: "Computers" }] : [])
 
     // ── Header: which phone, how it is ───────────────────────────────────────
 
@@ -63,7 +85,7 @@ Item {
             Text {
                 objectName: "phoneTitle"
                 width: parent.width
-                text: root.phone ? root.phone.name : "Phone"
+                text: root.shown === "computers" ? "Your computers" : root.phone ? root.phone.name : "Phone"
                 textFormat: Text.PlainText
                 color: Theme.textPrimary
                 font.pixelSize: theme.typeBodyStrong
@@ -75,6 +97,7 @@ Item {
                 width: parent.width
                 visible: text !== ""
                 text: {
+                    if (root.shown === "computers") return ComputersService.summary
                     if (!root.phone) return ""
                     const connected = root.state === "ready" || root.state === "noreport"
                     const line = root.phone.phone ? RP.phoneLine(root.phone.phone, PhoneService.nowMs) : ""
@@ -92,11 +115,11 @@ Item {
             objectName: "phoneSections"
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
-            width: theme.px(330)
+            width: theme.px(110 * root._sections.length)
             height: theme.px(34)
-            visible: root.state === "ready"
+            visible: root._sections.length > 1
             model: root._sections
-            currentPage: root.section
+            currentPage: root.shown
             onPageChanged: function (key) { root.section = key }
         }
     }
@@ -113,7 +136,7 @@ Item {
             objectName: "phonePageState"
             anchors.centerIn: parent
             width: parent.width * 0.8
-            visible: root.state !== "ready"
+            visible: root.shown !== "computers" && root.state !== "ready"
             plain: true
             glyph: root.state === "loading" ? "󰄜" : root.state === "error" ? "󰅚" : "󰥐"
             title: PhoneService.pageMessage.title
@@ -122,15 +145,19 @@ Item {
 
         PhoneMessages {
             anchors.fill: parent
-            visible: root.state === "ready" && root.section === "messages"
+            visible: root.state === "ready" && root.shown === "messages"
         }
         PhoneCalls {
             anchors.fill: parent
-            visible: root.state === "ready" && root.section === "calls"
+            visible: root.state === "ready" && root.shown === "calls"
         }
         PhonePhotos {
             anchors.fill: parent
-            visible: root.state === "ready" && root.section === "photos"
+            visible: root.state === "ready" && root.shown === "photos"
+        }
+        PhoneComputers {
+            anchors.fill: parent
+            visible: root.shown === "computers"
         }
     }
 }

@@ -131,4 +131,8 @@ PhonePage phone/PhonePage.qml
 PhoneMessages phone/PhoneMessages.qml
 PhoneCalls phone/PhoneCalls.qml
 PhonePhotos phone/PhonePhotos.qml
+# Your other paired Rime computers: the Phone page's Computers section and
+# Settings → Paired devices' Computers list read the same service.
+singleton ComputersService 1.0 ComputersService.qml
+PhoneComputers phone/PhoneComputers.qml
 singleton KeyboardLayoutService 1.0 KeyboardLayoutService.qml

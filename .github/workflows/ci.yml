@@ -1428,6 +1428,19 @@ jobs:
           # carries no text in argv: the service writes it on standard input.
           node tests/phone-test.js
 
+      - name: Your other computers, decision layer
+        run: |
+          # What the Phone page's Computers section and Settings → Paired
+          # devices read out of `rime remote computers list --json` (the
+          # Listed shape rimed/rime/src/remote.rs prints), the words they show
+          # and every argv they may run. The assertions that pay for it: a
+          # computer's id always comes after "--" (a base64url id may begin
+          # with "-"); a link to open there goes on standard input and only an
+          # http(s) one; a name from the other computer loses its line breaks
+          # and direction overrides; the clipboard's two switches become one
+          # exact word.
+          node tests/computers-test.js
+
       - name: Push-to-talk decision layer
         run: |
           # §8.2's push-to-talk, at the layer where its edge cases are: when
@@ -2844,6 +2857,21 @@ jobs:
           # Skips cleanly without quickshell or a compositor.
           ./tests/run-phone-page-test.sh
 
+      - name: Your other computers against a stub rime
+        run: |
+          # The Computers section of the Phone page and the Computers block of
+          # Settings → Paired devices in a real Quickshell, against a stub
+          # `rime` whose computer list its own verbs change. The assertions
+          # that pay for it: each switch runs its exact command and a refused
+          # one snaps back; a link goes on standard input and never in argv,
+          # and a clipboard that holds no http(s) link runs nothing; a hostile
+          # computer name runs nothing and shows as plain text; Remove needs a
+          # second click; an older rime without `computers` leaves the phone
+          # page as it was; and nothing is read while no page shows.
+          #
+          # Skips cleanly without quickshell or a compositor.
+          ./tests/run-computers-page-test.sh
+
       - name: A staged settings edit, and what it survives
         run: |
           # Criteria 3, 4 and 6 of P0-023, none of which a grep can answer,
@@ -3156,6 +3184,12 @@ jobs:
             "tests/phone-test.js"
             "tests/phone-page-test.qml"
             "tests/run-phone-page-test.sh"
+            "src/services/computers.js"
+            "src/services/ComputersService.qml"
+            "src/services/phone/PhoneComputers.qml"
+            "tests/computers-test.js"
+            "tests/computers-page-test.qml"
+            "tests/run-computers-page-test.sh"
             "tests/fixtures/qr-vectors.json"
             "tests/fixtures/gen-qr-vectors.py"
             "src/services/notifybus.js"
