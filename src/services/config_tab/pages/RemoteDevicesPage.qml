@@ -356,7 +356,9 @@ CfgScroll {
                         }
                         CfgButton {
                             objectName: "computerSendFile"
-                            visible: comp.live
+                            // Not before it is allowed: the sender refuses one
+                            // that is not (remote-live-contract §2.15).
+                            visible: comp.live && comp.c.trusted
                             label: "Send file…"
                             icon: "󰈔"
                             enabled: ComputersService.sendingFor === "" && ComputersService.pickingFor === ""
@@ -482,6 +484,116 @@ CfgScroll {
                         enabled: ComputersService.busyFor === ""
                         onToggled: function(v) { ComputersService.setSwitch(comp.computerId, "handoff", v) }
                     }
+                }
+
+                // ── Agent sessions across computers (M4) ─────────────────────
+                // `agents`: what that computer may do with the agent sessions
+                // HERE. The Shell only lowers it, to off; every other level is
+                // asked about at a terminal, so the command is shown to copy.
+                CfgRow {
+                    objectName: "computerAgents"
+                    visible: comp.live && comp.c.agents !== null
+                    plainText: true
+                    label: "Its agents on this computer"
+                    status: ComputersService.agentWord(comp.c.agents)
+                    description: comp.c.agents === "control"
+                        ? "It can watch the agent sessions here, attach to them and type into them."
+                        : comp.c.agents === "view"
+                        ? "It can see the agent sessions here and what they show. It cannot type into them."
+                        : "It cannot see the agent sessions here."
+                    descriptionLines: 2
+                    CfgButton {
+                        objectName: "computerAgentsOff"
+                        visible: comp.c.agents === "view" || comp.c.agents === "control"
+                        label: comp.busy && ComputersService.busyKind === "agents" ? "Turning off…" : "Turn off"
+                        variant: "danger"
+                        enabled: ComputersService.busyFor === ""
+                        onClicked: ComputersService.agentsOff(comp.computerId)
+                    }
+                }
+                Column {
+                    id: raise
+                    objectName: "computerAgentsRaise"
+                    readonly property var lines: ComputersService.agentsLines(comp.c)
+                    visible: comp.live && comp.c.agents !== null
+                    width: parent.width
+                    leftPadding: theme.px(12)
+                    rightPadding: theme.px(12)
+                    spacing: theme.px(4)
+
+                    Text {
+                        width: raise.width - raise.leftPadding - raise.rightPadding
+                        text: raise.lines.length > 0
+                            ? "Any level but Off is set from a terminal here: run the line, and rime asks you to type its name first."
+                            : "Allow this computer first to let it see your agent sessions."
+                        textFormat: Text.PlainText
+                        wrapMode: Text.WordWrap
+                        color: Theme.textSecondary
+                        font.pixelSize: theme.typeCaption
+                    }
+                    Repeater {
+                        model: raise.lines.length
+                        delegate: Row {
+                            required property int index
+                            readonly property var l: raise.lines[index] || ({ word: "", line: "" })
+                            spacing: theme.px(8)
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: theme.px(110)
+                                text: l.word
+                                textFormat: Text.PlainText
+                                elide: Text.ElideRight
+                                color: Theme.textSecondary
+                                font.pixelSize: theme.typeCaption
+                            }
+                            Rectangle {
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: Math.min(cmd.implicitWidth + theme.px(16),
+                                                raise.width - raise.leftPadding - raise.rightPadding - theme.px(230))
+                                height: cmd.implicitHeight + theme.px(8)
+                                radius: theme.radiusXS
+                                color: Theme.surfaceHigh
+                                clip: true
+                                TextEdit {
+                                    id: cmd
+                                    objectName: "computerAgentsCommand"
+                                    anchors.left: parent.left
+                                    anchors.leftMargin: theme.px(8)
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: l.line
+                                    textFormat: TextEdit.PlainText
+                                    readOnly: true
+                                    selectByMouse: true
+                                    color: Theme.text
+                                    font.family: Theme.fontMono
+                                    font.pixelSize: theme.typeMono
+                                    // Drawn as typed: no ligature turns "--" into one dash.
+                                    font.features: { "calt": 0, "liga": 0 }
+                                }
+                            }
+                            CfgButton {
+                                objectName: "computerAgentsCopy"
+                                anchors.verticalCenter: parent.verticalCenter
+                                label: "Copy"
+                                icon: "󰆏"
+                                onClicked: ComputersService.copyText(l.line)
+                            }
+                        }
+                    }
+                }
+                CfgRow {
+                    objectName: "computerCanAgents"
+                    visible: comp.live && comp.c.canAgents !== null
+                    plainText: true
+                    label: "Your agents on it"
+                    status: ComputersService.agentWord(comp.c.canAgents)
+                    description: (comp.c.canAgents === "control"
+                        ? "It says this computer can watch its agent sessions and work in them."
+                        : comp.c.canAgents === "view"
+                        ? "It says this computer can watch its agent sessions."
+                        : "It says this computer cannot see its agent sessions.")
+                        + (comp.c.canAgentsMs !== null ? " Last heard " + ComputersService.agoText(comp.c.canAgentsMs) + "." : "")
+                        + " Only someone at it can change this."
                 }
 
                 Item { width: 1; height: theme.px(10) }

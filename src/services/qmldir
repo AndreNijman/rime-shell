@@ -114,6 +114,11 @@ StateBadge agents/StateBadge.qml
 singleton RemoteAgentService 1.0 RemoteAgentService.qml
 RemoteHostRow agents/RemoteHostRow.qml
 RemoteSessionRow agents/RemoteSessionRow.qml
+# M4: agent sessions on this person's other Rime computers. Same rule again:
+# registered here because AgentCenter is loaded THROUGH this qmldir.
+singleton PeerAgentService 1.0 PeerAgentService.qml
+PeerHostRow agents/PeerHostRow.qml
+PeerSessionRow agents/PeerSessionRow.qml
 # §43's help surfaces. Same rule as the rows above: AgentCenter is loaded
 # THROUGH this qmldir, so its directory is not on the import path. The two
 # AgentHelp singletons are in src/qmldir instead, deliberately — see the note

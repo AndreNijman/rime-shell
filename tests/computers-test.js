@@ -72,6 +72,7 @@ check("the switches are the effective ones", [list[0].clipboardSend, list[0].cli
 check("handoff from an older daemon (absent) is null: no switch, no open", list[1].handoff, null);
 check("handoff listed on is off for one not allowed", list[2].handoff, false);
 check("handoff listed on is off for a removed one", list[3].handoff, false);
+check("a removed computer is never trusted (open, link and send rely on it)", [list[3].active, list[3].trusted], [false, false]);
 check("handoff listed on for a trusted computer is on",
       C.parseComputers('[{"id":"AAAA","name":"a","handoff":true}]')[0].handoff, true);
 check("a name from another machine has no line breaks or direction overrides", list[2].name,
@@ -213,6 +214,40 @@ check("on battery slower than on AC", C.pollInterval("", true) > C.pollInterval(
 check("a test's interval wins", C.pollInterval("400", true), 400);
 check("zero, a negative or junk is ignored",
       [C.pollInterval("0", true), C.pollInterval("-5", true), C.pollInterval("12ms", false)], [60000, 60000, 30000]);
+
+// ── Agent sessions across computers (M4) ─────────────────────────────────────
+// `agents` / `can_agents` / `can_agents_ms` as remote.rs prints them (its own
+// test: {"agents":"control","can_agents":"view","can_agents_ms":1}).
+const AG = C.parseComputers(JSON.stringify([
+    { id: "desk-AAAA", name: "Desk", agents: "control", can_agents: "view", can_agents_ms: 1 },
+    { id: "lap-BBBB", name: "Laptop", agents: "off", can_agents: "off" },
+    { id: "old-CCCC", name: "Older" },
+    { id: "odd-DDDD", name: "Odd", agents: "admin", can_agents: 3 },
+    { id: "-intro-E", name: "Intro", introduced_by: { id: "p", name: "Phone" }, agents: "view", can_agents: "control" },
+    { id: "gone-FFF", name: "Gone", revoked_ms: 5, agents: "view", can_agents: "view" }
+]));
+check("agents: read as given", [AG[0].agents, AG[0].canAgents, AG[0].canAgentsMs], ["control", "view", 1]);
+check("agents: off is off, an unknown claim time is null", [AG[1].agents, AG[1].canAgents, AG[1].canAgentsMs], ["off", "off", null]);
+check("agents: an older daemon gives null (no rows)", [AG[2].agents, AG[2].canAgents], [null, null]);
+check("agents: anything outside the closed set is null", [AG[3].agents, AG[3].canAgents], [null, null]);
+check("agents: the words", ["off", "view", "control", "admin"].map(C.agentWord), ["Off", "Can watch", "Can work in them", ""]);
+check("grant off: the id after --, no --yes",
+      C.agentsOffCommand(AG[0]), ["rime", "remote", "computers", "grant", "--", "desk-AAAA", "agents", "off"]);
+check("grant off: a hyphen id stays after --",
+      C.agentsOffCommand(AG[4]), ["rime", "remote", "computers", "grant", "--", "-intro-E", "agents", "off"]);
+check("grant off: nothing when it is already off", C.agentsOffCommand(AG[1]), null);
+check("grant off: nothing when the level is unknown", [C.agentsOffCommand(AG[2]), C.agentsOffCommand(AG[3])], [null, null]);
+check("grant off: nothing for a removed computer", C.agentsOffCommand(AG[5]), null);
+check("grant off: nothing for a bad id", C.agentsOffCommand({ id: "a b", active: true, agents: "view" }), null);
+check("terminal lines: every other non-off level, by id",
+      C.agentsTerminalLines(AG[0]), [{ level: "view", word: "Can watch", line: "rime remote computers grant -- desk-AAAA agents view" }]);
+check("terminal lines: from off, both raises",
+      C.agentsTerminalLines(AG[1]).map(function (l) { return l.line }),
+      ["rime remote computers grant -- lap-BBBB agents view", "rime remote computers grant -- lap-BBBB agents control"]);
+check("terminal lines: none for a computer not allowed yet", C.agentsTerminalLines(AG[4]), []);
+check("terminal lines: none for a removed computer or an unknown level",
+      [C.agentsTerminalLines(AG[5]), C.agentsTerminalLines(AG[2])], [[], []]);
+check("terminal lines: never the name", C.agentsTerminalLines(AG[0]).every(function (l) { return l.line.indexOf("Desk") < 0 }), true);
 
 if (failed) {
     console.error(`${failed} assertion(s) failed`);

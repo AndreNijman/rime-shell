@@ -155,10 +155,10 @@ fi
 # is identical.
 missing=""
 for t in AgentCenter RequestRow SessionRow SectionHeading SmallIconButton \
-         RemoteHostRow RemoteSessionRow; do
+         RemoteHostRow RemoteSessionRow PeerHostRow PeerSessionRow; do
     grep -qE "^${t} agents/${t}\.qml$" src/services/qmldir || missing="$missing $t"
 done
-for svc in AgentService RemoteAgentService; do
+for svc in AgentService RemoteAgentService PeerAgentService; do
     grep -q "^singleton ${svc} " src/services/qmldir || missing="$missing $svc"
 done
 if [ -z "$missing" ]; then
@@ -193,6 +193,48 @@ if grep -qE "refCount > 0 \? [0-9]+ : [0-9]+" src/services/AgentService.qml; the
     ok "AgentService keeps a two-tier poll interval"
 else
     bad "AgentService has no two-tier poll interval"
+fi
+
+# ── 6. A session on another computer is only read, peeked and attached ─────
+#
+# M4's rows (PeerHostRow, PeerSessionRow) show sessions that live on ANOTHER of
+# this person's computers. Their numbers mean nothing to the local daemon, so a
+# row that reached for AgentService's id verbs would stop, pause or rename an
+# unrelated local session. And every string in them came from that other
+# machine, so the rows run nothing themselves: PeerAgentService builds the only
+# argv (peeragents.js), from the computer's id and the session's number.
+PEER_ROWS="src/services/agents/PeerHostRow.qml src/services/agents/PeerSessionRow.qml"
+peer_findings() {
+    local r="${1:-.}" f
+    for f in $PEER_ROWS; do
+        uncommented "$r/$f" "$EXECUTES" | sed "s|^|$f:|"
+        uncommented "$r/$f" 'AgentService\.(focusTerminal|reviewRequest|pause|resume|kill|dismiss|dismissFinished|rename|setName|_act|refresh)\(' \
+            | sed "s|^|$f:|"
+    done
+}
+# Every Text in them is plain: a title of "<b>x</b>" must be drawn as those
+# characters. One `textFormat: Text.PlainText` per `Text {`.
+peer_rich() {
+    local r="${1:-.}" f texts plain
+    for f in $PEER_ROWS; do
+        texts="$(grep -cE '^[[:space:]]*Text[[:space:]]*\{' "$r/$f")"
+        plain="$(grep -cE '^[[:space:]]*textFormat:[[:space:]]*Text\.PlainText[[:space:]]*$' "$r/$f")"
+        [ "$texts" -gt 0 ] && [ "$texts" -eq "$plain" ] || echo "$f: $texts Text, $plain plain"
+    done
+}
+found="$(peer_findings)"
+if [ -z "$found" ]; then
+    ok "the rows for another computer's sessions run nothing and call no local AgentService verb"
+else
+    printf '%s\n' "$found" | head -10
+    bad "a row for another computer's session runs a command or acts on a LOCAL session"
+fi
+found="$(peer_rich)"
+if [ -z "$found" ]; then
+    ok "every Text in the rows for another computer's sessions is plain text"
+else
+    printf '%s\n' "$found"
+    bad "a Text in a row for another computer's session may render rich text"
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -293,6 +335,29 @@ if grep -qE "^RequestRow agents/RequestRow\.qml$" "$TMP/m/src/services/qmldir"; 
 else
     ok "self-test dropped qmldir entry: caught"
 fi
+
+# M7 — a peer row runs the other computer's text itself.
+expect "baseline peer rows" green "$(peer_findings "$TMP/m")$(peer_rich "$TMP/m")"
+if apply_mutant src/services/agents/PeerSessionRow.qml \
+    'Process { command: ["sh", "-c", srow.session.title] }'; then
+    expect "a peer row gains a Process" red "$(peer_findings "$TMP/m")"
+    restore_mutant src/services/agents/PeerSessionRow.qml
+fi
+# M8 — a peer row hands its number to the LOCAL daemon.
+if apply_mutant src/services/agents/PeerSessionRow.qml \
+    '    function stop() { AgentService.kill(srow.session.id) }'; then
+    expect "a peer row calls a local AgentService id verb" red "$(peer_findings "$TMP/m")"
+    restore_mutant src/services/agents/PeerSessionRow.qml
+fi
+# M9 — a peer Text loses its plain-text format.
+cp "$TMP/m/src/services/agents/PeerHostRow.qml" "$TMP/restore"
+sed -i '0,/^[[:space:]]*textFormat: Text\.PlainText[[:space:]]*$/{//d}' "$TMP/m/src/services/agents/PeerHostRow.qml"
+if cmp -s "$TMP/restore" "$TMP/m/src/services/agents/PeerHostRow.qml"; then
+    bad "self-test: the plain-text mutation did not apply"
+else
+    expect "a peer Text that may render rich text" red "$(peer_rich "$TMP/m")"
+fi
+restore_mutant src/services/agents/PeerHostRow.qml
 
 printf '\ncheck-agent-center-invariants: passed=%d failed=%d\n' "$pass" "$fail"
 [ "$fail" -eq 0 ] || exit 1

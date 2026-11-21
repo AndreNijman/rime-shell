@@ -33,6 +33,15 @@
 //                       than handoff cards: then `handoff` is null, and the
 //                       pages offer neither the switch nor "Open link there",
 //                       since that daemon has no `computers open` either.
+//   agents              off|view|control: what THIS computer lets that one do
+//                       with the agent sessions here (`computers grant`)
+//   can_agents          off|view|control: what THAT computer says it lets
+//                       this one do with its agent sessions (a claim, learned
+//                       when this computer last reached it)
+//   can_agents_ms       when that claim arrived; absent when it is unknown
+//                       Both read as null when absent or not one of the
+//                       three (an older rime-remoted): the pages then show
+//                       no agents rows.
 //
 // There is no "online" field. The daemon dials each paired computer every 5
 // minutes on AC and every 15 on battery, and nothing in power saver, so a
@@ -134,7 +143,10 @@ function parseComputers(text) {
             clipboardReceive: c.clipboard_receive === true,
             files: c.files === true,
             // null: this daemon has no handoff cards (see the header).
-            handoff: typeof c.handoff === "boolean" ? (trusted && c.handoff) : null
+            handoff: typeof c.handoff === "boolean" ? (trusted && c.handoff) : null,
+            agents: agentLevel(c.agents),
+            canAgents: agentLevel(c.can_agents),
+            canAgentsMs: ms(c.can_agents_ms)
         })
     }
     return out
@@ -222,6 +234,38 @@ function switchCommand(c, which, on) {
         return ["rime", "remote", "computers", "clipboard", "--", c.id, word]
     }
     return ["rime", "remote", "computers", which, "--", c.id, on ? "on" : "off"]
+}
+
+// ── Agent sessions across computers ──────────────────────────────────────────
+//
+// `agents` is this computer's grant to that one; the Shell may only LOWER it,
+// and only to off: rime asks about any other level at a terminal (a stdin that
+// is a terminal, and the computer's name typed unless --yes), so lowering
+// control to view, and every raise, is a command a person runs there. The
+// pages print it; the Shell never runs it and never passes --yes.
+var AGENT_LEVELS = ["off", "view", "control"]
+var AGENT_WORDS = { off: "Off", view: "Can watch", control: "Can work in them" }
+
+function agentLevel(v) { return AGENT_LEVELS.indexOf(v) >= 0 ? v : null }
+function agentWord(v) { return AGENT_WORDS[v] || "" }
+
+function agentsOffCommand(c) {
+    if (!c || !validId(c.id) || !c.active) return null
+    if (AGENT_LEVELS.indexOf(c.agents) <= 0) return null
+    return ["rime", "remote", "computers", "grant", "--", c.id, "agents", "off"]
+}
+
+// The commands that set every other level, as text to copy into a terminal
+// (the id, never the name: a name can be anything another machine sent).
+function agentsTerminalLines(c) {
+    if (!c || !validId(c.id) || !c.trusted || agentLevel(c.agents) === null) return []
+    var out = []
+    for (var i = 0; i < AGENT_LEVELS.length; i++) {
+        var l = AGENT_LEVELS[i]
+        if (l === "off" || l === c.agents) continue
+        out.push({ level: l, word: AGENT_WORDS[l], line: "rime remote computers grant -- " + c.id + " agents " + l })
+    }
+    return out
 }
 
 function allowCommand(id) { return validId(id) ? ["rime", "remote", "computers", "allow", "--", id] : null }
@@ -359,6 +403,11 @@ if (typeof module !== "undefined" && module.exports)
         summary: summary,
         switchCommand: switchCommand,
         allowCommand: allowCommand,
+        AGENT_LEVELS: AGENT_LEVELS,
+        agentLevel: agentLevel,
+        agentWord: agentWord,
+        agentsOffCommand: agentsOffCommand,
+        agentsTerminalLines: agentsTerminalLines,
         removeCommand: removeCommand,
         sendCommand: sendCommand,
         openCommand: openCommand,

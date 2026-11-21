@@ -75,6 +75,14 @@ Item {
     // query in flight — see RemoteAgentService.
     ServiceRef { service: RemoteAgentService; active: root.onScreen }
 
+    // This person's other Rime computers (M4). ComputersService reads the
+    // paired list (`computers list`, local, no dial); PeerAgentService asks the
+    // ones that share their agents, no sooner than that list is polled, and
+    // only while these refs are held. Handing them back kills its call in
+    // flight — see PeerAgentService.
+    ServiceRef { service: ComputersService; active: root.onScreen }
+    ServiceRef { service: PeerAgentService; active: root.onScreen }
+
     readonly property var _requests: AgentService.requests
     readonly property var _needsYou: AgentService.sessions.filter(function(s) {
         return AgentState.needsYou(s.state)
@@ -97,6 +105,9 @@ Item {
     // local file read (`rime host list`), never an ssh, so it is safe to ask
     // it in a binding.
     readonly property bool _hasRemote: RemoteAgentService.hosts.length > 0
+    // Whether a paired computer shares its agent sessions with this one: read
+    // from the computer list, never a dial.
+    readonly property bool _hasPeers: PeerAgentService.hostIds.length > 0
 
     // ── Keyboard (UI/UX roadmap v3 Phase 21) ────────────────────────────────
     // One Tab stop over ALL rows in visual order — requests, then "needs you",
@@ -227,7 +238,7 @@ Item {
             anchors.centerIn: parent
             width: parent.width * 0.8
             visible: AgentService.everChecked && !AgentService.daemonUp
-                     && !root._hasRemote
+                     && !root._hasRemote && !root._hasPeers
             glyph: "󰒲"
             title: "The agent runtime is not running"
             hint: "It is opt-in. Running claude, opencode or codex directly "
@@ -242,7 +253,7 @@ Item {
         EmptyState {
             anchors.centerIn: parent
             width: parent.width * 0.8
-            visible: AgentService.daemonUp && root._empty && !root._hasRemote
+            visible: AgentService.daemonUp && root._empty && !root._hasRemote && !root._hasPeers
             glyph: "󰚩"
             title: "No agent sessions"
             hint: "Start one from a terminal with the a command, or:"
@@ -258,7 +269,7 @@ Item {
             anchors.fill: parent
             anchors.margins: theme.px(6)
             clip: true
-            visible: (AgentService.daemonUp && !root._empty) || root._hasRemote
+            visible: (AgentService.daemonUp && !root._empty) || root._hasRemote || root._hasPeers
             ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
 
             activeFocusOnTab: root._rows.length > 0
@@ -338,7 +349,7 @@ Item {
                 // some of the sessions on the page are on a different computer.
                 SectionHeading {
                     visible: root._others.length > 0
-                    text: root._hasRemote
+                    text: root._hasRemote || root._hasPeers
                           ? "This machine"
                           : (root._needsYou.length > 0 || root._requests.length > 0)
                             ? "Other sessions" : "Sessions"
@@ -377,7 +388,7 @@ Item {
                 // implicitHeight, so the cycle does not exist.
                 Item {
                     width: parent.width
-                    visible: root._hasRemote && AgentService.everChecked
+                    visible: (root._hasRemote || root._hasPeers) && AgentService.everChecked
                              && !AgentService.daemonUp
                     height: visible ? localOffLabel.implicitHeight + theme.fs(12) : 0
 
@@ -467,6 +478,30 @@ Item {
                         text: "Attach with  rime host run -t <device> -- rime agent attach <id>"
                         color: Theme.subtext
                         font.pixelSize: theme.fs(9)
+                    }
+                }
+
+                // ── 5. Your computers (M4) ───────────────────────────────────────
+                // Paired Rime computers that let this one view or control their
+                // agent sessions. No refresh button: PeerAgentService asks at the
+                // computer list's own pace, and a button would be the one way to
+                // dial a sleeping laptop faster than that.
+                SectionHeading {
+                    objectName: "peerHeading"
+                    visible: root._hasPeers
+                    text: "Your computers"
+                }
+
+                Repeater {
+                    // An integer count model over hostIds, which is reassigned
+                    // only when the set of computers changes: a poll's new
+                    // results do not rebuild the rows.
+                    model: PeerAgentService.hostIds.length
+
+                    delegate: PeerHostRow {
+                        required property int index
+                        width: parent.width
+                        computerId: PeerAgentService.hostIds[index] || ""
                     }
                 }
             }

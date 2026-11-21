@@ -349,19 +349,46 @@ ShellRoot {
             })
         },
 
-        // The same for the computer with the hostile name: the clipboard script
-        // runs for it, and its answer names it as plain text.
+        // The computer with the hostile name is not allowed yet: its card
+        // offers neither "Open link there" nor "Send file…", only the line
+        // that says where to allow it, and the service refuses both anyway.
         function () {
+            root.check("not allowed yet: no Open link there, no Send file…, only the Allow line",
+                       !root.inBlock(root.intro, "computerOpenLink").visible
+                       && !root.inBlock(root.intro, "computerSendFile").visible
+                       && root.inBlock(root.intro, "computerIntroduced").visible
+                       && root.inBlock(root.desk, "computerSendFile").visible)
+            const opened = ComputersService.openFromClipboard(root.intro)
+            const linked = ComputersService.openLink(root.intro, "https://example.org/x")
+            const picked = ComputersService.pickAndSend(root.intro)
+            const sent = ComputersService.sendPath(root.intro, "/home/test/x.pdf")
+            root.sleep(400, function () {
+                root.readLog(function () {
+                    root.check("not allowed yet: the service runs neither (open, send, file dialog)",
+                               !opened && !linked && !picked && !sent && root.count("[open]") === 1
+                               && root.count("[send]") === 0 && root.count("[zenity]") === 0)
+                    ComputersService.allow(root.intro)
+                    root.waitFor("it to be allowed", function () {
+                        return root.idle() && ComputersService.row(root.intro).trusted
+                    }, root.next)
+                })
+            })
+        },
+        // Allowed, it offers Open link there; its answer names it as plain text.
+        function () { root.sleep(300, root.next) },
+        function () {
+            root.check("allowed: Open link there is offered and the Allow line is gone",
+                       root.inBlock(root.intro, "computerOpenLink").visible
+                       && !root.inBlock(root.intro, "computerIntroduced").visible)
             root.inBlock(root.intro, "computerOpenLink").press()
             root.waitFor("its answer", function () {
-                return ComputersService.openingFor === "" && ComputersService.noteOf(root.intro) !== ""
+                return ComputersService.openingFor === "" && ComputersService.noteOf(root.intro).indexOf("waiting") >= 0
             }, root.next)
         },
         function () {
             const note = root.inBlock(root.intro, "computerNote")
-            root.check("its \"off\" answer is said, naming it as plain text (" + note.text + ")",
-                       note.text === root.hostileShown + " does not take links from this computer. Turn on \"Take its links\" "
-                                     + "for this computer there, or allow this computer there first."
+            root.check("its \"busy\" answer is said, naming it as plain text (" + note.text + ")",
+                       note.text === root.hostileShown + " already has links from this computer waiting. Try again in a moment."
                        && note.textFormat === Text.PlainText)
             root.readLog(function () {
                 root.check("open ran for it with its id after --, the link on stdin",
@@ -609,6 +636,8 @@ ShellRoot {
                        && root.showing("·  reached 2m ago", root.blockFor(root.desk)))
             root.check("only the introduced one offers Allow",
                        root.inBlock(root.intro, "computerAllow").visible && !root.inBlock(root.desk, "computerAllow").visible)
+            root.check("an introduced computer offers no Send file… until it is allowed",
+                       !root.inBlock(root.intro, "computerSendFile").visible && root.inBlock(root.desk, "computerSendFile").visible)
             const name = root.inBlock(root.intro, "computerName")
             root.check("the hostile name is plain text on one line here too",
                        name.text === root.hostileShown && name.textFormat === Text.PlainText && name.lineCount === 1)
