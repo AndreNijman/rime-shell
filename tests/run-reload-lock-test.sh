@@ -239,7 +239,7 @@ scenario() {
     local log="$S/shell.log"
     ( cd "$tree" && exec env ${RL_WAYLAND_DEBUG:+WAYLAND_DEBUG=1} quickshell -p "$tree/.reload-lock-test.qml" ) > "$log" 2>&1 &
     local qs_pid=$!; pids+=("$qs_pid")
-    local i killed_once=""
+    local killed_once=""
     for _ in $(seq 1 400); do
         grep -q "^ *WARN qml: RL [0-9]* done" "$log" 2>/dev/null && break
         if [[ "$sc" == restart && -z "$killed_once" ]] && grep -q "mark holding" "$log" && kill -0 "$qs_pid" 2>/dev/null; then
