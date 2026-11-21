@@ -402,7 +402,7 @@ CfgScroll {
             CfgButton {
                 label: "Reload"
                 icon:  "󰑐"
-                onClicked: Quickshell.reload(true)
+                onClicked: LockKeeper.reload(true)
             }
         }
     }

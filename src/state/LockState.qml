@@ -13,15 +13,17 @@ import QtQuick
 //
 // Written by:  IpcManager "lockscreen" handler (lock only), PowerMenu — both
 //              through lock(), which may take up to 120 ms to engage while
-//              windows/LockCapture.qml takes the arrival's first frame.
+//              windows/LockCapture.qml takes the arrival's first frame — and
+//              services/system/LockKeeper.qml through resume() (lock only).
 // Read by:     windows/Lockscreen.qml (WlSessionLock.locked binding).
 // ─────────────────────────────────────────────────────────────
 
 QtObject {
     id: root
 
-    // True while the session is locked. Default false so the shell never
-    // comes up locked on startup.
+    // True while the session is locked. Default false: a Shell comes up
+    // locked only through resume(), when a Shell on this compositor held the
+    // lock when it was reloaded, killed or restarted (LockKeeper).
     property bool locked: false
 
     // ── The unlock, as motion (2026-09-26) ──────────────────────────────────
@@ -91,6 +93,21 @@ QtObject {
         root.captureSeq += 1
         root._captureCap.restart()
         root.captureRequested(root.captureSeq)
+    }
+
+    // ── Taking a lock back after a reload or a restart ──────────────────────
+    // services/system/LockKeeper.qml calls this when this Shell starts (a
+    // fresh process, or a new generation after a configuration reload) on a
+    // record saying the session was locked by a Shell on this compositor.
+    // It engages AT ONCE, never through the capture: a new generation has to
+    // want the lock before Quickshell hands it the old generation's lock, and
+    // a wait for a picture would let it take that lock over and release it
+    // (measured on Quickshell 0.3.2; see LockKeeper's header). Otherwise
+    // exactly lock(): it cancels a release and says lockStarting first.
+    function resume() {
+        root.unlocking = false
+        root.lockStarting()
+        root._engage()
     }
 
     // Emitted by lock() before it captures or engages anything: whoever must

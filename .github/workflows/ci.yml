@@ -2819,6 +2819,26 @@ jobs:
           # runner does not install: the proof is the local run in the PR.
           ./tests/run-lock-file-test.sh
 
+      - name: A reload or a restart while locked never unlocks, driven for real
+        run: |
+          # On Quickshell 0.3.2 a configuration reload while the screen was
+          # locked handed the lock to a new generation that released it: the
+          # session unlocked with no password. LockKeeper keeps the file
+          # watcher off and defers reloads while locked, makes a reloaded or
+          # restarted Shell lock again before the handover, and starts the
+          # Shell again when the reload ends it. This drives the shipped
+          # Lockscreen on a private headless labwc beside an out-of-process
+          # probe window that a virtual keyboard types at (letters only), and
+          # asserts the probe gets no key and no focus from the lock until the
+          # authenticated release through every reload and restart scenario.
+          # Seven mutants of LockKeeper, and one of the relauncher, must fail.
+          #
+          # The relauncher's own checks (pid + start time, never a second
+          # Shell) need only sh and run here; the rest skips cleanly without
+          # quickshell, labwc and wtype, which this runner does not install:
+          # the proof is the local run in the PR.
+          ./tests/run-reload-lock-test.sh
+
       - name: Every settings page, built and asked what it is
         run: |
           # Criterion 1 of the settings regression harness: every page, not a

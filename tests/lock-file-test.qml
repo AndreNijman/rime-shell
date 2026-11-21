@@ -41,7 +41,11 @@ import "./src/windows"
 // $LF_SCENARIO picks the run; the runner launches quickshell once per scenario
 // against the same runtime dir.
 //   main          start (no file) → lock → release → lock with a capture wait →
-//                 release → lock → RELOAD mid-lock → checks → lock → release
+//                 release → lock → RELOAD mid-lock → checks → lock → release.
+//                 The reload ends this process (services/system/LockKeeper.qml:
+//                 it fails closed on Quickshell's protocol error) and the Shell
+//                 is started again; the checks after it run in that process,
+//                 which finds the run so far in $XDG_RUNTIME_DIR/lock-file-reload.json.
 //   hold          start, lock, print "lock-file: holding" and wait: the runner
 //                 SIGTERMs it while locked
 //   after-restart a fresh process after that: the start state, then a lock and
@@ -78,6 +82,19 @@ ShellRoot {
         property string hintMark: "0"
         onLoaded: t.afterLoad()
     }
+
+    // Carries the run across the process that a reload mid-lock ends: the
+    // Shell started again after it is a new process, not a new generation.
+    FileView {
+        id: carry
+        path: Quickshell.env("XDG_RUNTIME_DIR") + "/lock-file-reload.json"
+        blockLoading: true
+        blockAllReads: true
+        blockWrites: true
+        printErrors: false
+    }
+    readonly property int myPid: Number(Quickshell.processId)
+    property string hintMark: "0"
 
     // ── reading the file NOW ────────────────────────────────────────────────
     // A FileView of its own with blockLoading: reload() reads synchronously, so
@@ -256,6 +273,7 @@ ShellRoot {
     // ── the run ─────────────────────────────────────────────────────────────
     Component.onCompleted: {
         t.firstRead = t.readNow()
+        console.warn("lock-file: pid " + t.myPid)
         t.loadTimer.start()
     }
     // PersistentProperties restores a reloaded generation's values after
@@ -274,7 +292,16 @@ ShellRoot {
         if (t.scenario === "hold") return t.settle(t.hold0)
         if (t.scenario === "after-restart") return t.settle(t.restart0)
         if (t.scenario === "direct") return t.settle(t.direct0)
-        if (keep.phase === 1) return t.reload1()
+        if (keep.phase === 1) { t.hintMark = keep.hintMark; return t.reload1() }
+        let c = null
+        try { c = JSON.parse(String(carry.text())) } catch (e) { c = null }
+        if (carry.loaded && c !== null && c.pid !== t.myPid) {
+            // The Shell started again after the reload ended the last process.
+            carry.setText("{}\n")
+            t.pass = c.pass; t.fail = c.fail; t.hintMark = String(c.hintMark)
+            t.note("the reload ended process " + c.pid + "; this is the Shell started again")
+            return t.reload1()
+        }
         t.settle(t.phase0)
     }
 
@@ -382,6 +409,8 @@ ShellRoot {
                     keep.hintMark = String(h.length)
                     keep.phase = 1
                     keep.pass = t.pass; keep.fail = t.fail
+                    carry.setText(JSON.stringify({ "pid": t.myPid, "pass": t.pass, "fail": t.fail,
+                                                   "hintMark": h.length }) + "\n")
                     console.warn("lock-file: reloading mid-lock")
                     Quickshell.reload(false)
                 })
@@ -401,12 +430,15 @@ ShellRoot {
         t.note("first read in the new generation: " + t.firstRead)
         t.check("the new generation found or wrote locked, never unlocked (" + t.firstRead + ")",
                 t.firstRead === t.lockedText)
-        t.check("the new generation's service is sticky (it found the old lock)", LockFileService.sticky === true)
+        // Sticky until a lock of its own is secure: LockKeeper takes the lock
+        // back at once, which ends `sticky` (and keeps the file locked).
+        t.check("the new generation's service is sticky (it found the old lock) or holds a lock of its own",
+                LockFileService.sticky === true || (LockState.locked && lock.secure))
         t.check("this generation wrote only locked (" + JSON.stringify(t.writes) + ")",
                 t.writes.every(function (w) { return w === true }))
         t.note("after the reload: lock.secure=" + lock.secure + " lock.locked=" + lock.locked
                + " LockState.locked=" + LockState.locked
-               + " (Quickshell 0.3.2 hands the old lock to the new WlSessionLock, which releases it)")
+               + " sticky=" + LockFileService.sticky)
         t.samples = []
         t.sampler.start()
         t.pause(1500, function () {
@@ -418,7 +450,7 @@ ShellRoot {
             t.settle(function () {
                 t.expectFile("after the reload", t.lockedText, function () {
                     t.hints(function (h) {
-                        const since = h.slice(parseInt(keep.hintMark, 10))
+                        const since = h.slice(parseInt(t.hintMark, 10))
                         t.check("logind was not told unlocked by the reload (" + JSON.stringify(since) + ")",
                                 since.every(function (v) { return v === "true" }))
                         t.markWrites()
@@ -469,7 +501,9 @@ ShellRoot {
     function restart0() {
         t.check("the restarted Shell found locked and did not overwrite it (" + t.firstRead + ")",
                 t.firstRead === t.lockedText)
-        t.check("…and is sticky", LockFileService.sticky === true)
+        // LockKeeper locks a Shell started after one died locked; once that
+        // lock is secure `sticky` has done its job.
+        t.check("…and is sticky, or locked again by itself", LockFileService.sticky === true || (LockState.locked && lock.secure))
         t.check("it wrote only locked (" + JSON.stringify(t.writes) + ")",
                 t.writes.every(function (w) { return w === true }))
         t.expectFile("after a restart mid-lock", t.lockedText, function () {
