@@ -110,7 +110,8 @@ real_home="$(getent passwd "$(id -u)" | cut -d: -f6)"
 unset WAYLAND_DISPLAY DISPLAY HYPRLAND_INSTANCE_SIGNATURE NIRI_SOCKET
 export WLR_BACKENDS=headless WLR_LIBINPUT_NO_DEVICES=1 WLR_RENDERER=pixman WLR_HEADLESS_OUTPUTS=1
 export XDG_SESSION_TYPE=wayland QT_QPA_PLATFORM=wayland
-export LF_UID="$(id -u)"
+LF_UID="$(id -u)"
+export LF_UID
 # Fedora gives a user with a private group umask 002. A file the Shell makes
 # without setting its mode is then 0664, which the daemon refuses: the mode
 # checks below only mean something under it.
