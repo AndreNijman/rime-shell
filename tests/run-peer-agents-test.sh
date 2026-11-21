@@ -141,6 +141,9 @@ if verb == "list":
     out = []
     for c in state:
         row = {k: v for k, v in c.items() if not k.startswith("_")}
+        # The test turns this on while the Agent Center is hidden: Spare starts sharing.
+        if c["id"].startswith("Spare") and os.path.exists(os.path.join(W, "spare-shares")):
+            row["can_agents"] = "view"
         if "_claim_ago" in c:
             row["can_agents_ms"] = now - c["_claim_ago"]
         out.append(row)
@@ -263,7 +266,7 @@ phase() {
     [[ -n "${RIME_PA_ONLY:-}" && " $RIME_PA_ONLY " != *" $name "* ]] && return 0
     local log="$W/$name.log"
     : > "$CALLS"
-    rm -f "$W/slow-agents" "$W/times.log"
+    rm -f "$W/slow-agents" "$W/spare-shares" "$W/times.log"
     seed "$name"
 
     echo
@@ -316,7 +319,7 @@ phase() {
     fi
 }
 
-phase centre   32
+phase centre   33
 phase settings 14
 
 echo

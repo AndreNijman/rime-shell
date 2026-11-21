@@ -452,6 +452,30 @@ ShellRoot {
                     root.next()
                 })
             })
+        },
+
+        // Still hidden, but another page (Settings, Phone) keeps the computer
+        // list polling, and a computer starts sharing: the list changes, the
+        // section's hosts change, and still no computer is asked.
+        function () {
+            ComputersService.refCount += 1
+            root.setFile("spare-shares", "1", function () {
+                root.waitFor("Spare in the hosts while hidden",
+                             function () { return PeerAgentService.hostIds.indexOf("SpareAQIDBAUGBwg") >= 0 },
+                             function () { root.sleep(2500, root.next) })
+            })
+        },
+        function () {
+            root.readLog(function () {
+                const fresh = root.lines.slice(root._linesAtHide)
+                const asked = fresh.filter(function (l) { return l.indexOf("[agents]") >= 0 || l.indexOf("[peek]") >= 0 })
+                root.check("hidden, a changed list asks no computer (" + fresh.length + " list reads, "
+                           + asked.length + " asks: " + asked.join(" ") + ")",
+                           fresh.length > 0 && asked.length === 0 && PeerAgentService.checking === ""
+                           && !PeerAgentService._queryProc.running && !PeerAgentService._cooldown.running)
+                ComputersService.refCount -= 1
+                root.next()
+            })
         }
     ] }
 
