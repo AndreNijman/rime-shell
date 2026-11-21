@@ -155,7 +155,7 @@ mutant "a direct write from IPC" src/state/IpcManager.qml "LockState.lock()" "Lo
 mutant "the power menu bypassing lock()" src/services/PowerMenu.qml "LockState.lock()" "LockState.locked = true" CALLERS
 mutant "an unguarded release" src/windows/Lockscreen.qml "if (!LockState.unlocking) return" "if (false) return" CANCEL
 mutant "lock() not cancelling" src/state/LockState.qml "        root.unlocking = false
-        if (root.locked" "        if (root.locked" CANCEL
+        root.lockStarting()" "        root.lockStarting()" CANCEL
 mutant "a lock while locked waiting for a picture" src/state/LockState.qml "if (root.locked || root.capturing ||" "if (root.capturing ||" IMMEDIATE
 mutant "a second request made to wait" src/state/LockState.qml "if (root.locked || root.capturing ||" "if (root.locked ||" IMMEDIATE
 mutant "an engage with a condition" src/state/LockState.qml "        root.revealScreens = ({})

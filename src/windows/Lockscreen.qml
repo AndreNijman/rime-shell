@@ -42,8 +42,17 @@ WlSessionLock {
     // engaged (or been released), so a lock that fails to engage is never
     // reported to logind as engaged. See LockedHintService for why this has
     // to be the shell's job and not rimed's.
+    //
+    // `|| LockFileService.sticky`: a Shell that started after a reload or a
+    // restart mid-lock keeps reporting locked until a lock of its own has been
+    // engaged and released (LockFileService's start rule). Measured on
+    // Quickshell 0.3.2: a reload mid-lock hands the old lock to the new
+    // WlSessionLock, which releases it and reports secure → false; that is not
+    // an unlock anybody authenticated, so it must not reach logind as one.
+    // `sticky` is false again as soon as a lock of this Shell's is
+    // acknowledged, so for every lock this Shell makes this is `secure` alone.
     onSecureStateChanged: {
-        LockedHintService.setLocked(sessionLock.secure)
+        LockedHintService.setLocked(sessionLock.secure || LockFileService.sticky)
         LockState.lockSecure = sessionLock.secure
         if (Motion.pacingLog) console.info("Rime pacing: lock secure=" + sessionLock.secure)
     }
@@ -60,9 +69,16 @@ WlSessionLock {
     //
     // A fresh shell has no lock surface up, so `secure` is false here by
     // construction — ext-session-lock only sets it once the compositor has
-    // acknowledged THIS client's lock. Pushing it anyway is what clears a
-    // stale `yes`, and `_confirmed` starts undefined so the first call always
-    // reaches logind rather than being suppressed as a no-op.
+    // acknowledged THIS client's lock. That is also why `secure` cannot say
+    // whether the session is unlocked: it read false here after a reload
+    // mid-lock and after a restart while the compositor still held a lock
+    // (measured, Quickshell 0.3.2). So what is pushed is LockFileService's
+    // start state: unlocked when the previous Shell's lock file is absent (a
+    // fresh login) or said unlocked, locked otherwise. Pushing unlocked is
+    // what clears a stale `yes` after a crash while unlocked, and `_confirmed`
+    // starts undefined so the first call always reaches logind rather than
+    // being suppressed as a no-op. The lock file and logind start from the
+    // same state, so they cannot disagree about it.
     //
     // This is also the only thing that brings the singleton into existence at
     // startup: Quickshell creates a Singleton on first reference, not when the
@@ -70,7 +86,10 @@ WlSessionLock {
     // tests/run-locked-hint-test.sh. A `Component.onCompleted` inside
     // LockedHintService would therefore not run until something else had
     // already used it, which on this path is the lock it exists to report.
-    Component.onCompleted: LockedHintService.setLocked(sessionLock.secure)
+    // Referencing LockFileService here is also what creates it at startup
+    // (and so writes the lock file's start state): see the note above about
+    // singletons.
+    Component.onCompleted: LockedHintService.setLocked(sessionLock.secure || LockFileService.sticky)
 
     // ── Release, after the exit has played ──────────────────────────────
     // Called ONLY from a surface's PAM success. The lock UI plays its exit
