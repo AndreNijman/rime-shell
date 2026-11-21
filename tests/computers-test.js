@@ -172,9 +172,9 @@ check("empty asks for a link", C.linkCheck("").error, "Type or paste a link that
 
 // ── outcomes ─────────────────────────────────────────────────────────────────
 
-check("shown", C.openOutcome(0, '{"reply":"computer_handoff","shown":true}', "", "Desk"),
+check("shown", C.openOutcome(0, '{"id":"-DeskAQ","name":"Desk","shown":true,"why":null}', "", "Desk"),
       { ok: true, text: "Showing the link on Desk. Someone there has to open it." });
-check("off", C.openOutcome(0, '{"reply":"computer_handoff","shown":false,"why":"off"}', "", "Desk").text,
+check("off", C.openOutcome(1, '{"id":"-DeskAQ","name":"Desk","shown":false,"why":"off"}', "", "Desk").text,
       "Desk does not take links from this computer. Turn on \"Take its links\" for this computer there, or allow this computer there first.");
 check("busy", C.openOutcome(0, '{"shown":false,"why":"busy"}', "", "Desk").text, "Desk already has links from this computer waiting. Try again in a moment.");
 check("offline", C.openOutcome(1, '{"shown":false,"why":"offline"}', "", "Desk").text, "Desk could not be reached. It may be asleep or off.");

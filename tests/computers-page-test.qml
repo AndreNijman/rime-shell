@@ -349,6 +349,28 @@ ShellRoot {
             })
         },
 
+        // The same for the computer with the hostile name: the clipboard script
+        // runs for it, and its answer names it as plain text.
+        function () {
+            root.inBlock(root.intro, "computerOpenLink").press()
+            root.waitFor("its answer", function () {
+                return ComputersService.openingFor === "" && ComputersService.noteOf(root.intro) !== ""
+            }, root.next)
+        },
+        function () {
+            const note = root.inBlock(root.intro, "computerNote")
+            root.check("its \"off\" answer is said, naming it as plain text (" + note.text + ")",
+                       note.text === root.hostileShown + " does not take links from this computer. Turn on \"Take its links\" "
+                                     + "for this computer there, or allow this computer there first."
+                       && note.textFormat === Text.PlainText)
+            root.readLog(function () {
+                root.check("open ran for it with its id after --, the link on stdin",
+                           root.ran("[remote][computers][open][--json][--][" + root.intro + "][-]")
+                           && root.count("example.org") === 0)
+                root.next()
+            })
+        },
+
         // Not a link on the clipboard: ftp://, then a password manager's copy.
         function () { root.setFile("clip", "ftp://example.org/x", root.next) },
         function () {
@@ -376,7 +398,7 @@ ShellRoot {
         function () {
             root.readLog(function () {
                 root.check("javascript: and a password manager's copy ran no open",
-                           root.count("[open]") === 1 && root.count("bank.example") === 0)
+                           root.count("[open]") === 2 && root.count("bank.example") === 0)
                 root.next()
             })
         },
@@ -408,7 +430,7 @@ ShellRoot {
                 root.check("a typed ftp:// link is refused, saying why",
                            root.inBlock(root.lap, "computerNote").text === "Only http:// and https:// links can be opened on another computer.")
                 root.readLog(function () {
-                    root.check("and nothing ran for it", root.count("[open]") === 1)
+                    root.check("and nothing ran for it", root.count("[open]") === 2)
                     f.text = "https://example.org/typed path"
                     root.inBlock(root.lap, "computerLinkSend").press()
                     root.sleep(300, function () {
@@ -428,7 +450,8 @@ ShellRoot {
             root.check("the field stays for another try", root.inBlock(root.lap, "computerLinkField").visible)
             root.readStdin(function () {
                 root.check("the typed link went in on standard input, alone",
-                           root.stdinText === "https://example.org/a?b=c#d\n<<END>>\nhttps://example.org/typed\n<<END>>\n")
+                           root.stdinText === "https://example.org/a?b=c#d\n<<END>>\nhttps://example.org/a?b=c#d\n<<END>>\n"
+                                              + "https://example.org/typed\n<<END>>\n")
                 root.readLog(function () {
                     root.check("open ran for the laptop with its id after --",
                                root.ran("[remote][computers][open][--json][--][LaptAQIDBAUGBwgJ][-]"))

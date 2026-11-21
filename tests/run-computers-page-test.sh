@@ -13,7 +13,9 @@
 #              (`$(touch …)`, backquotes, <b>, a newline, a direction
 #              override) shown as plain text on one line; "Open link there"
 #              with an https link on the clipboard sends it on STANDARD INPUT
-#              and in no argv; with ftp://, javascript: or text on the
+#              and in no argv, also for the computer with the hostile name,
+#              whose "off" answer names it as plain text; with ftp://,
+#              javascript: or text on the
 #              clipboard it runs no `open` and asks for a link; a typed ftp
 #              link is refused with nothing run; a typed link goes on stdin;
 #              the other computer's "busy" answer is shown; "Send file…" runs
@@ -207,11 +209,16 @@ elif verb == "send":
     c = find(rest[0])
     print("rime: %s has %s and saved it in its Downloads." % (c["name"], os.path.basename(rest[1])), file=sys.stderr)
 elif verb == "open":
+    # computers_open's --json answer: {id, name, shown, why}, exit 1 when not
+    # shown. The desk shows it; the computer not allowed here does not take
+    # links from us either; the laptop already has some waiting.
     c = find(rest[0])
-    if c["id"].startswith("-Desk"):
-        print(json.dumps({"reply": "computer_handoff", "shown": True}))
-    else:
-        print(json.dumps({"reply": "computer_handoff", "shown": False, "why": "busy"}))
+    shown, why = True, None
+    if not c["id"].startswith("-Desk"):
+        shown = False
+        why = "off" if c.get("introduced_by") and not c.get("allowed_ms") else "busy"
+    print(json.dumps({"id": c["id"], "name": c["name"], "shown": shown, "why": why}))
+    sys.exit(0 if shown else 1)
 else:
     print("error: unrecognized subcommand '%s'" % verb, file=sys.stderr)
     sys.exit(2)
@@ -358,7 +365,7 @@ phase() {
     fi
 }
 
-phase dash     34
+phase dash     36
 phase alone     6
 phase old       6
 phase settings 35
