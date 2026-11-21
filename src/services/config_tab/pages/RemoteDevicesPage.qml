@@ -52,6 +52,18 @@ CfgScroll {
         service: RemotePairingService
         active: root.onScreen
     }
+    ServiceRef {
+        service: ComputersService
+        active: root.onScreen
+    }
+
+    // The computer whose Remove was pressed once: a second press within
+    // 2.5 s removes it (MiscPage's two-click confirm). A removal ends the
+    // pair on both computers, and pairing again needs a person at each.
+    property string _removeArmed: ""
+    Timer { id: removeTimer; interval: 2500; onTriggered: root._removeArmed = "" }
+    // The computer a path is being typed for, where no file dialog exists.
+    property string _pathFor: ""
 
     // ── The devices ──────────────────────────────────────────────────────────
     CfgSection {
@@ -116,6 +128,7 @@ CfgScroll {
 
                     Text {
                         text: modelData.name
+                        textFormat: Text.PlainText
                         font.pixelSize: theme.fs(13)
                         font.weight: Font.Medium
                         color: Theme.text
@@ -213,6 +226,274 @@ CfgScroll {
         }
     }
 
+    // ── Your other Rime computers ────────────────────────────────────────────
+    //
+    // `rime remote computers list --json`, through ComputersService. Hidden
+    // while none was ever paired, or when this rime has no `computers` verb.
+    // A removed computer stays listed, as a revoked phone does. Each switch
+    // is this computer's half (rime-os docs/remote.md, "Your clipboard and
+    // files between computers"); the daemon refuses any of them for a
+    // computer that is not allowed yet, so they are off and say why.
+    //
+    // Names come from the other computer: plain text, one line, elided.
+    CfgSection {
+        title: "Computers"
+        visible: ComputersService.computers.length > 0
+
+        Repeater {
+            // The ids, so a list read updates a row rather than rebuilding it
+            // (a half-typed path, or a Remove waiting for its second click,
+            // would go with a rebuilt row).
+            model: ComputersService.computerIds
+
+            Column {
+                id: comp
+                required property var modelData
+                readonly property string computerId: comp.modelData
+                readonly property var c: ComputersService.row(comp.computerId)
+                readonly property var st: ComputersService.stateOf(comp.c)
+                readonly property color tone: Theme[comp.st.token]
+                readonly property bool live: comp.c.active
+                readonly property bool busy: ComputersService.busyFor === comp.computerId
+                readonly property string note: ComputersService.sendingFor === comp.computerId
+                    ? "Sending " + ComputersService.sendingName + "…" : ComputersService.noteOf(comp.computerId)
+
+                objectName: "computerSettings"
+                width: parent.width
+                spacing: theme.px(2)
+
+                Rectangle {
+                    width: parent.width
+                    height: info.implicitHeight + theme.px(20)
+                    radius: theme.px(8)
+                    color: comp.st.weight === "tint" ? Qt.rgba(comp.tone.r, comp.tone.g, comp.tone.b, 0.08) : "transparent"
+                    border.color: comp.st.weight === "outline" || comp.st.weight === "solid" ? comp.tone : Theme.border
+                    border.width: Math.max(1, theme.px(1))
+
+                    Column {
+                        id: info
+                        anchors.left: parent.left
+                        anchors.leftMargin: theme.px(12)
+                        anchors.right: buttons.left
+                        anchors.rightMargin: theme.px(10)
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: theme.px(3)
+
+                        Text {
+                            objectName: "computerName"
+                            text: comp.c.name
+                            textFormat: Text.PlainText
+                            maximumLineCount: 1
+                            font.pixelSize: theme.fs(13)
+                            font.weight: Font.Medium
+                            color: Theme.text
+                            elide: Text.ElideRight
+                            width: parent.width
+                        }
+                        Row {
+                            spacing: theme.px(8)
+                            width: parent.width
+                            Text {
+                                id: stateWord
+                                text: comp.st.word
+                                textFormat: Text.PlainText
+                                font.pixelSize: theme.typeCaption
+                                color: comp.tone
+                            }
+                            Text {
+                                width: parent.width - stateWord.width - theme.px(8)
+                                visible: text !== ""
+                                // "Reached 2m ago" → "·  reached 2m ago"; only the
+                                // first letter, so "Rime Remote" keeps its capitals.
+                                readonly property string line: ComputersService.reachedLine(comp.c)
+                                text: line !== "" ? "·  " + line.charAt(0).toLowerCase() + line.slice(1) : ""
+                                textFormat: Text.PlainText
+                                font.pixelSize: theme.typeCaption
+                                color: Theme.subtext
+                                elide: Text.ElideRight
+                            }
+                        }
+                        Text {
+                            objectName: "computerPresence"
+                            width: parent.width
+                            visible: text !== ""
+                            text: comp.live ? ComputersService.presenceLine(comp.c) : ""
+                            textFormat: Text.PlainText
+                            maximumLineCount: 1
+                            font.pixelSize: theme.typeCaption
+                            color: Theme.subtext
+                            elide: Text.ElideRight
+                        }
+                        Text {
+                            objectName: "computerIntroduced"
+                            width: parent.width
+                            visible: text !== ""
+                            text: ComputersService.introducedLine(comp.c)
+                            textFormat: Text.PlainText
+                            maximumLineCount: 1
+                            font.pixelSize: theme.typeCaption
+                            color: comp.c.needsAllow ? Theme.warning : Theme.subtext
+                            elide: Text.ElideRight
+                        }
+                    }
+
+                    Row {
+                        id: buttons
+                        anchors.right: parent.right
+                        anchors.rightMargin: theme.px(8)
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: theme.px(6)
+
+                        // An introduced computer stays less trusted until a
+                        // person here says otherwise: `computers allow`.
+                        CfgButton {
+                            objectName: "computerAllow"
+                            visible: comp.c.needsAllow
+                            label: comp.busy && ComputersService.busyKind === "allow" ? "Allowing…" : "Allow"
+                            variant: "accent"
+                            enabled: ComputersService.busyFor === ""
+                            onClicked: ComputersService.allow(comp.computerId)
+                        }
+                        CfgButton {
+                            objectName: "computerSendFile"
+                            visible: comp.live
+                            label: "Send file…"
+                            icon: "󰈔"
+                            enabled: ComputersService.sendingFor === "" && ComputersService.pickingFor === ""
+                            onClicked: {
+                                if (ComputersService.canPick) ComputersService.pickAndSend(comp.computerId)
+                                else root._pathFor = root._pathFor === comp.computerId ? "" : comp.computerId
+                            }
+                        }
+                        CfgButton {
+                            objectName: "computerRemove"
+                            visible: comp.live
+                            variant: "danger"
+                            icon: "󰅙"
+                            label: comp.busy && ComputersService.busyKind === "remove" ? "Removing…"
+                                 : root._removeArmed === comp.computerId ? "Click to confirm" : "Remove"
+                            enabled: ComputersService.busyFor === ""
+                            onClicked: {
+                                if (root._removeArmed !== comp.computerId) {
+                                    root._removeArmed = comp.computerId
+                                    removeTimer.restart()
+                                } else {
+                                    root._removeArmed = ""
+                                    removeTimer.stop()
+                                    ComputersService.remove(comp.computerId)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // No file dialog on this machine: the whole path, typed.
+                Row {
+                    visible: comp.live && root._pathFor === comp.computerId
+                    spacing: theme.px(8)
+                    topPadding: theme.px(4)
+                    CfgTextField {
+                        id: pathField
+                        objectName: "computerPathField"
+                        fieldWidth: theme.px(320)
+                        placeholder: "/home/you/Documents/file.pdf"
+                        Accessible.name: "Path of the file to send to " + comp.c.name
+                        onAccepted: pathSend.press()
+                    }
+                    CfgButton {
+                        id: pathSend
+                        label: "Send"
+                        variant: "accent"
+                        enabled: ComputersService.sendingFor === "" && pathField.text.trim() !== ""
+                        onClicked: if (ComputersService.sendPath(comp.computerId, pathField.text)) {
+                            pathField.text = ""
+                            root._pathFor = ""
+                        }
+                    }
+                }
+
+                Text {
+                    objectName: "computerNote"
+                    width: parent.width
+                    visible: text !== ""
+                    topPadding: theme.px(4)
+                    text: comp.note
+                    textFormat: Text.PlainText
+                    wrapMode: Text.WordWrap
+                    maximumLineCount: 3
+                    elide: Text.ElideRight
+                    font.pixelSize: theme.typeCaption
+                    color: ComputersService.sendingFor !== comp.computerId && !ComputersService.noteOk ? Theme.danger : Theme.subtext
+                }
+
+                Item { width: 1; height: theme.px(2); visible: comp.live }
+
+                CfgRow {
+                    objectName: "computerSwitch_clipboard_send"
+                    visible: comp.live
+                    plainText: true
+                    label: "Send my clipboard to it"
+                    disabledReason: comp.c.trusted ? "" : "Allow this computer first."
+                    description: SettingsService.phoneClipboard
+                        ? "Text you copy here goes to it when it takes this computer's clipboard too."
+                        : "Nothing is sent while \"Send my clipboard to my phone\" is off, under Clipboard below."
+                    CfgSwitch {
+                        checked: comp.c.clipboardSend
+                        enabled: ComputersService.busyFor === ""
+                        onToggled: function(v) { ComputersService.setSwitch(comp.computerId, "clipboard_send", v) }
+                    }
+                }
+                CfgRow {
+                    objectName: "computerSwitch_clipboard_receive"
+                    visible: comp.live
+                    plainText: true
+                    label: "Take its clipboard"
+                    disabledReason: comp.c.trusted ? "" : "Allow this computer first."
+                    description: "Text copied there lands on this clipboard when it sends it. Never while this screen is locked."
+                    CfgSwitch {
+                        checked: comp.c.clipboardReceive
+                        enabled: ComputersService.busyFor === ""
+                        onToggled: function(v) { ComputersService.setSwitch(comp.computerId, "clipboard_receive", v) }
+                    }
+                }
+                CfgRow {
+                    objectName: "computerSwitch_files"
+                    visible: comp.live
+                    plainText: true
+                    label: "Take its files"
+                    disabledReason: comp.c.trusted ? "" : "Allow this computer first."
+                    description: "Files it sends are saved in Downloads. Nothing is opened."
+                    CfgSwitch {
+                        checked: comp.c.files
+                        enabled: ComputersService.busyFor === ""
+                        onToggled: function(v) { ComputersService.setSwitch(comp.computerId, "files", v) }
+                    }
+                }
+                CfgRow {
+                    objectName: "computerSwitch_handoff"
+                    // A rime-remoted without handoff cards lists no `handoff`.
+                    visible: comp.live && comp.c.handoff !== null
+                    plainText: true
+                    label: "Take its links"
+                    disabledReason: comp.c.trusted ? "" : "Allow this computer first."
+                    description: "A link it sends shows here as a notification. Nothing opens until you press Open."
+                    CfgSwitch {
+                        checked: comp.c.handoff === true
+                        enabled: ComputersService.busyFor === ""
+                        onToggled: function(v) { ComputersService.setSwitch(comp.computerId, "handoff", v) }
+                    }
+                }
+
+                Item { width: 1; height: theme.px(10) }
+            }
+        }
+
+        CfgRow {
+            label: "Both computers decide"
+            description: "A copy, a file or a link goes from one computer to the other only when the other takes it, so turn each on at both. Removing a computer removes this one there too."
+        }
+    }
+
     // ── The device's own claim ───────────────────────────────────────────────
     CfgSection {
         title: "Device locks"
@@ -251,7 +532,7 @@ CfgScroll {
             label: "Send my clipboard to my phone"
             // Off by default: with it off nothing watches the clipboard.
             // PhoneClipboardService; rime-os contract §2.10.
-            description: "Text you copy here goes to each connected phone with \"Get the computer's clipboard\" turned on in Rime Remote. A password manager's copy, images and text over 64 KB are not sent."
+            description: "Text you copy here goes to each connected phone with \"Get the computer's clipboard\" turned on in Rime Remote, and to each computer under Computers that you send your clipboard to. A password manager's copy, images and text over 64 KB are not sent."
             CfgSwitch {
                 checked: SettingsService.phoneClipboard
                 onToggled: function(v) { SettingsService.set("phoneClipboard", v) }
