@@ -69,6 +69,13 @@ engine="${RIME_DISPLAY_ENGINE_REAL:-/usr/libexec/rime-display-apply}"
 timeout_s="${RIME_TEST_CONFIRM_SECONDS:-5}"
 
 sandbox="$(mktemp -d)"
+# A runtime dir of its own: the nested labwc's socket, and everything the Shell
+# keeps there (the lock file rime-remoted reads, LockKeeper's record of a held
+# lock), stay out of the desktop's. Under /tmp because a Wayland socket path
+# must fit in 108 bytes and an agent's TMPDIR can be long.
+runtime="$(mktemp -d /tmp/rime-dt.XXXXXX)"
+chmod 0700 "$runtime"
+export XDG_RUNTIME_DIR="$runtime"
 cfg="$sandbox/labwc"
 shim="$sandbox/shim"
 mkdir -p "$cfg" "$shim" "$sandbox/home"
@@ -100,7 +107,7 @@ cleanup() {
     [ -n "$shell_pid" ] && { kill -9 "$shell_pid" 2>/dev/null; wait "$shell_pid" 2>/dev/null; }
     [ -n "$labwc_pid" ] && { kill "$labwc_pid" 2>/dev/null; wait "$labwc_pid" 2>/dev/null; }
     rm -f "$root/.display-transaction-test.qml" "$root/.display-restart-arm.qml"
-    rm -rf "$sandbox"
+    rm -rf "$sandbox" "$runtime"
     return 0
 }
 trap cleanup EXIT INT TERM
