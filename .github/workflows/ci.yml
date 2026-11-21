@@ -2803,6 +2803,22 @@ jobs:
           # Skips cleanly without quickshell or a compositor.
           ./tests/run-locked-hint-test.sh
 
+      - name: The lock screen tells rime-remoted, driven for real
+        run: |
+          # LockFileService writes $XDG_RUNTIME_DIR/rime-remote/lock.json,
+          # the file rime-remoted reads before letting a phone used as a
+          # touchpad type anything. This drives the shipped Lockscreen on a
+          # private headless labwc and asserts, synchronously at each instant,
+          # that the file says locked before the lock is asked for, says
+          # unlocked only once the session lock is gone, keeps saying locked
+          # across a reload and a SIGTERM restart mid-lock, and is a 0600
+          # regular file replaced by rename. Seven mutants must each fail.
+          #
+          # Private runtime dir and HOME; `loginctl` and `busctl` are stubs.
+          # Skips cleanly without quickshell or a compositor, which this
+          # runner does not install: the proof is the local run in the PR.
+          ./tests/run-lock-file-test.sh
+
       - name: Every settings page, built and asked what it is
         run: |
           # Criterion 1 of the settings regression harness: every page, not a
