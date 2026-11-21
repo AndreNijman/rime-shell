@@ -13,8 +13,11 @@
 #              (`$(touch …)`, backquotes, <b>, a newline, a direction
 #              override) shown as plain text on one line; "Open link there"
 #              with an https link on the clipboard sends it on STANDARD INPUT
-#              and in no argv, also for the computer with the hostile name,
-#              whose "off" answer names it as plain text; with ftp://,
+#              and in no argv; the computer with the hostile name, not yet
+#              allowed, offers neither "Open link there" nor "Send file…"
+#              (only "Allow it in Settings") and the service refuses both;
+#              once allowed it offers the link, and its "busy" answer names
+#              it as plain text; with ftp://,
 #              javascript: or text on the
 #              clipboard it runs no `open` and asks for a link; a typed ftp
 #              link is refused with nothing run; a typed link goes on stdin;
@@ -365,10 +368,10 @@ phase() {
     fi
 }
 
-phase dash     36
+phase dash     39
 phase alone     6
 phase old       6
-phase settings 35
+phase settings 36
 
 echo
 echo "passed=$pass failed=$fail"

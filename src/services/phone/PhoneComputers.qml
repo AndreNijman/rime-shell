@@ -124,8 +124,10 @@ Item {
                             objectName: "computerOpenLink"
                             label: "Open link there"
                             icon: "󰌹"
-                            // A rime-remoted without handoff cards has no `open`.
-                            visible: card.c.handoff !== null
+                            // A rime-remoted without handoff cards has no `open`;
+                            // one not allowed yet refuses it (and a file), so
+                            // its card says only "Allow it in Settings".
+                            visible: card.c.handoff !== null && card.c.trusted
                             enabled: ComputersService.openingFor === ""
                             Accessible.name: "Open a link on " + card.c.name
                             onClicked: ComputersService.openFromClipboard(card.computerId)
@@ -134,7 +136,7 @@ Item {
                             objectName: "computerSendFile"
                             label: "Send file…"
                             icon: "󰈔"
-                            visible: ComputersService.canPick
+                            visible: ComputersService.canPick && card.c.trusted
                             enabled: ComputersService.sendingFor === "" && ComputersService.pickingFor === ""
                             Accessible.name: "Send a file to " + card.c.name
                             onClicked: {

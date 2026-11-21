@@ -1441,6 +1441,18 @@ jobs:
           # exact word.
           node tests/computers-test.js
 
+      - name: Agent sessions on your other computers, decision layer
+        run: |
+          # What the Agent Center's "Your computers" section reads out of
+          # `rime remote computers agents|peek --json` (the shapes
+          # rimed/rime/src/remote.rs prints), which computers it asks, and
+          # every argv. The assertions that pay for it: only an active,
+          # trusted computer that claims view or control is asked; the id and
+          # the session number are the only things from the other machine in
+          # argv, each after "--"; every text field comes out one plain line;
+          # a refusal and an unreachable computer are each one fixed line.
+          node tests/peer-agents-test.js
+
       - name: Push-to-talk decision layer
         run: |
           # §8.2's push-to-talk, at the layer where its edge cases are: when
@@ -2872,6 +2884,22 @@ jobs:
           # Skips cleanly without quickshell or a compositor.
           ./tests/run-computers-page-test.sh
 
+      - name: Agent sessions on your other computers against a stub rime
+        run: |
+          # The Agent Center's "Your computers" section and the agents rows of
+          # Settings → Paired devices in a real Quickshell, against a stub
+          # `rime`, a stub terminal and a stub wl-copy. The assertions that pay
+          # for it: only computers that share are asked, never faster than the
+          # computer list and never while the page is hidden (the call in
+          # flight is killed); a hostile session title runs nothing and shows
+          # as plain text; Attach is offered only with control and opens the
+          # terminal with the exact attach argv; Settings only ever runs
+          # `grant -- ID agents off`, and shows every other level as a
+          # command to copy.
+          #
+          # Skips cleanly without quickshell or a compositor.
+          ./tests/run-peer-agents-test.sh
+
       - name: A staged settings edit, and what it survives
         run: |
           # Criteria 3, 4 and 6 of P0-023, none of which a grep can answer,
@@ -3190,6 +3218,13 @@ jobs:
             "tests/computers-test.js"
             "tests/computers-page-test.qml"
             "tests/run-computers-page-test.sh"
+            "src/services/peeragents.js"
+            "src/services/PeerAgentService.qml"
+            "src/services/agents/PeerHostRow.qml"
+            "src/services/agents/PeerSessionRow.qml"
+            "tests/peer-agents-test.js"
+            "tests/peer-agents-test.qml"
+            "tests/run-peer-agents-test.sh"
             "tests/fixtures/qr-vectors.json"
             "tests/fixtures/gen-qr-vectors.py"
             "src/services/notifybus.js"

@@ -188,6 +188,24 @@ Singleton {
         if (!c || !c.active) return false
         return root._act(id, "remove", C.removeCommand(id), "Removed.")
     }
+    // M4: what that computer may do with the agent sessions here. The Shell
+    // only ever LOWERS it, and only to off (computers.js agentsOffCommand):
+    // rime asks about every other level at a terminal, so the page prints that
+    // command (agentsTerminalLines) and this file never runs it.
+    function agentsOff(id) {
+        const c = root.find(id)
+        return root._act(id, "agents", C.agentsOffCommand(c), "It can no longer reach your agent sessions.")
+    }
+    function agentsLines(c) { return C.agentsTerminalLines(c) }
+    function agentWord(level) { return C.agentWord(level) }
+    function agoText(t) { return C.ago(t, root.nowMs) }
+    // A command the page shows, onto the clipboard. Its own argument: never a
+    // shell string.
+    function copyText(t) {
+        if (typeof t !== "string" || t === "") return false
+        Quickshell.execDetached(["wl-copy", "--", t])
+        return true
+    }
 
     function _act(id, kind, cmd, fallback) {
         if (!cmd || root.busyFor !== "") return false
@@ -236,12 +254,12 @@ Singleton {
 
     function openFromClipboard(id) {
         const c = root.find(id)
-        if (!c || !c.active || root.openingFor !== "") return false
+        if (!c || !c.trusted || root.openingFor !== "") return false
         return root._open(c, C.clipboardOpenCommand(id), "", true)
     }
     function openLink(id, text) {
         const c = root.find(id)
-        if (!c || !c.active || root.openingFor !== "") return false
+        if (!c || !c.trusted || root.openingFor !== "") return false
         const k = C.linkCheck(text)
         if (!k.ok) { root._say(id, { ok: false, text: k.error }); return false }
         return root._open(c, C.openCommand(id), k.url, false)
@@ -317,7 +335,7 @@ Singleton {
     property string _pickOut: ""
     function pickAndSend(id) {
         const c = root.find(id)
-        if (!c || !c.active || !root.canPick || root.pickingFor !== "" || root.sendingFor !== "") return false
+        if (!c || !c.trusted || !root.canPick || root.pickingFor !== "" || root.sendingFor !== "") return false
         const cmd = C.pickCommand(root._pickTool, Quickshell.env("HOME") || "")
         if (!cmd) return false
         root.pickingFor = id
@@ -348,7 +366,7 @@ Singleton {
     property string _sendErr: ""
     function sendPath(id, path) {
         const c = root.find(id)
-        if (!c || !c.active || root.sendingFor !== "") return false
+        if (!c || !c.trusted || root.sendingFor !== "") return false
         const cmd = C.sendCommand(id, String(path || "").trim())
         if (!cmd) {
             root._say(id, { ok: false, text: "Give the whole path of the file, starting with /." })
