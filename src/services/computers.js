@@ -53,6 +53,18 @@
 
 var ONLINE_MS = 20 * 60 * 1000
 
+// How often a visible page reads the list again: every 30 s on AC, every 60 s
+// on battery (the phone service reads every 30 s whatever the power, and this
+// must never read more often than it). A positive whole number in the
+// environment (tests) wins.
+var POLL_AC_MS = 30000
+var POLL_BATTERY_MS = 60000
+function pollInterval(envValue, onBattery) {
+    var v = /^[0-9]+$/.test(String(envValue || "")) ? parseInt(envValue, 10) : 0
+    if (v > 0) return v
+    return onBattery ? POLL_BATTERY_MS : POLL_AC_MS
+}
+
 // The base64url characters an id is made of (Device::id_for: the first 16 of
 // the key). Anything else is not an id this Shell will pass on.
 function validId(v) {
@@ -337,6 +349,7 @@ if (typeof module !== "undefined" && module.exports)
         cleanLine: cleanLine,
         parseComputers: parseComputers,
         paired: paired,
+        pollInterval: pollInterval,
         online: online,
         ago: ago,
         stateOf: stateOf,

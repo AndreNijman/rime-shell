@@ -176,7 +176,7 @@ check("shown", C.openOutcome(0, '{"id":"-DeskAQ","name":"Desk","shown":true,"why
       { ok: true, text: "Showing the link on Desk. Someone there has to open it." });
 check("off", C.openOutcome(1, '{"id":"-DeskAQ","name":"Desk","shown":false,"why":"off"}', "", "Desk").text,
       "Desk does not take links from this computer. Turn on \"Take its links\" for this computer there, or allow this computer there first.");
-check("busy", C.openOutcome(0, '{"shown":false,"why":"busy"}', "", "Desk").text, "Desk already has links from this computer waiting. Try again in a moment.");
+check("busy", C.openOutcome(1, '{"shown":false,"why":"busy"}', "", "Desk").text, "Desk already has links from this computer waiting. Try again in a moment.");
 check("offline", C.openOutcome(1, '{"shown":false,"why":"offline"}', "", "Desk").text, "Desk could not be reached. It may be asleep or off.");
 check("unsupported", C.openOutcome(1, '{"shown":false,"why":"unsupported"}', "", "Desk").text, "Desk runs a Rime that cannot show links yet.");
 check("an unknown why", C.openOutcome(1, '{"shown":false,"why":"zzz"}', "", "Desk").text, "Desk did not show the link.");
@@ -200,6 +200,20 @@ check("two lines is not one path", C.pickedPath("/a\n/b\n"), "");
 check("base name", C.baseName("/home/a/report.pdf"), "report.pdf");
 
 console.log("");
+// How often a visible page reads the list: never more often than the phone
+// service on battery. The phone's interval is read from PhoneService.qml, so
+// a change there is noticed here.
+const phoneSrc = require("fs").readFileSync(path.join(__dirname, "..", "src", "services", "PhoneService.qml"), "utf8");
+const phonePoll = Number((phoneSrc.match(/RIME_PHONE_POLL_MS[\s\S]*?v > 0 \? v : (\d+)/) || [])[1]);
+check("the phone's interval was found", phonePoll > 0, true);
+check("on battery: no faster than the phone", C.pollInterval("", true) >= phonePoll, true);
+check("on battery: 60 s", C.pollInterval(undefined, true), 60000);
+check("on AC: 30 s", C.pollInterval("", false), 30000);
+check("on battery slower than on AC", C.pollInterval("", true) > C.pollInterval("", false), true);
+check("a test's interval wins", C.pollInterval("400", true), 400);
+check("zero, a negative or junk is ignored",
+      [C.pollInterval("0", true), C.pollInterval("-5", true), C.pollInterval("12ms", false)], [60000, 60000, 30000]);
+
 if (failed) {
     console.error(`${failed} assertion(s) failed`);
     process.exit(1);

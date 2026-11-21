@@ -52,12 +52,9 @@ Singleton {
     property int refCount: 0
     readonly property bool active: root.refCount > 0
 
-    // How often a visible page reads the list again. Tests shorten it.
-    readonly property int pollMs: {
-        const v = parseInt(Quickshell.env("RIME_COMPUTERS_POLL_MS") || "", 10)
-        if (v > 0) return v
-        return UPower.onBattery ? 60000 : 30000
-    }
+    // How often a visible page reads the list again (computers.js
+    // pollInterval: 30 s on AC, 60 s on battery). Tests shorten it.
+    readonly property int pollMs: C.pollInterval(Quickshell.env("RIME_COMPUTERS_POLL_MS"), UPower.onBattery)
 
     property real nowMs: Date.now()
 
