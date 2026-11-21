@@ -84,6 +84,7 @@ QtObject {
     // is nothing to capture with (LockCapture absent, no grim, Reduce Motion).
     function lock() {
         root.unlocking = false
+        root.lockStarting()
         if (root.locked || root.capturing || !root.captureEnabled) { root._engage(); return }
         root.capturing = true
         root.captures = ({})
@@ -91,6 +92,15 @@ QtObject {
         root._captureCap.restart()
         root.captureRequested(root.captureSeq)
     }
+
+    // Emitted by lock() before it captures or engages anything: whoever must
+    // know about a lock before the compositor is asked for it connects here.
+    // services/system/LockFileService.qml writes rime-remoted's lock file in
+    // its handler, synchronously, so the file says locked before the lock
+    // surface can have focus (a phone used as a touchpad stops there). A
+    // signal rather than a call so this file imports nothing: the lock-capture
+    // suite runs it on its own.
+    signal lockStarting()
 
     // ── The desktop as it was, for the arrival ──────────────────────────────
     // Presentation only, like `unlocking` and `curtain`: none of this can hold
