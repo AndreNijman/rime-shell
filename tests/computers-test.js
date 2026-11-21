@@ -72,6 +72,7 @@ check("the switches are the effective ones", [list[0].clipboardSend, list[0].cli
 check("handoff from an older daemon (absent) is null: no switch, no open", list[1].handoff, null);
 check("handoff listed on is off for one not allowed", list[2].handoff, false);
 check("handoff listed on is off for a removed one", list[3].handoff, false);
+check("a removed computer is never trusted (open, link and send rely on it)", [list[3].active, list[3].trusted], [false, false]);
 check("handoff listed on for a trusted computer is on",
       C.parseComputers('[{"id":"AAAA","name":"a","handoff":true}]')[0].handoff, true);
 check("a name from another machine has no line breaks or direction overrides", list[2].name,

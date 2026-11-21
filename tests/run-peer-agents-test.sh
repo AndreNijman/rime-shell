@@ -80,7 +80,12 @@ printf '%s\n' "$line" >> "$RIME_PA_CALLS"
 
 case "${1:-}" in
 agent)
-    # One local session, so "This machine" shows above "Your computers".
+    # One local session, so "This machine" shows above "Your computers";
+    # none in the "empty" scene; the runtime not running in the "down" one.
+    if [[ "${2:-}" == list && "${RIME_PA_SCENE:-}" == empty ]]; then echo '[]'; exit 0; fi
+    if [[ "${2:-}" == list && "${RIME_PA_SCENE:-}" == down ]]; then
+        echo "rime: the agent runtime is not running" >&2; exit 1
+    fi
     [[ "${2:-}" == list ]] && echo '[{"id":1,"agent":"claude","program":"claude","args":[],"cwd":"/home/test/rime","project":null,"project_name":"rime","name":null,"title":"Local work","state":"working","detail":null,"paused":false,"started":1789150000,"last_activity":1789155000,"exit_code":null,"exit_signal":null,"attached":1,"cols":80,"rows":24}]'
     exit 0 ;;
 request) echo '[]'; exit 0 ;;
@@ -226,7 +231,7 @@ base = {"public_key": "k", "paired_ms": 1789000000000, "last_seen_ms": None, "re
         "files": False, "handoff": False}
 def comp(**kw):
     d = dict(base); d.update(kw); return d
-if scene == "centre":
+if scene in ("centre", "empty", "down"):
     state = [
         comp(id="-DeskAQIDBAUGBwg", name="Desk", agents="off", can_agents="control", _claim_ago=60000),
         comp(id="LaptAQIDBAUGBwgJ", name="Laptop", agents="view", can_agents="view", _claim_ago=60000),
@@ -321,6 +326,8 @@ phase() {
 
 phase centre   33
 phase settings 14
+phase empty    5
+phase down     5
 
 echo
 echo "passed=$pass failed=$fail"

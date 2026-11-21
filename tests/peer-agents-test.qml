@@ -246,7 +246,9 @@ ShellRoot {
     readonly property var page: root.settingsScene ? settingsLoader.item : centreLoader.item
 
     Component.onCompleted: {
-        root.steps = root.settingsScene ? root.settingsSteps() : root.centreSteps()
+        root.steps = root.settingsScene ? root.settingsSteps()
+                   : root.scene === "empty" || root.scene === "down" ? root.aloneSteps()
+                   : root.centreSteps()
         root.next()
     }
 
@@ -476,6 +478,34 @@ ShellRoot {
                 ComputersService.refCount -= 1
                 root.next()
             })
+        }
+    ] }
+
+    // ── empty / down: no local session, only the other computers' ───────────
+    // The Agent Center's empty states must give way to "Your computers": with
+    // the runtime up and no session ("empty"), and with it not running ("down",
+    // where the one-line local note replaces the full-page empty state).
+    function aloneSteps() { return [
+        root.openPage,
+        function () {
+            root.waitFor("the desk answered, and the local runtime was asked", function () {
+                const r = PeerAgentService.results[root.desk]
+                return r && r.status === "ok" && AgentService.everChecked
+            }, function () { root.sleep(500, root.next) })
+        },
+        function () {
+            const down = root.scene === "down"
+            root.check(root.scene + ": the local runtime reads as " + (down ? "not running" : "running with no session"),
+                       AgentService.daemonUp === !down && AgentService.sessions.length === 0)
+            root.check(root.scene + ": Your computers is shown, with the desk's sessions",
+                       root.find(page, "peerHeading").visible && root.hostRow(root.desk) !== null
+                       && root.showing("Fixing the tests"))
+            root.check(root.scene + ": no full-page empty state over it",
+                       !root.showing("No agent sessions") && !root.showing("The agent runtime is not running"))
+            root.check(root.scene + (down ? ": the one-line note says this machine's runtime is off"
+                                          : ": no note about this machine's runtime"),
+                       root.showing("This machine's agent runtime is not running") === down)
+            root.grab("agent-center-peer-" + root.scene, root.next)
         }
     ] }
 
