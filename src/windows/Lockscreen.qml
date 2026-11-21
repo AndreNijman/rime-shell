@@ -89,7 +89,16 @@ WlSessionLock {
     // Referencing LockFileService here is also what creates it at startup
     // (and so writes the lock file's start state): see the note above about
     // singletons.
-    Component.onCompleted: LockedHintService.setLocked(sessionLock.secure || LockFileService.sticky)
+    //
+    // LockKeeper first: if this Shell is a reload or a restart of one that held
+    // the lock, it locks again here, before Quickshell hands this generation
+    // the old generation's lock (see LockKeeper's header for why it has to be
+    // now). shell.qml starts it earlier still; this covers a tree that loads
+    // the lock screen on its own.
+    Component.onCompleted: {
+        LockKeeper.start()
+        LockedHintService.setLocked(sessionLock.secure || LockFileService.sticky)
+    }
 
     // ── Release, after the exit has played ──────────────────────────────
     // Called ONLY from a surface's PAM success. The lock UI plays its exit

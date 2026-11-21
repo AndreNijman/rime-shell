@@ -171,8 +171,23 @@ suite() {
             kill -TERM "$qs_pid" 2>/dev/null
         else
             for _ in $(seq 1 720); do kill -0 "$qs_pid" 2>/dev/null || break; sleep 0.25; done
+            # A reload mid-lock ends the process; LockKeeper's relauncher starts
+            # the Shell again, writing to the same log. Wait for that one too.
+            if grep -q "lock-file: reloading mid-lock" "$log"; then
+                for _ in $(seq 1 720); do
+                    grep -q "lock-file: passed=" "$log" && break
+                    sleep 0.25
+                done
+                sleep 1
+            fi
         fi
         stop_pid "$qs_pid"; qs_pid=""
+        # Every Shell process of this run, by the pid it printed (checked
+        # against its command line: never a stranger's pid).
+        local p
+        for p in $(sed -n 's/.*lock-file: pid \([0-9]*\).*/\1/p' "$log"); do
+            { tr '\0' ' ' < "/proc/$p/cmdline"; } 2>/dev/null | grep -qF "$tree/.lock-file-test.qml" && stop_pid "$p"
+        done
         out="$(sed -e 's/\x1b\[[0-9;]*m//g' -e 's/^[[:space:]]*WARN qml: //' "$log")"
         echo "── $sc"
         printf '%s\n' "$out" | grep -E "^( *PASS| *FAIL| *note:|lock-file:)" || true
@@ -245,7 +260,7 @@ PY
 mutant "ordering swapped: the file is written after the compositor is asked" \
     src/state/LockState.qml \
     "        root.lockStarting()
-" "" main
+        if (root.locked" "        if (root.locked" main
 mutant "a reload or restart writes unlocked" \
     src/services/system/LockFileService.qml \
     "root.sticky = !root._startsUnlocked()" "root.sticky = false" main hold after-restart
@@ -263,8 +278,10 @@ mutant "the file ignores the session lock (secure)" \
     "                                   || LockState.lockSecure !== false" "" main direct
 mutant "logind told unlocked at a restart mid-lock" \
     src/windows/Lockscreen.qml \
-    "Component.onCompleted: LockedHintService.setLocked(sessionLock.secure || LockFileService.sticky)" \
-    "Component.onCompleted: LockedHintService.setLocked(sessionLock.secure)" hold after-restart
+    "        LockedHintService.setLocked(sessionLock.secure || LockFileService.sticky)
+    }" \
+    "        LockedHintService.setLocked(sessionLock.secure)
+    }" hold after-restart
 
 echo
 echo "shipped tree: passed=$real_pass failed=0; mutants: killed=$killed survived=$survived not-applied=$unapplied"

@@ -21,6 +21,12 @@ ShellRoot {
     property var _i18n: null
 
     Component.onCompleted: {
+        // Before anything else, and outside the gate below: a Shell that is a
+        // reload or a restart of one that held the session lock locks again
+        // now, while this generation is being created (services/system/
+        // LockKeeper.qml). The lock screen itself is built behind the gate.
+        LockKeeper.start();
+
         const c = Qt.createComponent("./src/i18n/I18nBootstrap.qml");
         if (c.status === Component.Error) {
             console.warn("Rime i18n: the Rime.I18n module did not load, so the shell stays in English —",

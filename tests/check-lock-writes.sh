@@ -32,6 +32,18 @@
 #      unconditionally. Nothing the capture does (or fails to do) can hold the
 #      session unlocked past it.
 #
+#  Since 2026-11-22 a configuration reload is an unlock path to guard: on
+#  Quickshell 0.3.2 a new generation that does not want the lock when it is
+#  handed the old one releases it (services/system/LockKeeper.qml). So:
+#
+#   7. RESUME — LockState.resume(), what LockKeeper calls when a Shell starts
+#      on a held lock, cancels a release, says lockStarting, and engages AT
+#      ONCE with no condition (never through the capture); only LockKeeper
+#      calls it.
+#   8. RELOADS — nothing in src/ calls Quickshell.reload() or sets
+#      Quickshell.watchFiles except LockKeeper, whose reload() defers while a
+#      lock is held or being taken, and whose after-unlock reload re-checks.
+#
 #  Each rule is mutated on a copy to prove it can fail (repo idiom: a mutant
 #  that did not apply is reported as such, never as caught).
 # ─────────────────────────────────────────────────────────────────────────────
@@ -114,6 +126,32 @@ verdict("BOUNDED",
 
 verdict("NOUNLOCK", bool(unlockfn) and "LockState" not in unlockfn.group(1),
         "the IPC unlock() must not touch lock state")
+
+resume_body = body(st, r'function\s+resume\s*\(\s*\)')
+rl = [l.strip().rstrip(";") for l in (resume_body or "").split("\n") if l.strip()]
+resume_callers = []
+reload_calls = []
+watch_writes = []
+for f in (root / "src").rglob("*.qml"):
+    rel = str(f.relative_to(root))
+    c = "\n".join(l.split("//", 1)[0] for l in f.read_text(errors="replace").split("\n"))
+    if re.search(r'LockState\s*\.\s*resume\s*\(', c): resume_callers.append(rel)
+    if re.search(r'Quickshell\s*\.\s*reload\s*\(', c): reload_calls.append(rel)
+    if re.search(r'Quickshell\s*\.\s*watchFiles\s*=(?!=)', c): watch_writes.append(rel)
+keeper = "src/services/system/LockKeeper.qml"
+verdict("RESUME", rl == ["root.unlocking = false", "root.lockStarting()", "root._engage()"]
+        and resume_callers in ([], [keeper]),
+        "resume() must be exactly: unlocking = false, lockStarting(), _engage(); called only by LockKeeper (%s; %s)"
+        % (rl, resume_callers))
+kp = code(keeper) if (root / keeper).exists() else ""
+reload_body = body(kp, r'function\s+reload\s*\(\s*hard\s*\)') or ""
+gate = re.match(r'\s*if\s*\(\s*root\.holding\s*\)\s*\{(.*?)\breturn\s+false\s*\}', reload_body, re.S)
+after = body(kp, r'property\s+Timer\s+_after\s*:\s*Timer') or ""
+after_trig = re.search(r'onTriggered\s*:\s*\{\s*if\s*\(\s*root\.holding\s*\)\s*return', after)
+verdict("RELOADS", set(reload_calls) <= {keeper} and set(watch_writes) <= {keeper} and gate is not None
+        and after_trig is not None,
+        "only LockKeeper may reload or set watchFiles, its reload() must defer while holding, and its "
+        "after-unlock reload must re-check (reload: %s; watchFiles: %s)" % (reload_calls, watch_writes))
 PY
 }
 
@@ -125,6 +163,8 @@ label() {
         IMMEDIATE) echo "a lock while locked, while capturing, or with no capture engages at once; _engage() is unconditional" ;;
         BOUNDED)  echo "a lock waiting for its picture is capped (<= 150 ms, armed first) and the cap always engages" ;;
         NOUNLOCK) echo "the IPC unlock() is still a no-op" ;;
+        RESUME)   echo "resume() cancels a release and engages at once, unconditionally; only LockKeeper calls it" ;;
+        RELOADS)  echo "only LockKeeper reloads or touches the file watcher, and never while a lock is held" ;;
     esac
 }
 
@@ -134,7 +174,7 @@ while read -r rule verdict detail; do
     [ -n "$rule" ] || continue
     if [ "$verdict" = PASS ]; then ok "$(label "$rule")"; else bad "$(label "$rule") — $detail"; fi
 done <<<"$verdicts"
-[ "$(grep -c . <<<"$verdicts")" -eq 6 ] && ok "all six rules were evaluated" || bad "expected six verdicts, got: $verdicts"
+[ "$(grep -c . <<<"$verdicts")" -eq 8 ] && ok "all eight rules were evaluated" || bad "expected eight verdicts, got: $verdicts"
 
 echo "── self-test: can these checks fail? ──"
 MW="$(mktemp -d)"; trap 'rm -rf "$MW"' EXIT INT TERM
@@ -165,6 +205,24 @@ mutant "an unbounded wait" src/state/LockState.qml "interval: 120" "interval: 50
 mutant "a cap that does not engage" src/state/LockState.qml "onTriggered: root._engage()" "onTriggered: {}" BOUNDED
 mutant "a wait with no cap armed" src/state/LockState.qml "        root._captureCap.restart()
 " "" BOUNDED
+mutant "resume() waiting for a picture" src/state/LockState.qml "        root.lockStarting()
+        root._engage()" "        root.lockStarting()
+        root.lock()" RESUME
+mutant "resume() not cancelling a release" src/state/LockState.qml "    function resume() {
+        root.unlocking = false
+" "    function resume() {
+" RESUME
+mutant "resume() with a condition" src/state/LockState.qml "        root.lockStarting()
+        root._engage()" "        root.lockStarting()
+        if (root.captureSeq > 0) root._engage()" RESUME
+mutant "resume() from IPC" src/state/IpcManager.qml "LockState.lock()" "LockState.resume()" RESUME
+mutant "a reload button that bypasses LockKeeper" src/services/config_tab/pages/MiscPage.qml "onClicked: LockKeeper.reload(true)" "onClicked: Quickshell.reload(true)" RELOADS
+mutant "the file watcher turned on elsewhere" src/state/IpcManager.qml "LockState.lock()" "Quickshell.watchFiles = true; LockState.lock()" RELOADS
+mutant "a reload() that does not defer" src/services/system/LockKeeper.qml "        if (root.holding) {
+            root._pending = true" "        if (false) {
+            root._pending = true" RELOADS
+mutant "an after-unlock reload that does not re-check" src/services/system/LockKeeper.qml "        onTriggered: {
+            if (root.holding) return" "        onTriggered: {" RELOADS
 mutant "an unlock over IPC" src/state/IpcManager.qml "            // Deliberately does nothing. See note above." "            LockState.unlocking = true" NOUNLOCK
 
 echo
