@@ -26,7 +26,9 @@
 #    old       an older rime with no `computers` verb: no Computers tab, the
 #              phone's page as before, no error shown.
 #    settings  each of the four switches runs its exact command (the
-#              clipboard's two switches as one word); a refused switch shows
+#              clipboard's two switches as one word); a switch changed while
+#              an older list read is running is shown as changed once that
+#              read ends (read again, never left stale); a refused switch shows
 #              the CLI's sentence and snaps back; an introduced computer's
 #              switches are off with the reason and running them does nothing;
 #              Allow; Remove needs a second click, shows a refusal in the
@@ -152,6 +154,11 @@ def refused(what):
         sys.exit(1)
 
 if verb == "list":
+    # A slow read, while the test's flag file exists, answering with the list
+    # as it was when the read began: the window in which an action finishes
+    # while a read that predates it is still running.
+    if os.path.exists(os.path.join(W, "slow-list")):
+        time.sleep(1.2)
     out = []
     for c in state:
         row = {k: v for k, v in c.items() if not k.startswith("_")}
@@ -296,7 +303,7 @@ phase() {
     local log="$W/$name.log"
     : > "$CALLS"
     : > "$STDIN_LOG"
-    rm -f "$W/clip" "$W/clip-hint" "$W/pick" "$W/refuse-switch" "$W/refuse-remove"
+    rm -f "$W/clip" "$W/clip-hint" "$W/pick" "$W/refuse-switch" "$W/refuse-remove" "$W/slow-list"
     seed
 
     echo
@@ -354,7 +361,7 @@ phase() {
 phase dash     34
 phase alone     6
 phase old       6
-phase settings 34
+phase settings 35
 
 echo
 echo "passed=$pass failed=$fail"

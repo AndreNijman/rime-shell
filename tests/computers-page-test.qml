@@ -615,6 +615,25 @@ ShellRoot {
         root.switchStep(root.lap, "clipboard_send", "[remote][computers][clipboard][--][LaptAQIDBAUGBwgJ][receive]", false),
         root.switchStep(root.lap, "clipboard_receive", "[remote][computers][clipboard][--][LaptAQIDBAUGBwgJ][off]", false),
 
+        // A change made while a list read that began before it is running:
+        // that read's answer is stale, so the list is read once more.
+        function () { root.setFile("slow-list", "1", function () { root.sleep(900, root.next) }) },
+        // Past one poll, so the read now running is a slow one.
+        root.settled("a slow list read in flight", function () { return ComputersService._listProc.running }),
+        function () {
+            root.switchOf(root.desk, "handoff").toggle()
+            root.waitFor("the switch command", function () {
+                return ComputersService.busyFor === "" && ComputersService.noteOf(root.desk) !== ""
+            }, function () { root.setFile("slow-list", null, root.next) })
+        },
+        root.settled("the reads after it", root.idle),
+        function () {
+            root.check("a switch changed during an older list read shows the change once it ends",
+                       root.switchOf(root.desk, "handoff").checked === false
+                       && ComputersService.find(root.desk).handoff === false)
+            root.next()
+        },
+
         // A refused switch: the CLI's sentence, and the switch snaps back.
         function () { root.setFile("refuse-switch", "1", root.next) },
         function () {
