@@ -132,6 +132,10 @@ ShellRoot {
             // the phones. Off (no watcher, no command) unless turned on.
             property var _phoneClipboard: PhoneClipboardService
 
+            // And again: it is what announces a phone that starts using this
+            // computer as a touchpad, whether or not a notch is on screen.
+            property var _touchpad: TouchpadService
+
             // Must exist at startup for the same kind of reason: a display transaction
             // the previous shell left open has to be settled whether or not anybody
             // opens the Display page. Enumeration stays on demand — this costs one

@@ -17,6 +17,7 @@ import "../../services/players.js" as Players
 //   "timer"     — ClockState.timerRunning
 //   "stopwatch" — ClockState.swRunning
 //   "voice"     — push-to-talk is listening, transcribing or refusing (P1-023)
+//   "touchpad"  — a paired phone is this computer's touchpad (TouchpadService)
 //
 // CenterNotchMonitor (internal QtObject) watches ClockState and
 // handles urgent transitions:
@@ -96,6 +97,9 @@ Item {
 		// string decides presence and supplies the text, and there is no second
 		// copy of the phase table in here to drift from the reducer's.
 		if (PushToTalkService.indicatorLabel !== "") list.push("voice")
+		// A phone moving the pointer and typing here (rime-os contract §2.16):
+		// on for as long as the daemon's input.json says live, with a Stop.
+		if (TouchpadService.live) list.push("touchpad")
 
 		root._items = list
 
@@ -114,7 +118,10 @@ Item {
 				// release bind, so the failure it has to defend against is a hot mic the
 				// user forgot. An indicator parked behind whatever they last scrolled to
 				// would not defend against it.
-				if (isScreenRec || autoScrollType === "voice" || currentType === "title")
+				// And a phone that has started driving this computer: a person at the
+				// keyboard must see it begin, wherever the carousel was.
+				if (isScreenRec || autoScrollType === "voice" || autoScrollType === "touchpad"
+				    || currentType === "title")
 				idx = nIdx
 			}
 		}
@@ -178,6 +185,16 @@ Item {
 			if (PushToTalkService.micOpen) root._forceScrollTo("voice")
 		}
 	}
+
+	Connections {
+		target: TouchpadService
+		function onLiveChanged() {
+			root._rebuildItems(TouchpadService.live ? "touchpad" : null)
+		}
+	}
+	// A bar made while a phone is already the touchpad (a screen plugged in,
+	// the Shell started mid-session) shows it from the start.
+	Component.onCompleted: if (TouchpadService.live) root._rebuildItems("touchpad")
 
 	Connections {
 		target: ScreenRecService
@@ -960,6 +977,16 @@ Item {
 									color:          Theme.subtext
 								}
 							}
+						}
+
+						// ── A phone as this computer's touchpad (rime-os contract §2.16) ──
+						TouchpadNotice {
+							anchors {
+								fill: parent
+								leftMargin: root.fw/2
+								rightMargin: root.fw/2
+							}
+							visible: modelData === "touchpad"
 						}
 
 					} // delegate

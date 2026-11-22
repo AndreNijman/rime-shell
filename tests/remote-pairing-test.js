@@ -405,6 +405,38 @@ check("a line that is not the watcher's is not sent",
           sh("sensitive", "hunter2"), "clip sensitive\n");
 }
 
+// ── the phone as a touchpad: input.json (rime-os contract §2.16) ─────────────
+check("touchpad: the daemon's live line",
+      R.parseTouchpad('{"v":1,"live":true,"device":"d-1","name":"Pixel 8","since_ms":1795000000000}'),
+      {live: true, device: "d-1", name: "Pixel 8", sinceMs: 1795000000000});
+check("touchpad: the daemon's not-live line",
+      R.parseTouchpad('{"v":1,"live":false}').live, false);
+check("touchpad: absent, empty, garbage, another version, live not true: never live",
+      ["", "{", "null", "[]", "[1]", '"live"', '{"live":true}', '{"v":2,"live":true,"name":"x"}',
+       '{"v":1,"live":"true","name":"x"}', '{"v":1,"live":1,"name":"x"}', "\u0000\u0001"].map(t => R.parseTouchpad(t).live),
+      [false, false, false, false, false, false, false, false, false, false, false]);
+check("touchpad: a file past the cap is not live, even if it says so",
+      R.parseTouchpad('{"v":1,"live":true,"name":"x","pad":"' + "a".repeat(R.TOUCHPAD_FILE_MAX) + '"}').live, false);
+check("touchpad: a missing or odd since_ms is 0, still live",
+      ['{"v":1,"live":true,"name":"x"}', '{"v":1,"live":true,"name":"x","since_ms":"5"}',
+       '{"v":1,"live":true,"name":"x","since_ms":-4}'].map(t => [R.parseTouchpad(t).live, R.parseTouchpad(t).sinceMs]),
+      [[true, 0], [true, 0], [true, 0]]);
+check("touchpad: a name that is not a string is empty (the Shell says A phone)",
+      ['{"v":1,"live":true,"name":5}', '{"v":1,"live":true}', '{"v":1,"live":true,"name":"  \u200b "}']
+          .map(t => R.parseTouchpad(t).name), ["", "", ""]);
+check("touchpad: control, bidi and zero-width characters are dropped; markup is kept as text",
+      R.touchpadName("\u202eA<b>b</b>\u0007\u200f\u2066c\u2069\n\u0085d\ufeff\udb40\udc41"), "A<b>b</b>cd");
+check("touchpad: kept to 64 code points, never half a surrogate pair",
+      [R.touchpadName("x".repeat(10000)).length, Array.from(R.touchpadName("\ud83d\ude00".repeat(100))).length,
+       R.touchpadName("a".repeat(63) + "\ud83d\ude00b")],
+      [64, 64, "a".repeat(63) + "\ud83d\ude00"]);
+check("touchpad: Stop names no phone",
+      R.TOUCHPAD_STOP_COMMAND, ["rime", "remote", "devices", "touchpad", "stop"]);
+check("touchpad: markup escaped for a notification body",
+      R.escapeMarkup(`<a href="x">&'</a>`), "&lt;a href=&quot;x&quot;&gt;&amp;&#39;&lt;/a&gt;");
+check("touchpad: fill takes the value literally",
+      [R.fill("%1 is here", "$& %1 $1"), R.fill("no slot", "x")], ["$& %1 $1 is here", "no slot"]);
+
 if (failed > 0) {
     console.error(`\n${failed} assertion(s) failed`);
     process.exit(1);
