@@ -2819,6 +2819,25 @@ jobs:
           # runner does not install: the proof is the local run in the PR.
           ./tests/run-lock-file-test.sh
 
+      - name: A phone used as a touchpad shows in the notch with a Stop, driven for real
+        run: |
+          # TouchpadService reads $XDG_RUNTIME_DIR/rime-remote/input.json,
+          # which rime-remoted writes while a phone is this computer's
+          # touchpad. This builds the real TopBar on a private headless labwc
+          # and asserts the notch item is shown only for a live record (not
+          # for live:false, garbage, an oversized file or no file), that a
+          # hostile phone name (markup, control and direction characters,
+          # 10k long) is drawn as clean plain text, that one notification is
+          # sent per session with the name escaped, and that Stop runs
+          # exactly one `rime remote devices touchpad stop` naming no phone,
+          # then says so when the file stays live. Six mutants must each fail.
+          #
+          # Private runtime dir and HOME; `rime` and `notify-send` are stubs
+          # that record argv. Skips cleanly without quickshell or a
+          # compositor, which this runner does not install: the proof is the
+          # local run in the PR.
+          ./tests/run-touchpad-notice-test.sh
+
       - name: A reload or a restart while locked never unlocks, driven for real
         run: |
           # On Quickshell 0.3.2 a configuration reload while the screen was
