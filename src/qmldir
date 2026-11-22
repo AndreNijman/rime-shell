@@ -63,3 +63,9 @@ singleton AgentHelpContent 1.0 services/agents/AgentHelpContent.qml
 # already import: IpcManager through `import "../"` and the topbar indicator
 # through `import "../.."`.
 singleton PushToTalkService 1.0 services/PushToTalkService.qml
+# Whether a paired phone is this computer's touchpad right now, and its Stop
+# (rime-os contract §2.16). Registered HERE only, for the reason above
+# AgentHelp: one copy, so every screen's notch and the one notification agree.
+# Its consumers already import src/: the notch (CenterContent, `import "../../"`),
+# IpcManager (`import "../"`) and shell.qml.
+singleton TouchpadService 1.0 services/TouchpadService.qml

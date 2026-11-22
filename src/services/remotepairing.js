@@ -502,6 +502,71 @@ function sendClipboardCommand(id) {
     return ["rime", "remote", "send", String(id), "--clipboard"]
 }
 
+// ── The phone as a touchpad (rime-os contract §2.16) ─────────────────────────
+//
+// rime-remoted keeps $XDG_RUNTIME_DIR/rime-remote/input.json (0600, replaced
+// by rename): {"v":1,"live":true,"device":"<id>","name":"<phone>","since_ms":N}
+// while a phone is this computer's touchpad and keyboard, {"v":1,"live":false}
+// otherwise. TouchpadService reads it; the notch says so with a Stop button.
+
+// Stop takes no argument: it ends whichever phone's channel is live (there is
+// only ever one), so nothing the phone chose -- its name -- goes on a command
+// line. The CLI exits 0 whether or not one was running.
+var TOUCHPAD_STOP_COMMAND = ["rime", "remote", "devices", "touchpad", "stop"]
+
+// The daemon writes well under 1 KiB. A file far past that was not written by
+// it, and is read as "not live" rather than parsed.
+var TOUCHPAD_FILE_MAX = 65536
+// The daemon keeps names to 64 characters; so does the Shell, whoever wrote it.
+var TOUCHPAD_NAME_MAX = 64
+
+// The phone's name as plain text the Shell can show: the daemon's own cleaning
+// done again, because any process of this user can write the file. Control
+// characters (C0, DEL, C1), zero-width marks, bidi marks, embeddings,
+// overrides and isolates, line and paragraph separators, the BOM, interlinear
+// annotation marks and Unicode tag characters are dropped; the rest is
+// trimmed and kept to 64 code points (never half a surrogate pair). "" when
+// nothing is left; the caller says "A phone". Markup characters are KEPT:
+// every place the name is shown renders it as plain text, and the one that
+// cannot (a notification body) escapes it (escapeMarkup).
+function touchpadName(raw) {
+    var s = typeof raw === "string" ? raw : ""
+    s = s.replace(/[\u0000-\u001f\u007f-\u009f\u00ad\u061c\u180e\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff\ufff9-\ufffb]/g, "")
+    s = s.replace(/\udb40[\udc00-\udc7f]/g, "")
+    s = s.trim()
+    var cps = Array.from(s)
+    if (cps.length > TOUCHPAD_NAME_MAX) s = cps.slice(0, TOUCHPAD_NAME_MAX).join("").trim()
+    return s
+}
+
+// input.json's text as {live, device, name, sinceMs}. Anything that is not
+// exactly the daemon's live shape -- empty, half a file, garbage, too big, a
+// version this Shell does not know, live that is not `true` -- is not live.
+function parseTouchpad(text) {
+    var off = {live: false, device: "", name: "", sinceMs: 0}
+    var t = String(text || "")
+    if (t.length > TOUCHPAD_FILE_MAX) return off
+    var o
+    try { o = JSON.parse(t) } catch (e) { return off }
+    if (!o || typeof o !== "object" || Array.isArray(o) || o.v !== 1 || o.live !== true) return off
+    var since = (typeof o.since_ms === "number" && isFinite(o.since_ms) && o.since_ms > 0) ? o.since_ms : 0
+    var device = typeof o.device === "string" ? o.device.slice(0, 256) : ""
+    return {live: true, device: device, name: touchpadName(o.name), sinceMs: since}
+}
+
+// For the one place the name meets rich text: a notification body, which the
+// Shell's own toast draws as StyledText (and other servers as their markup).
+function escapeMarkup(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+                    .replace(/"/g, "&quot;").replace(/'/g, "&#39;")
+}
+
+// `template` with every "%1" replaced by `value`, taken literally: no "$&"
+// patterns (String.replace), no further placeholders found inside `value`.
+function fill(template, value) {
+    return String(template).split("%1").join(String(value))
+}
+
 // Node (tests) sees `module`; the QML engine does not, and ignores this.
 if (typeof module !== "undefined" && module.exports)
     module.exports = {
@@ -533,6 +598,13 @@ if (typeof module !== "undefined" && module.exports)
         networkLabel: networkLabel,
         phoneLine: phoneLine,
         focusCommand: focusCommand,
+        TOUCHPAD_STOP_COMMAND: TOUCHPAD_STOP_COMMAND,
+        TOUCHPAD_FILE_MAX: TOUCHPAD_FILE_MAX,
+        TOUCHPAD_NAME_MAX: TOUCHPAD_NAME_MAX,
+        touchpadName: touchpadName,
+        parseTouchpad: parseTouchpad,
+        escapeMarkup: escapeMarkup,
+        fill: fill,
         parseFocus: parseFocus,
         focusIsNew: focusIsNew,
         ringOutcome: ringOutcome,

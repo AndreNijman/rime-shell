@@ -645,6 +645,22 @@ QtObject {
         }
     }
 
+    // A paired phone as this computer's touchpad (rime-os contract §2.16).
+    // The notch's Stop is a pointer target in a bar that never takes the
+    // keyboard; this is the same Stop for a key binding or a script:
+    // `qs ipc call touchpad stop`. `state()` is "" or the phone's name.
+    property var touchpad: IpcHandler {
+        target: "touchpad"
+        function stop(): bool {
+            const was = TouchpadService.live
+            TouchpadService.stop()
+            return was
+        }
+        function state(): string {
+            return TouchpadService.live ? TouchpadService.name : ""
+        }
+    }
+
     // Exposed independently so caffeine's actual inhibitor can be tested and
     // automated without opening the dashboard.
     property var caffeine: IpcHandler {
